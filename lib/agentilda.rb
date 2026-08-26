@@ -136,6 +136,7 @@ end
   agent
   transcript
   roster
+  viewer
   worktree
   publisher
   executor

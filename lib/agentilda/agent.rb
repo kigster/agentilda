@@ -59,6 +59,25 @@ module Agentilda
     # @return [Agentilda::Agent, nil]
     def find(name) = all.find { |a| a.name == name.to_s }
 
+    # Every agent the query could mean. An exact name wins outright; failing
+    # that the query matches as a prefix, and failing that anywhere in the
+    # name, so `leah` finds leah-researcher and `review` finds
+    # hansolo-reviewer. A directory or a trailing `.md` is stripped first,
+    # because tab completion hands those in.
+    #
+    # @param query [String]
+    # @return [Array<Agentilda::Agent>]
+    def match(query)
+      wanted = File.basename(query.to_s, ".md")
+      exact = all.select { |a| a.name == wanted }
+      return exact unless exact.empty?
+
+      prefixed = all.select { |a| a.name.start_with?(wanted) }
+      return prefixed unless prefixed.empty?
+
+      all.select { |a| a.name.include?(wanted) }
+    end
+
     # Every agent that will act on a plan in this state, in definition order.
     # A read-only agent is never offered work by the loop — it has nothing to
     # advance, so including it would make every round look productive.
