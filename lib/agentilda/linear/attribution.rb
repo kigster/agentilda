@@ -45,7 +45,9 @@ module Agentilda
         def why
           return "matched no folder at all" if subject.nil? && score.zero?
           return "#{percent} of a folder name is not enough" if subject.nil? && rivals.empty?
-          return "#{rivals.size + 1} folders matched equally well (#{percent})" if subject.nil?
+          # `rivals` already holds every tied folder — there is no winner to
+          # add back in, and `+ 1` here once reported a two-way tie as three.
+          return "#{rivals.size} folders matched equally well (#{percent})" if subject.nil?
 
           "#{source}: covers #{percent} of the folder name"
         end
