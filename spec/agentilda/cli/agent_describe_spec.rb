@@ -59,7 +59,7 @@ RSpec.describe Agentilda::CLI::Agents::Describe do
     run
 
     expect(viewer).to have_received(:open)
-      .with([path("lando-broker"), path("leah-researcher"), path("luke-backend")])
+                        .with([path("lando-broker"), path("leah-researcher"), path("luke-backend")])
   end
 
   it "routes through mdfried when asked to stay in the terminal" do
@@ -73,7 +73,7 @@ RSpec.describe Agentilda::CLI::Agents::Describe do
     run(mdfried: true)
 
     expect(viewer).to have_received(:mdfried)
-      .with([path("lando-broker"), path("leah-researcher"), path("luke-backend")])
+                        .with([path("lando-broker"), path("leah-researcher"), path("luke-backend")])
   end
 
   # A fragment that fits several agents is a question, not an order.

@@ -307,8 +307,7 @@ RSpec.describe Agentilda::Runner, :tree do
         allow(publisher).to receive(:publish).and_return(refused)
         runner.call
 
-        expect(runner.rounds.first.attempts.first.note)
-          .to include("publish refused: the branch has no commits of its own")
+        expect(runner.rounds.first.attempts.first.note).to include("publish refused: the branch has no commits of its own")
       end
 
       context "when the plan already recorded earlier pull requests" do
