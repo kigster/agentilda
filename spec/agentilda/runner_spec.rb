@@ -75,6 +75,68 @@ RSpec.describe Agentilda::Runner, :tree do
       end
     end
 
+    describe "chaining" do
+      subject(:runner) { described_class.new(tree:, executor:, agents:, max_rounds: 5, chain: true) }
+
+      let!(:built) do
+        plans { |t| t.plan "000.00", :new, "relay", files: {"spec.md" => spec_body} }
+      end
+
+      # Each stub does the least its real counterpart would: leah leaves the
+      # Research chapter (no rename), yoda renames the folder to ⭐️ the way
+      # the real one does, palpatine writes plan.md. That covers both ways a
+      # hop advances — by contents and by the agent's own rename.
+      let(:executor) do
+        lambda { |agent, subject, **|
+          case agent.name
+          when "leah-researcher"
+            File.write(File.join(subject.feature.path, "spec.md"),
+              "#{spec_body}\n## Research\n\nWhat was found.\n")
+          when "yoda-writer"
+            subject.rename_to(Agentilda::STATUS_BY_KEY.fetch(:planned))
+          when "palpatine-planner"
+            File.write(File.join(subject.feature.path, "plan.md"), "# P")
+          end
+          record(agent, subject)
+        }
+      end
+
+      it "carries one plan researcher → writer → planner inside one round" do
+        runner.call
+
+        expect(calls.map(&:first).first(3))
+          .to eq(%w[leah-researcher yoda-writer palpatine-planner])
+        expect(runner.rounds.first.attempts.map(&:agent).first(3))
+          .to eq(%w[leah-researcher yoda-writer palpatine-planner])
+      end
+
+      it "records each hop's transition on its own attempt" do
+        runner.call
+
+        hops = runner.rounds.first.attempts.first(2)
+        expect(hops.map { |a| [a.from, a.to] }).to eq([[:new, :researched], [:researched, :planned]])
+      end
+
+      it "runs one agent per plan per round when chaining is off" do
+        plain = described_class.new(tree:, executor:, agents:, max_rounds: 1)
+        plain.call
+
+        expect(calls.map(&:first)).to eq(%w[leah-researcher])
+      end
+
+      it "stops the chain at a state a human must decide" do
+        parked = described_class.new(tree:, agents:, max_rounds: 1, chain: true,
+          executor: lambda { |agent, subject, **|
+            File.write(File.join(subject.feature.path, "blocked.md"), "B1. Which?")
+            subject.rename_to(Agentilda::STATUS_BY_KEY.fetch(:product_blocked))
+            record(agent, subject)
+          })
+        parked.call
+
+        expect(calls.map(&:first)).to eq(%w[leah-researcher])
+      end
+    end
+
     describe "termination" do
       let!(:built) do
         plans { |t| t.plan "000.00", :new, "stuck", files: {"spec.md" => spec_body} }

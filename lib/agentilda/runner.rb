@@ -82,6 +82,11 @@ module Agentilda
     # before either can advance.
     DRY_ROUNDS = 2
 
+    # The most agents one task will chain through in a single round. The
+    # pipeline is shorter than this, so hitting the cap means states are
+    # cycling, and a cap beats a loop.
+    MAX_CHAIN_HOPS = 6
+
     # @param tree [Agentilda::Tree]
     # @param executor [#call] receives (agent, subject) and returns [ok, note]
     # @param agents [Agentilda::Agents]
@@ -99,9 +104,16 @@ module Agentilda
     # @param dry_run [Boolean] no agent is invoked, so the per-round resync
     #   must not rename anything either — a preview that moves folders is
     #   not a preview.
+    # @param chain [Boolean] when an agent finishes and the plan's CONTENTS
+    #   now justify the next state, hand the plan straight to that state's
+    #   agent in the same round — researcher to writer to planner — instead
+    #   of paying a full round per hop. The folder is not renamed mid-round
+    #   (the serial resync still owns that); the chain reads {Subject#best_fit}
+    #   afresh, which needs no rename. Off when the caller restricted the run
+    #   to one agent, since chaining past the restriction would un-restrict it.
     def initialize(tree:, executor:, agents: Agents.new, max_rounds: 10,
       isolation: :shared, jobs: 1, worktree: nil, plans: nil, publisher: nil,
-      dry_run: false)
+      dry_run: false, chain: false)
       @tree = tree
       @executor = executor
       @agents = agents
@@ -111,6 +123,7 @@ module Agentilda
       @plans = plans
       @publisher = publisher
       @dry_run = dry_run
+      @chain = chain
       @rounds = []
 
       # Concurrency without isolation is the exact failure the worktree exists
@@ -195,7 +208,12 @@ module Agentilda
       # that already happened.
       Resync::Dirs.new(tree:).call(commit: !@dry_run)
 
-      attempts = tasks.zip(results).map { |task, r| r.is_a?(Attempt) ? finish(task, r) : failed(r) }
+      attempts = tasks.zip(results).flat_map do |task, r|
+        next [failed(r)] unless r.is_a?(Array)
+
+        *hops, last = r
+        hops + [finish(task, last)]
+      end
       Round.new(number:, attempts:)
     end
 
@@ -251,21 +269,68 @@ module Agentilda
     # not safe to resync until every thread has stopped writing. {#finish}
     # settles it, once, after {#run_round}'s single serial resync.
     #
+    # With chaining on, one task can carry a plan through several agents:
+    # each hop re-reads the folder's contents, and only a state the contents
+    # JUSTIFY (per {Subject#best_fit}) hands the plan to the next agent. A
+    # state in {StateMachine::SETTLED} — parked, blocked, done — ends the
+    # chain the same way it keeps a plan out of {#assignments}.
+    #
     # @param task [Agentilda::Runner::Task]
-    # @return [Agentilda::Runner::Attempt]
+    # @return [Array<Agentilda::Runner::Attempt>] one per agent that ran
     # @yieldparam progress [Agentilda::Transcript::Progress] what the agent
     #   is doing and what it has spent, forwarded to its line
     def attempt(task, &on_progress)
       ordinal = task.subject.feature.ordinal.to_s
-      from = task.subject.status.key
+      agent = task.agent
+      subject = task.subject
+      from = subject.status.key
+      attempts = []
 
-      result = @executor.call(task.agent, task.subject, root: task.root, &on_progress)
-      ok, note = result
-      note = "#{note} (#{task.checkout.branch})" if task.checkout
+      loop do
+        result = @executor.call(agent, subject, root: task.root, &on_progress)
+        ok, note = result
+        note = "#{note} (#{task.checkout.branch})" if task.checkout
 
-      Attempt.new(ordinal:, agent: task.agent.name, from:, ok: !!ok, note: note.to_s, to: from,
-        up: spend(result, :up), down: spend(result, :down), subagents: spend(result, :subagents),
-        delegated: spend(result, :delegated), seconds: spend(result, :seconds))
+        attempts << Attempt.new(ordinal:, agent: agent.name, from:, ok: !!ok, note: note.to_s, to: from,
+          up: spend(result, :up), down: spend(result, :down), subagents: spend(result, :subagents),
+          delegated: spend(result, :delegated), seconds: spend(result, :seconds))
+
+        break unless @chain && ok && attempts.size < MAX_CHAIN_HOPS
+
+        # Re-locate the plan by ordinal rather than by path: several agents
+        # rename their own folder when they finish, so the path this hop
+        # started with may already be stale. A fresh single-use Tree keeps the
+        # read out of the shared, memoized one that other threads see.
+        current = Tree.new(dir: tree.dir).find(task.subject.feature.ordinal)
+        break if current.nil?
+
+        fit = further_of(current)
+        break if fit.nil? || fit.key == from || StateMachine::SETTLED.include?(fit.key)
+
+        succ = @agents.for_status(fit).first
+        break if succ.nil?
+
+        attempts[-1] = attempts[-1].with(to: fit.key)
+        agent = succ
+        from = fit.key
+        subject = current
+      end
+
+      attempts
+    end
+
+    # The state a hop hands forward: whichever of the name the folder claims
+    # and the state its contents justify sits FURTHER along the pipeline.
+    # Either alone misleads — an agent that renamed its folder is ahead of
+    # what `best_fit` can prove (yoda-writer moves to ⭐️ before `plan.md`
+    # exists), and an agent that only wrote files is ahead of its unrenamed
+    # folder (leah-researcher leaves ⚪️ on the door of a researched spec).
+    # Taking the maximum is forward-monotonic, so a chain cannot cycle.
+    #
+    # @param subject [Agentilda::Subject]
+    # @return [Agentilda::Status, nil]
+    def further_of(subject)
+      [subject.status, subject.best_fit].compact.max_by { |s| STATUSES.index { |x| x.key == s.key } || -1 }
     end
 
     # An executor is anything that answers `call` and returns something that
@@ -304,7 +369,10 @@ module Agentilda
       current = tree.find(task.subject.feature.ordinal)
       to = current&.status&.key || attempt.from
       settled = attempt.with(to:)
-      return settled unless task.agent.advances_to == :ready_for_review && to == :ready_for_review
+      # The agent that ran last is the attempt's, which under chaining is not
+      # necessarily the one the task started with.
+      finisher = @agents.find(attempt.agent) || task.agent
+      return settled unless finisher.advances_to == :ready_for_review && to == :ready_for_review
 
       publication = publish(task, current)
       note = if publication&.published?

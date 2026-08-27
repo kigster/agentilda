@@ -113,6 +113,7 @@ end
 # `File.exist?` guard once every file below is in place.
 %w[
   ui
+  config
   ordinal
   status
   progress_log

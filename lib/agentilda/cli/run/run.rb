@@ -8,7 +8,11 @@ module Agentilda
 
       option :commit, type: :boolean, default: false,
         desc: "Actually invoke the agents (default: dry run, prints the plan of work)"
-      option :rounds, default: "10", desc: "Hard ceiling on loop iterations"
+      option :rounds, desc: "Hard ceiling on loop iterations (default: 10)"
+      option :timeout, desc: "Seconds before one agent is abandoned (default: 900)"
+      option :chain, type: :boolean,
+        desc: "When an agent advances a plan, run the next agent in the same round " \
+              "(default: on; forced off by --agent)"
       option :agent, desc: "Only run this one agent"
       option :plan, aliases: ["--plans"],
         desc: "Only these plans, comma separated: NNN or NNN.MM, e.g. --plan 003,005.01. Default: the whole tree"
@@ -31,9 +35,20 @@ module Agentilda
         "--commit --plan 005,006,007  # only the plans a batch step just created"
       ]
 
+      # Option precedence, quietest to loudest: the built-in default, then
+      # `~/.local/config/agentilda.json` under its `"run"` key, then the flag
+      # actually typed. The config never supplies `--commit`: an agent run
+      # that writes is something a person asks for each time.
+      #
       # @param options [Hash]
       # @return [void]
       def call(**options)
+        config = begin
+          Agentilda::Config.for(:run)
+        rescue Agentilda::Error => e
+          refuse(e.message, 66)
+        end
+
         tree = tree_for(options)
         root = options[:root] || File.dirname(tree.dir)
         agents = Agentilda::Agents.new
@@ -41,7 +56,15 @@ module Agentilda
         plans = options[:plan] ? scoped(tree, options[:plan]) : nil
 
         isolation = options.fetch(:isolation, "worktree").to_sym
-        jobs = (options[:jobs] || UI.default_jobs).to_i
+        jobs = (options[:jobs] || config[:jobs] || UI.default_jobs).to_i
+        timeout = (options[:timeout] || config[:timeout] || 900).to_i
+        chain = if options[:agent]
+          false
+        elsif options.key?(:chain)
+          options[:chain]
+        else
+          config.fetch(:chain, true)
+        end
 
         if isolation == :worktree && !Worktree.new(root:).repository?
           refuse("#{root} is not a git repository, so plans cannot be isolated.\n\n" \
@@ -52,15 +75,16 @@ module Agentilda
         # whether a round prints anything at all) is read the whole time the
         # loop runs, not just when `report` prints its closing summary.
         quiet?(options)
-        UI.log_path = options[:log] || File.join(Dir.tmpdir, "agentilda-#{File.basename(root)}.log")
+        UI.log_path = options[:log] || config[:log] ||
+          File.join(Dir.tmpdir, "agentilda-#{File.basename(root)}.log")
         info("Progress: #{UI.log_path}") unless quiet?(options)
         credentials_warning if commit?(options) && !quiet?(options)
 
         runner = Runner.new(
-          tree:, agents:, isolation:, jobs:, plans:,
+          tree:, agents:, isolation:, jobs:, plans:, chain:,
           worktree: (Worktree.new(root:) if isolation == :worktree),
-          max_rounds: options.fetch(:rounds, 10).to_i,
-          executor: Executor.new(root:, dry_run: !commit?(options)), dry_run: !commit?(options),
+          max_rounds: (options[:rounds] || config[:rounds] || 10).to_i,
+          executor: Executor.new(root:, timeout:, dry_run: !commit?(options)), dry_run: !commit?(options),
           publisher: publisher_for(root, isolation, options)
         )
 
