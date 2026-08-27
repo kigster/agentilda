@@ -12,11 +12,11 @@ RSpec.describe Agentilda::Index, :tree do
   let!(:tree) do
     plans do |t|
       t.plan "001.00", :new, "initial-spec",
-        files: { "spec.md" => spec_body(title: "Initial Spec", goal: "Answer **one** question, using `numeric`.") }
+        files: {"spec.md" => spec_body(title: "Initial Spec", goal: "Answer **one** question, using `numeric`.")}
       t.plan "002.00", :approved, "dev-foundation",
-        files: { "spec.md" => spec_body, "plan.md" => "# Plan" },
+        files: {"spec.md" => spec_body, "plan.md" => "# Plan"},
         prs: [t.merged(2, "Frontend test rig"), t.merged(3, "Rails foundation")]
-      t.plan "003.00", :blocked, "pricing", files: { "blocked.md" => "B1. Which tier?" }
+      t.plan "003.00", :blocked, "pricing", files: {"blocked.md" => "B1. Which tier?"}
     end
   end
 

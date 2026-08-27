@@ -11,7 +11,7 @@ RSpec.describe Agentilda::Linear::Units, :tree do
   def build(plan, ordinal: "010.00", prs: nil)
     plans do |t|
       t.plan ordinal, :building, "engine-advanced",
-        files: { "spec.md" => spec_body, "plan.md" => plan },
+        files: {"spec.md" => spec_body, "plan.md" => plan},
         prs: prs || [t.merged(25, "Spec 010 PR-1: Per-person taxes")]
     end
   end
@@ -95,13 +95,13 @@ RSpec.describe Agentilda::Linear::Units, :tree do
     it "believes the pull request number written into the heading" do
       plans do |t|
         t.plan "020.00", :building, "clerk-integration",
-               files: { "spec.md" => spec_body, "plan.md" => <<~PLAN },
-                 ### PR 020.01 — Clerk auth (✔ #38)
+          files: {"spec.md" => spec_body, "plan.md" => <<~PLAN},
+            ### PR 020.01 — Clerk auth (✔ #38)
 
-                 ### PR 020.02 — Frontend (✔ #39)
-               PLAN
-               prs: [t.merged(38, "Clerk authentication behind the dev-fixture seam"),
-                     t.merged(39, "Frontend: Clerk sign-in + mockup design system")]
+            ### PR 020.02 — Frontend (✔ #39)
+          PLAN
+          prs: [t.merged(38, "Clerk authentication behind the dev-fixture seam"),
+            t.merged(39, "Frontend: Clerk sign-in + mockup design system")]
       end
       found = described_class.new(subject: Agentilda::Tree.new(dir: plans_root).find("020.00")).all
 
@@ -130,7 +130,7 @@ RSpec.describe Agentilda::Linear::Units, :tree do
     it "never gives one pull request to two units" do
       plans do |t|
         t.plan "011.00", :building, "twice",
-          files: { "spec.md" => spec_body, "plan.md" => "## PR-1 — One\n\n## PR-2 — Two\n" },
+          files: {"spec.md" => spec_body, "plan.md" => "## PR-1 — One\n\n## PR-2 — Two\n"},
           prs: [t.merged(9, "Spec 011 PR-1 and PR-2: both at once")]
       end
       found = described_class.new(subject: Agentilda::Tree.new(dir: plans_root).find("011.00")).all
@@ -146,7 +146,7 @@ RSpec.describe Agentilda::Linear::Units, :tree do
     # business inventing is a child standing for the same thing.
     it "has no units at all when nothing has been planned or built" do
       plans do |t|
-        t.plan "012.00", :new, "small-thing", files: { "spec.md" => spec_body(title: "Small Thing") }
+        t.plan "012.00", :new, "small-thing", files: {"spec.md" => spec_body(title: "Small Thing")}
       end
 
       expect(units_of("012.00")).to be_empty

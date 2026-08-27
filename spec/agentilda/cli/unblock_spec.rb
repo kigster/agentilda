@@ -24,7 +24,7 @@ RSpec.describe Agentilda::CLI::Unblock, :tree do
   end
 
   def blocked_plan(ordinal = "001.00", body: blocked_body)
-    plans { |t| t.plan(ordinal, :blocked, "plaid-integration", files: { "spec.md" => spec_body, "blocked.md" => body }) }
+    plans { |t| t.plan(ordinal, :blocked, "plaid-integration", files: {"spec.md" => spec_body, "blocked.md" => body}) }
   end
 
   # Everything the user sees that is not the deliverable goes to STDERR, so a
@@ -92,7 +92,7 @@ RSpec.describe Agentilda::CLI::Unblock, :tree do
   end
 
   describe "a plan that was never blocked" do
-    before { plans { |t| t.plan("002.00", :new, "unstopped", files: { "spec.md" => spec_body }) } }
+    before { plans { |t| t.plan("002.00", :new, "unstopped", files: {"spec.md" => spec_body}) } }
 
     it "says the folder has no blocked.md rather than saying nothing" do
       _out, err, = run("002")

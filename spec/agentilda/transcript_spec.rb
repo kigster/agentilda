@@ -10,23 +10,23 @@ RSpec.describe Agentilda::Transcript do
 
   let(:seen) { [] }
 
-  def assistant(*blocks) = { type: "assistant", message: { content: blocks } }.to_json + "\n"
-  def tool(name, input) = { type: "tool_use", name: name, input: input }
-  def text(body) = { type: "text", text: body }
+  def assistant(*blocks) = {type: "assistant", message: {content: blocks}}.to_json + "\n"
+  def tool(name, input) = {type: "tool_use", name: name, input: input}
+  def text(body) = {type: "text", text: body}
 
   # One chunk per call, the way `readpartial` hands them over.
   def feed(*chunks) = chunks.each { |chunk| transcript.push(chunk) }
 
   def delta(usage, parent: nil)
-    { type: "stream_event", parent_tool_use_id: parent, event: { type: "message_delta", usage: } }.to_json + "\n"
+    {type: "stream_event", parent_tool_use_id: parent, event: {type: "message_delta", usage:}}.to_json + "\n"
   end
 
   def started(id, tool_use_id: "toolu_1")
-    { type: "system", subtype: "task_started", task_id: id, tool_use_id: }.to_json + "\n"
+    {type: "system", subtype: "task_started", task_id: id, tool_use_id:}.to_json + "\n"
   end
 
   def spent(id, total, subtype: "task_notification")
-    { type: "system", subtype:, task_id: id, usage: { total_tokens: total } }.to_json + "\n"
+    {type: "system", subtype:, task_id: id, usage: {total_tokens: total}}.to_json + "\n"
   end
 
   # The meter is the number on the spinner line and the number in the closing
@@ -34,8 +34,8 @@ RSpec.describe Agentilda::Transcript do
   # otherwise be counted twice or not at all.
   describe "the meter" do
     it "counts everything that went up, cache reads included" do
-      transcript.push(delta({ "input_tokens" => 2, "cache_creation_input_tokens" => 100,
-                              "cache_read_input_tokens" => 900, "output_tokens" => 40 }))
+      transcript.push(delta({"input_tokens" => 2, "cache_creation_input_tokens" => 100,
+                              "cache_read_input_tokens" => 900, "output_tokens" => 40}))
 
       expect(transcript.up).to eq(1002)
     end
@@ -45,7 +45,7 @@ RSpec.describe Agentilda::Transcript do
     # four thousand tokens. Only `message_delta` settles it.
     it "counts what a message settles at, not what it started at" do
       transcript.push(assistant(text("Working.")))
-      transcript.push(delta({ "input_tokens" => 1, "output_tokens" => 3163 }))
+      transcript.push(delta({"input_tokens" => 1, "output_tokens" => 3163}))
 
       expect(transcript.down).to eq(3163)
     end
@@ -65,7 +65,7 @@ RSpec.describe Agentilda::Transcript do
     # million.
     it "takes a sub-agent's last report rather than the sum of them" do
       feed(started("t1"), spent("t1", 12_000, subtype: "task_progress"),
-           spent("t1", 30_000, subtype: "task_progress"), spent("t1", 34_116))
+        spent("t1", 30_000, subtype: "task_progress"), spent("t1", 34_116))
 
       expect(transcript.up).to eq(34_116)
     end
@@ -74,8 +74,8 @@ RSpec.describe Agentilda::Transcript do
     # tool call they belong to. Those are already counted.
     it "does not count a sub-agent twice when its own messages stream past" do
       feed(started("t1", tool_use_id: "toolu_9"),
-           delta({ "input_tokens" => 1000, "output_tokens" => 50 }, parent: "toolu_9"),
-           spent("t1", 34_116))
+        delta({"input_tokens" => 1000, "output_tokens" => 50}, parent: "toolu_9"),
+        spent("t1", 34_116))
 
       aggregate_failures do
         expect(transcript.up).to eq(1000)
@@ -87,11 +87,11 @@ RSpec.describe Agentilda::Transcript do
     # The `result` event is the invocation's own final accounting, so it
     # replaces what the stream accumulated rather than adding to it.
     it "lets the result event settle the total it kept a running count of" do
-      feed(delta({ "input_tokens" => 5, "output_tokens" => 5 }))
-      transcript.push({ type: "result", usage: { "input_tokens" => 8,
-                                                "cache_creation_input_tokens" => 61_673,
-                                                "cache_read_input_tokens" => 239_937,
-                                                "output_tokens" => 3163 } }.to_json + "\n")
+      feed(delta({"input_tokens" => 5, "output_tokens" => 5}))
+      transcript.push({type: "result", usage: {"input_tokens" => 8,
+                                               "cache_creation_input_tokens" => 61_673,
+                                               "cache_read_input_tokens" => 239_937,
+                                               "output_tokens" => 3163}}.to_json + "\n")
 
       aggregate_failures do
         expect(transcript.up).to eq(301_618)
@@ -101,7 +101,7 @@ RSpec.describe Agentilda::Transcript do
 
     it "reports both directions and the sub-agent count in one snapshot" do
       feed(started("t1"), spent("t1", 1000),
-           delta({ "input_tokens" => 10, "output_tokens" => 20 }))
+        delta({"input_tokens" => 10, "output_tokens" => 20}))
 
       expect(transcript.progress).to have_attributes(up: 1010, down: 20, subagents: 1)
     end
@@ -109,7 +109,7 @@ RSpec.describe Agentilda::Transcript do
 
   describe "#push" do
     it "reports a tool call as something being done, not as a tool name" do
-      transcript.push(assistant(tool("Edit", { "file_path" => "/a/b/spec.md" })))
+      transcript.push(assistant(tool("Edit", {"file_path" => "/a/b/spec.md"})))
 
       expect(seen).to eq(["editing spec.md"])
     end
@@ -123,7 +123,7 @@ RSpec.describe Agentilda::Transcript do
     # An agent that says "now I'll edit the spec" and then edits it is more
     # usefully reported as editing it.
     it "prefers the most recent block in a message" do
-      transcript.push(assistant(text("Next I will read the plan."), tool("Read", { "file_path" => "plan.md" })))
+      transcript.push(assistant(text("Next I will read the plan."), tool("Read", {"file_path" => "plan.md"})))
 
       expect(seen).to eq(["reading plan.md"])
     end
@@ -131,7 +131,7 @@ RSpec.describe Agentilda::Transcript do
     # readpartial splits wherever it likes, so a line arriving in two chunks is
     # the normal case rather than the edge one.
     it "reassembles a line split across chunks" do
-      whole = assistant(tool("Write", { "file_path" => "blocked.md" }))
+      whole = assistant(tool("Write", {"file_path" => "blocked.md"}))
       transcript.push(whole[0, 30])
       transcript.push(whole[30..])
 
@@ -139,7 +139,7 @@ RSpec.describe Agentilda::Transcript do
     end
 
     it "says nothing twice in a row about the same thing" do
-      2.times { transcript.push(assistant(tool("Read", { "file_path" => "spec.md" }))) }
+      2.times { transcript.push(assistant(tool("Read", {"file_path" => "spec.md"}))) }
 
       expect(seen).to eq(["reading spec.md"])
     end
@@ -171,7 +171,7 @@ RSpec.describe Agentilda::Transcript do
 
   describe "the result event" do
     it "records what the agent finally said" do
-      transcript.push({ type: "result", subtype: "success", result: "done", is_error: false }.to_json + "\n")
+      transcript.push({type: "result", subtype: "success", result: "done", is_error: false}.to_json + "\n")
 
       aggregate_failures do
         expect(transcript.result).to eq("done")
@@ -180,7 +180,7 @@ RSpec.describe Agentilda::Transcript do
     end
 
     it "treats an error result as a failure with the agent's own words" do
-      transcript.push({ type: "result", result: "hit the turn limit", is_error: true }.to_json + "\n")
+      transcript.push({type: "result", result: "hit the turn limit", is_error: true}.to_json + "\n")
 
       aggregate_failures do
         expect(transcript).to be_failed
@@ -198,9 +198,9 @@ RSpec.describe Agentilda::Transcript do
         path = File.join(dir, "trace.ndjson")
         described_class.new(trace: path) do |_|
         end.tap { |t|
-          t.push({ type: "stream_event", event: { type: "content_block_delta",
-                                                 delta: { type: "text_delta", text: "Fol" } } }.to_json + "\n")
-          t.push({ type: "result", result: "Folded B3." }.to_json + "\n")
+          t.push({type: "stream_event", event: {type: "content_block_delta",
+                                                delta: {type: "text_delta", text: "Fol"}}}.to_json + "\n")
+          t.push({type: "result", result: "Folded B3."}.to_json + "\n")
           t.finish
         }
 
@@ -214,7 +214,7 @@ RSpec.describe Agentilda::Transcript do
 
   describe "#finish" do
     it "consumes a last line that never got its newline" do
-      transcript.push(assistant(tool("Bash", { "command" => "bundle exec rspec" })).chomp)
+      transcript.push(assistant(tool("Bash", {"command" => "bundle exec rspec"})).chomp)
       transcript.finish
 
       expect(seen).to eq(["running bundle exec rspec"])

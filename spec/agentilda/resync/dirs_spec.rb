@@ -12,8 +12,8 @@ RSpec.describe Agentilda::Resync::Dirs, :tree do
     context "when every folder's name is already honest" do
       let!(:tree) do
         plans do |t|
-          t.plan "001.00", :new, "initial-spec", files: { "spec.md" => spec_body }
-          t.plan "002.00", :building, "dev-foundation", files: { "spec.md" => spec_body, "plan.md" => "# Plan" }
+          t.plan "001.00", :new, "initial-spec", files: {"spec.md" => spec_body}
+          t.plan "002.00", :building, "dev-foundation", files: {"spec.md" => spec_body, "plan.md" => "# Plan"}
           t.plan "003.00", :approved, "ledger", prs: [t.merged(3, "Ship it")]
         end
       end
@@ -26,7 +26,7 @@ RSpec.describe Agentilda::Resync::Dirs, :tree do
     context "when a folder has outgrown its emoji" do
       let!(:tree) do
         plans do |t|
-          t.plan "001.00", :new, "initial-spec", files: { "spec.md" => spec_body, "plan.md" => "# Plan" }
+          t.plan "001.00", :new, "initial-spec", files: {"spec.md" => spec_body, "plan.md" => "# Plan"}
         end
       end
 
@@ -45,7 +45,7 @@ RSpec.describe Agentilda::Resync::Dirs, :tree do
     context "when a folder's number was written before the NNN.MM rule" do
       let!(:tree) do
         plans do |t|
-          t.raw "018-⚪️-verify-returns", files: { "spec.md" => spec_body }
+          t.raw "018-⚪️-verify-returns", files: {"spec.md" => spec_body}
         end
       end
 
@@ -71,7 +71,7 @@ RSpec.describe Agentilda::Resync::Dirs, :tree do
     context "when a retroactive number is written with one digit" do
       let!(:tree) do
         plans do |t|
-          t.raw "18.1-⚪️-schedule-k1", files: { "spec.md" => spec_body }
+          t.raw "18.1-⚪️-schedule-k1", files: {"spec.md" => spec_body}
         end
       end
 
@@ -85,7 +85,7 @@ RSpec.describe Agentilda::Resync::Dirs, :tree do
     context "when a folder is both unpadded and wearing the wrong emoji" do
       let!(:tree) do
         plans do |t|
-          t.raw "007-⚪️-tenancy", files: { "spec.md" => spec_body, "plan.md" => "# Plan" }
+          t.raw "007-⚪️-tenancy", files: {"spec.md" => spec_body, "plan.md" => "# Plan"}
         end
       end
 
@@ -104,8 +104,8 @@ RSpec.describe Agentilda::Resync::Dirs, :tree do
     context "when the padded name is already taken by another folder" do
       let!(:tree) do
         plans do |t|
-          t.raw "005-⚪️-ledger", files: { "spec.md" => spec_body }
-          t.raw "005.00-⚪️-ledger", files: { "spec.md" => spec_body }
+          t.raw "005-⚪️-ledger", files: {"spec.md" => spec_body}
+          t.raw "005.00-⚪️-ledger", files: {"spec.md" => spec_body}
         end
       end
 
@@ -118,7 +118,7 @@ RSpec.describe Agentilda::Resync::Dirs, :tree do
       let!(:tree) do
         plans do |t|
           t.plan "004.00", :approved, "deploy",
-            files: { "spec.md" => spec_body, "plan.md" => "# Plan" },
+            files: {"spec.md" => spec_body, "plan.md" => "# Plan"},
             prs: [t.merged(1, "a"), t.open(2, "b")]
         end
       end
@@ -139,8 +139,8 @@ RSpec.describe Agentilda::Resync::Dirs, :tree do
     # which human must decide, and resync must not overwrite that.
     it "never reclassifies between the two blocked states" do
       plans do |t|
-        t.plan "005.00", :blocked, "engine-choice", files: { "blocked.md" => "B1" }
-        t.plan "006.00", :product_blocked, "pricing", files: { "blocked.md" => "B1" }
+        t.plan "005.00", :blocked, "engine-choice", files: {"blocked.md" => "B1"}
+        t.plan "006.00", :product_blocked, "pricing", files: {"blocked.md" => "B1"}
       end
 
       expect(changes).to be_empty
@@ -155,8 +155,8 @@ RSpec.describe Agentilda::Resync::Dirs, :tree do
       let!(:tree) do
         plans do |t|
           t.plan "005.00", :blocked, "engine-choice",
-                 files: { "spec.md" => spec_body, "plan.md" => "# Plan",
-                          "blocked.md" => "## Answers\n\n- **B1** \u2014 2026-08-21, CTO: Postgres.\n" }
+            files: {"spec.md" => spec_body, "plan.md" => "# Plan",
+                    "blocked.md" => "## Answers\n\n- **B1** \u2014 2026-08-21, CTO: Postgres.\n"}
         end
       end
 
@@ -185,7 +185,7 @@ RSpec.describe Agentilda::Resync::Dirs, :tree do
   describe "#call" do
     let!(:tree) do
       plans do |t|
-        t.plan "001.00", :new, "initial-spec", files: { "spec.md" => spec_body, "plan.md" => "# Plan" }
+        t.plan "001.00", :new, "initial-spec", files: {"spec.md" => spec_body, "plan.md" => "# Plan"}
       end
     end
 

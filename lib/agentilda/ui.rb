@@ -200,7 +200,7 @@ module Agentilda
         return yield(logging_activity(message)) unless animate?
 
         spinner = TTY::Spinner.new("[:spinner] #{message}:activity", format: :dots, output: $stderr,
-                                                                     success_mark: paint("✓", :green), error_mark: paint("✖", :red))
+          success_mark: paint("✓", :green), error_mark: paint("✖", :red))
         spinner.update(activity: "")
         spinner.auto_spin
         begin
@@ -227,7 +227,7 @@ module Agentilda
         bar = TTY::ProgressBar.new(
           "#{message} [:bar] :current/:total :percent",
           total: list.size, output: $stderr, width: 24,
-          complete: "█", incomplete: "░", head: "█",
+          complete: "█", incomplete: "░", head: "█"
         )
         list.each do |item|
           yield item
@@ -276,7 +276,7 @@ module Agentilda
         spinners = TTY::Spinner::Multi.new(
           ":spinner #{paint(message, :bold)}",
           format: :dots, output: $stderr,
-          success_mark: paint("✓", :green), error_mark: paint("✖", :red),
+          success_mark: paint("✓", :green), error_mark: paint("✖", :red)
         )
 
         list.each_with_index do |item, index|
@@ -334,7 +334,7 @@ module Agentilda
       def once(item, label, fields = NO_FIELDS, &block)
         text = label.call(item)
         line = Line.new(fields: fields.call(item), mark: paint("done", :bright_black),
-                        spinner: (solo_spinner(text) if animate?))
+          spinner: (solo_spinner(text) if animate?))
         line.start
         begin
           result = block.call(item, line)
@@ -356,7 +356,7 @@ module Agentilda
       # @return [TTY::Spinner]
       def solo_spinner(text)
         spinner = TTY::Spinner.new("[:spinner] :meter#{text}:activity", format: :dots, output: $stderr,
-                                                                        success_mark: paint("✓", :green), error_mark: paint("✖", :red))
+          success_mark: paint("✓", :green), error_mark: paint("✖", :red))
         spinner.update(meter: meter(nil), activity: "")
         spinner.auto_spin
         spinner
@@ -381,16 +381,16 @@ module Agentilda
         [jobs, list.size].min.times.map {
           Thread.new do
             while (pair = begin
-                queue.pop(true)
-              rescue ThreadError
-                nil
-              end)
+              queue.pop(true)
+            rescue ThreadError
+              nil
+            end)
               item, index = pair
               results[index] = begin
-                  once(item, label, fields, &)
-                rescue => e
-                  e
-                end
+                once(item, label, fields, &)
+              rescue => e
+                e
+              end
             end
           end
         }.each(&:join)

@@ -27,7 +27,7 @@ SimpleCov.start do
 
   self.formatters = [
     SimpleCov::Formatter::HTMLFormatter,
-    Coverage::Badge::Formatter,
+    Coverage::Badge::Formatter
   ]
 end
 

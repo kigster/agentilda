@@ -7,14 +7,14 @@ module Agentilda
       desc "Write .plans/INDEX.md: every plan, its goal, its pull requests and its documents"
 
       option :output, aliases: ["-o"],
-                      desc: "Write somewhere other than <plans>/INDEX.md; - for STDOUT"
+        desc: "Write somewhere other than <plans>/INDEX.md; - for STDOUT"
       option :project, aliases: ["-p"],
-                       desc: "Heading for the page, default: the repository's directory name"
+        desc: "Heading for the page, default: the repository's directory name"
 
       example [
         "                     # write .plans/INDEX.md",
         "-o -                 # print it instead",
-        "-p 'Equilibris App'  # override the heading",
+        "-p 'Equilibris App'  # override the heading"
       ]
 
       # @param options [Hash]

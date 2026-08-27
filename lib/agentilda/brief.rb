@@ -21,7 +21,7 @@ module Agentilda
       "What we are trying to achieve",
       "Why it matters",
       "What already exists",
-      "What research needs to settle",
+      "What research needs to settle"
     ].freeze
 
     # Read whole into the drafting prompt, in order, so the model sees the
@@ -102,8 +102,8 @@ module Agentilda
     # @return [Array<String>]
     def invocation
       ["claude", "-p", prompt, "--add-dir", root,
-       "--allowedTools", ALLOWED_TOOLS.join(","),
-       "--disallowedTools", DENIED_TOOLS.join(",")]
+        "--allowedTools", ALLOWED_TOOLS.join(","),
+        "--disallowedTools", DENIED_TOOLS.join(",")]
     end
 
     private

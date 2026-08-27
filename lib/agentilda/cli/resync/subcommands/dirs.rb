@@ -9,11 +9,11 @@ module Agentilda
         desc "Rename plan folders so the name matches the contents and the NNN.MM form"
 
         option :commit, type: :boolean, default: false,
-                        desc: "Actually rename the folders (default: dry run)"
+          desc: "Actually rename the folders (default: dry run)"
 
         example [
           "                # show what would be renamed",
-          "--commit        # do it",
+          "--commit        # do it"
         ]
 
         # @param options [Hash]

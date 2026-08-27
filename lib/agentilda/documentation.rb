@@ -25,7 +25,7 @@ module Agentilda
         diagram,
         files_section,
         pull_requests,
-        footer,
+        footer
       ].join("\n")
     end
 

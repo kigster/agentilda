@@ -11,15 +11,15 @@ module Agentilda
         desc "Open one specialist's definition in a Markdown viewer"
 
         argument :name, required: false,
-                        desc: "Which specialist, full name or a fragment, e.g. leah (default: every one)"
+          desc: "Which specialist, full name or a fragment, e.g. leah (default: every one)"
 
         option :mdfried, type: :boolean, default: false, aliases: ["-m"],
-                         desc: "Render in the terminal through mdfried instead of the system viewer"
+          desc: "Render in the terminal through mdfried instead of the system viewer"
 
         example [
           "leah               # leah-researcher, in the system Markdown viewer",
           "luke-backend -m    # the same, rendered in this terminal by mdfried",
-          "                       # every agent, one viewer window each",
+          "                       # every agent, one viewer window each"
         ]
 
         # The registry instantiates commands bare, so both collaborators

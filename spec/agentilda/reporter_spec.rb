@@ -7,14 +7,14 @@ RSpec.describe Agentilda::Reporter, :tree do
 
   let!(:tree) do
     plans do |t|
-      t.plan "001.00", :new, "initial-spec", files: { "spec.md" => spec_body(title: "Initial Spec") }
+      t.plan "001.00", :new, "initial-spec", files: {"spec.md" => spec_body(title: "Initial Spec")}
       t.plan "002.00", :approved, "dev-foundation",
-        files: { "spec.md" => spec_body },
+        files: {"spec.md" => spec_body},
         prs: [t.merged(2, "Frontend test rig"), t.merged(3, "Rails foundation")]
       t.plan "018.01", :building, "verify-returns",
-        files: { "spec.md" => spec_body, "plan.md" => "# Plan" },
+        files: {"spec.md" => spec_body, "plan.md" => "# Plan"},
         prs: [t.open(92, "Send mail through Resend")]
-      t.plan "003.00", :blocked, "pricing", files: { "blocked.md" => "B1. Which tier?" }
+      t.plan "003.00", :blocked, "pricing", files: {"blocked.md" => "B1. Which tier?"}
     end
   end
 
@@ -108,8 +108,8 @@ RSpec.describe Agentilda::Reporter, :tree do
   describe "duplicate plan numbers" do
     let!(:tree) do
       plans do |t|
-        t.plan "002.00", :new, "one-thing", files: { "spec.md" => spec_body }
-        t.plan "002.00", :blocked, "another-thing", files: { "blocked.md" => "B1" }
+        t.plan "002.00", :new, "one-thing", files: {"spec.md" => spec_body}
+        t.plan "002.00", :blocked, "another-thing", files: {"blocked.md" => "B1"}
       end
     end
 

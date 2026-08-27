@@ -190,7 +190,7 @@ RSpec.describe Agentilda::UI do
     it "appends a line in columns, creating the directory if needed" do
       described_class.log_path = @log_path
       described_class.log("editing spec.md", plan: "003.00", status: "⭐️ Planned",
-                                             agent: "yoda-writer", seconds: 42)
+        agent: "yoda-writer", seconds: 42)
 
       expect(File.read(@log_path)).to match(/\A\[\d\d:\d\d:\d\d \| 003\.00 +\| ⭐️ Planned +\| yoda-writer +\| +\d+ \| +42s\] editing spec\.md\n\z/)
     end
@@ -237,7 +237,7 @@ RSpec.describe Agentilda::UI do
         Dir.mktmpdir do |dir|
           described_class.log_path = File.join(dir, "run.log")
           described_class.concurrently([:plan], "round 1", jobs: 1, label: ->(_) { "000.00" },
-                                                           fields: ->(_) { { plan: "000.00", agent: "yoda-writer" } }) { |_| :done }
+            fields: ->(_) { {plan: "000.00", agent: "yoda-writer"} }) { |_| :done }
 
           log = File.read(described_class.log_path)
           aggregate_failures do
@@ -269,7 +269,7 @@ RSpec.describe Agentilda::UI do
       before { allow($stderr).to receive(:tty?).and_return(false) }
 
       it "runs every item and returns results in input order, not completion order" do
-        delays = { a: 0.02, b: 0 }
+        delays = {a: 0.02, b: 0}
         result = described_class.concurrently(%i[a b], "round", jobs: 2) { |item|
           sleep(delays[item])
           item
@@ -316,7 +316,7 @@ RSpec.describe Agentilda::UI do
   # what any agent was doing, and a quiet run writes the same phrase hundreds
   # of times.
   describe "Line" do
-    subject(:line) { Agentilda::UI::Line.new(fields: { plan: "003.00" }, spinner:) }
+    subject(:line) { Agentilda::UI::Line.new(fields: {plan: "003.00"}, spinner:) }
 
     let(:spinner) { instance_double(TTY::Spinner, update: nil, success: nil, error: nil) }
 
@@ -341,7 +341,7 @@ RSpec.describe Agentilda::UI do
       line.call(progress("reading spec.md"))
 
       expect(spinner).to have_received(:update)
-                           .with(meter: a_string_including("↑10"), activity: a_string_including("reading spec.md"))
+        .with(meter: a_string_including("↑10"), activity: a_string_including("reading spec.md"))
     end
 
     it "logs a phrase once, however many times the stream repeats it" do
@@ -373,7 +373,7 @@ RSpec.describe Agentilda::UI do
     end
 
     it "runs with no spinner at all — a piped run still logs" do
-      bare = Agentilda::UI::Line.new(fields: { plan: "003.00" })
+      bare = Agentilda::UI::Line.new(fields: {plan: "003.00"})
       bare.call(progress("reading spec.md"))
 
       expect(File.read(Agentilda::UI.log_path)).to include("reading spec.md")

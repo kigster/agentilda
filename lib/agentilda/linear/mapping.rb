@@ -56,7 +56,7 @@ module Agentilda
       product_blocked: Placement.new(type: "unstarted", name: "Todo", labels: %w[blocked-on-product]),
       deferred: Placement.new(type: "backlog", name: "Backlog", labels: %w[deferred]),
       retroactive: Placement.new(type: "completed", name: "Done", labels: %w[retroactive]),
-      discarded: Placement.new(type: "canceled", name: "Canceled", labels: []),
+      discarded: Placement.new(type: "canceled", name: "Canceled", labels: [])
     }.freeze
 
     # States deliberately left out, and why.
@@ -74,7 +74,7 @@ module Agentilda
       shit: "the plan survives and its pull requests do not; whether that is work still to do " \
             "or work abandoned depends on what the team does next",
       rolled_back: "it shipped and was pulled; whether that reopens this work or opens new work " \
-                   "depends on what broke",
+                   "depends on what broke"
     }.freeze
 
     # Where one unit of work belongs, which is not always where its plan does.

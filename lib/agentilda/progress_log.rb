@@ -74,14 +74,14 @@ module Agentilda
       # @param at [Time] injectable, so a caller can render a fixed clock
       # @return [String] one line, with no trailing newline
       def render(message, plan: nil, status: nil, agent: nil, seconds: nil,
-                          pid: Process.pid, at: Time.now)
+        pid: Process.pid, at: Time.now)
         columns = [
           left(at.strftime(TIME_FORMAT), TIME_WIDTH),
           left(plan, PLAN_WIDTH),
           left(status, STATUS_WIDTH),
           left(agent, AGENT_WIDTH),
           right(pid, PID_WIDTH),
-          right(duration(seconds), SECONDS_WIDTH),
+          right(duration(seconds), SECONDS_WIDTH)
         ]
 
         text = message.to_s

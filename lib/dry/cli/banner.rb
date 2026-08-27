@@ -49,10 +49,10 @@ module Dry
 
         def pastel
           @pastel ||= if Banner.color_enabled?
-              Pastel.new
-            else
-              NoColorPastel.new
-            end
+            Pastel.new
+          else
+            NoColorPastel.new
+          end
         end
 
         extend Forwardable
@@ -103,7 +103,7 @@ module Dry
           command_subcommands(command),
           command_arguments(command),
           command_options(command),
-          command_examples(command, name),
+          command_examples(command, name)
         ].compact.join("\n")
       end
 
@@ -190,14 +190,14 @@ module Dry
         result = command.options.map do |option|
           name = Inflector.dasherize(option.name)
           name = if option.boolean?
-              "[no-]#{name}"
-            elsif option.flag?
-              name
-            elsif option.array?
-              "#{name}=VALUE1,VALUE2,.."
-            else
-              "#{name}=VALUE"
-            end
+            "[no-]#{name}"
+          elsif option.flag?
+            name
+          elsif option.array?
+            "#{name}=VALUE1,VALUE2,.."
+          else
+            "#{name}=VALUE"
+          end
           name = "#{name}, #{option.alias_names.join(", ")}" if option.aliases.any?
           name = "  --#{name.ljust(30)}"
           name = "#{name}  # #{option.desc}"

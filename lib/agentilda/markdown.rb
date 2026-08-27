@@ -46,7 +46,7 @@ module Agentilda
           cursor += 1
         end
 
-        found << { header: cells(head), rows: body }
+        found << {header: cells(head), rows: body}
         index = cursor
       end
 

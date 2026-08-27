@@ -37,7 +37,7 @@ module Agentilda
       [/\bclosed\b|\bunmerged\b|\babandoned\b/i, "Closed 🔴"],
       [/\bmerged\b/i, "Merged 🟣"],
       [/\bdraft\b|\bwip\b/i, "WIP 🟡"],
-      [/\bopen\b/i, "Open 🟡"],
+      [/\bopen\b/i, "Open 🟡"]
     ].freeze
 
     # Filenames that may hold the table.
@@ -151,7 +151,7 @@ module Agentilda
       {
         number: header.index { |h| h.match?(/number|\A#\z|\Apr\z|\Apr\s*#/i) },
         title: header.index { |h| h.match?(/name|title|summary|description|scope/i) },
-        state: header.index { |h| h.match?(/status|state/i) },
+        state: header.index { |h| h.match?(/status|state/i) }
       }
     end
 
@@ -175,7 +175,7 @@ module Agentilda
       return nil if title.empty? && url.nil?
 
       PullRequest.new(number:, url:, title: title.empty? ? "Pull request" : title,
-                      state: normalize(cells[idx[:state] || -1].to_s))
+        state: normalize(cells[idx[:state] || -1].to_s))
     end
 
     # When there is no parsable table, scrape bare links so a folder that
@@ -186,7 +186,7 @@ module Agentilda
     def scrape(text)
       text.scan(%r{https?://\S+?/(?:pull|merge_requests)/(\d+)}).flatten.uniq.map do |num|
         PullRequest.new(number: num, title: "Pull request ##{num}", state: "Unknown",
-                        url: text[%r{https?://\S+?/(?:pull|merge_requests)/#{num}\b}])
+          url: text[%r{https?://\S+?/(?:pull|merge_requests)/#{num}\b}])
       end
     end
 

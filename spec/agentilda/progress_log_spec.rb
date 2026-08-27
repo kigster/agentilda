@@ -13,7 +13,7 @@ RSpec.describe Agentilda::ProgressLog do
       line = described_class.render(
         "editing spec.md",
         plan: "003.00", status: "⭐️ Planned", agent: "yoda-writer",
-        seconds: 42, pid: 91_234, at:,
+        seconds: 42, pid: 91_234, at:
       )
 
       expect(line).to eq(
@@ -32,7 +32,7 @@ RSpec.describe Agentilda::ProgressLog do
       full = described_class.render(
         "editing spec.md",
         plan: "003.00", status: "⭐️ Planned", agent: "yoda-writer",
-        seconds: 42, pid: 91_234, at:,
+        seconds: 42, pid: 91_234, at:
       )
 
       aggregate_failures do

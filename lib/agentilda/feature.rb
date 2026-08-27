@@ -17,7 +17,7 @@ module Agentilda
     "github" => "GitHub", "gitlab" => "GitLab", "graphql" => "GraphQL", "ios" => "iOS",
     "javascript" => "JavaScript", "macos" => "macOS", "nodejs" => "Node.js", "oauth" => "OAuth",
     "openai" => "OpenAI", "postgres" => "PostgreSQL", "postgresql" => "PostgreSQL",
-    "typescript" => "TypeScript", "uuidv7" => "UUIDv7", "websocket" => "WebSocket",
+    "typescript" => "TypeScript", "uuidv7" => "UUIDv7", "websocket" => "WebSocket"
   }.freeze
 
   # Turn a kebab slug into a proper name: `law-as-data` → "Law as Data".
@@ -30,7 +30,17 @@ module Agentilda
 
     words.each_with_index.map { |word, i|
       lower = word.downcase
-      if SPECIAL_CASE.key?(lower) then SPECIAL_CASE[lower] elsif ACRONYMS.include?(lower) then lower.upcase elsif i.positive? && SMALL_WORDS.include?(lower) then lower elsif lower.match?(/\A\d+\z/) then lower else lower.sub(/\A./, &:upcase) end
+      if SPECIAL_CASE.key?(lower)
+        SPECIAL_CASE[lower]
+      elsif ACRONYMS.include?(lower)
+        lower.upcase
+      elsif i.positive? && SMALL_WORDS.include?(lower)
+        lower
+      elsif lower.match?(/\A\d+\z/)
+        lower
+      else
+        lower.sub(/\A./, &:upcase)
+      end
     }.join(" ")
   end
 

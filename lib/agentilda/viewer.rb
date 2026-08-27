@@ -20,7 +20,7 @@ module Agentilda
     # @param launch [#call] runs a command, returns truthy on success
     # @param pipe [#call] runs a command, yielding its stdin as an IO
     def initialize(launch: ->(*cmd) { system(*cmd) },
-                   pipe: ->(cmd, &block) { IO.popen(cmd, "w", &block) })
+      pipe: ->(cmd, &block) { IO.popen(cmd, "w", &block) })
       @launch = launch
       @pipe = pipe
     end

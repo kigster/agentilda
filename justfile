@@ -31,13 +31,13 @@ install:
 
 build: install
 
-# Lint and reformat files
+# standardrb
 lint:
-    {{ rbenv }} rufo --check .
+    {{ rbenv }} standardrb
 
-# Lint and reformat files (-a) — pass -A as an argument
+# Fix style with standardrb, then format the markdown
 format *args:
-    {{ rbenv }} rufo .
+    {{ rbenv }} standardrb --fix
     /usr/bin/find . -name '*.md' -exec mdformat --wrap no {} \; -print
 
 # Run all the tests

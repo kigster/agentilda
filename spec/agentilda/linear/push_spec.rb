@@ -8,31 +8,31 @@ RSpec.describe Agentilda::Linear::Push, :tree do
   subject(:push) { described_class.new(import:, api:, tree:) }
 
   let(:tree) { Agentilda::Tree.new(dir: plans_root) }
-  let(:project) { { "id" => "p-1", "name" => "US Tax Law: Self Contained Ruby Gem", "url" => "https://linear.app/p-1" } }
+  let(:project) { {"id" => "p-1", "name" => "US Tax Law: Self Contained Ruby Gem", "url" => "https://linear.app/p-1"} }
   let(:api) { Agentilda::Linear::API.new(transport: fake) }
   let(:calls) { [] }
   let(:issued) { [] }
 
   let(:import) { fresh_import }
   let(:states) do
-    [{ "id" => "s-backlog", "name" => "Backlog", "type" => "backlog", "position" => 0 },
-     { "id" => "s-todo", "name" => "Todo", "type" => "unstarted", "position" => 1 },
-     { "id" => "s-doing", "name" => "Doing", "type" => "started", "position" => 2 },
-     { "id" => "s-done", "name" => "Done", "type" => "completed", "position" => 3 }]
+    [{"id" => "s-backlog", "name" => "Backlog", "type" => "backlog", "position" => 0},
+      {"id" => "s-todo", "name" => "Todo", "type" => "unstarted", "position" => 1},
+      {"id" => "s-doing", "name" => "Doing", "type" => "started", "position" => 2},
+      {"id" => "s-done", "name" => "Done", "type" => "completed", "position" => 3}]
   end
-  let(:labels) { [{ "id" => "l-blocked", "name" => "blocked" }] }
+  let(:labels) { [{"id" => "l-blocked", "name" => "blocked"}] }
   # Answers whichever operation it is handed, and records what it was asked.
   let(:fake) do
     lambda { |document, variables|
       calls << [document[/mutation (\w+)|query (\w+)/, 1], variables]
-      { "data" => response_for(document, variables) }
+      {"data" => response_for(document, variables)}
     }
   end
   let!(:built) do
     plans do |t|
       t.plan "002.00", :approved, "dev-foundation",
-        files: { "spec.md" => spec_body(title: "Dev Foundation"),
-                 "plan.md" => "## PR-1 — Test rig\n\nThe rig.\n" },
+        files: {"spec.md" => spec_body(title: "Dev Foundation"),
+                "plan.md" => "## PR-1 — Test rig\n\nThe rig.\n"},
         prs: [t.merged(2, "Spec 002 PR-1: Test rig")]
     end
   end
@@ -44,20 +44,20 @@ RSpec.describe Agentilda::Linear::Push, :tree do
   def response_for(document, variables)
     case document
     when /teams\(filter/
-      { "teams" => { "nodes" => [{ "id" => "team-1", "name" => "Tax", "key" => "TAX",
-                                 "states" => { "nodes" => states }, "labels" => { "nodes" => labels } }] } }
+      {"teams" => {"nodes" => [{"id" => "team-1", "name" => "Tax", "key" => "TAX",
+                                "states" => {"nodes" => states}, "labels" => {"nodes" => labels}}]}}
     when /issueCreate/
       issued << variables[:input]
       number = 40 + issued.size
-      { "issueCreate" => { "success" => true, "issue" => { "id" => "i-#{number}",
-                                                         "identifier" => "TAX-#{number}",
-                                                         "url" => "https://linear.app/TAX-#{number}" } } }
+      {"issueCreate" => {"success" => true, "issue" => {"id" => "i-#{number}",
+                                                        "identifier" => "TAX-#{number}",
+                                                        "url" => "https://linear.app/TAX-#{number}"}}}
     when /issueUpdate/
-      { "issueUpdate" => { "success" => true, "issue" => { "id" => "i-40", "identifier" => variables[:id],
-                                                         "url" => "https://linear.app/#{variables[:id]}" } } }
+      {"issueUpdate" => {"success" => true, "issue" => {"id" => "i-40", "identifier" => variables[:id],
+                                                        "url" => "https://linear.app/#{variables[:id]}"}}}
     when /issueLabelCreate/
-      { "issueLabelCreate" => { "success" => true, "issueLabel" => { "id" => "l-new", "name" => variables[:input][:name] } } }
-    when /attachmentCreate/ then { "attachmentCreate" => { "success" => true, "attachment" => { "id" => "a-1" } } }
+      {"issueLabelCreate" => {"success" => true, "issueLabel" => {"id" => "l-new", "name" => variables[:input][:name]}}}
+    when /attachmentCreate/ then {"attachmentCreate" => {"success" => true, "attachment" => {"id" => "a-1"}}}
     end
   end
 
@@ -95,7 +95,7 @@ RSpec.describe Agentilda::Linear::Push, :tree do
     # import that only knows the word "In Progress" would file every plan
     # wrong on it.
     it "falls back to the type when the team has no state by that name" do
-      plans { |t| t.plan "005.00", :building, "in-flight", files: { "spec.md" => spec_body }, prs: [t.open(9, "WIP")] }
+      plans { |t| t.plan "005.00", :building, "in-flight", files: {"spec.md" => spec_body}, prs: [t.open(9, "WIP")] }
       push.call
 
       expect(issued.map { |i| i[:stateId] }).to include("s-doing")
@@ -110,7 +110,7 @@ RSpec.describe Agentilda::Linear::Push, :tree do
 
   describe "labels" do
     it "reuses a label the team already has rather than making a second one" do
-      plans { |t| t.plan "006.00", :blocked, "stuck", files: { "blocked.md" => "B1. Which tier?" } }
+      plans { |t| t.plan "006.00", :blocked, "stuck", files: {"blocked.md" => "B1. Which tier?"} }
       push.call
 
       aggregate_failures do
@@ -120,7 +120,7 @@ RSpec.describe Agentilda::Linear::Push, :tree do
     end
 
     it "creates one the team is missing" do
-      plans { |t| t.plan "007.00", :deployed, "shipped", files: { "deployed.md" => "v1.2.0" } }
+      plans { |t| t.plan "007.00", :deployed, "shipped", files: {"deployed.md" => "v1.2.0"} }
       push.call
 
       expect(calls.filter_map { |n, v| v[:input][:name] if n == "CreateLabel" }).to eq(["deployed"])
@@ -161,7 +161,7 @@ RSpec.describe Agentilda::Linear::Push, :tree do
 
     it "updates rather than duplicates once the plan changes underneath it" do
       File.write(File.join(plans_root, "002.00-✅-dev-foundation", "plan.md"),
-                 "## PR-1 — Test rig, rewritten\n\nDifferent now.\n")
+        "## PR-1 — Test rig, rewritten\n\nDifferent now.\n")
       calls.clear
       described_class.new(import: fresh_import, api:, tree:).call
 
@@ -176,9 +176,9 @@ RSpec.describe Agentilda::Linear::Push, :tree do
     let(:fake) do
       lambda { |document, variables|
         calls << [document[/mutation (\w+)|query (\w+)/, 1], variables]
-        next { "errors" => [{ "message" => "title is too long" }] } if document.match?(/issueCreate/)
+        next {"errors" => [{"message" => "title is too long"}]} if document.match?(/issueCreate/)
 
-        { "data" => response_for(document, variables) }
+        {"data" => response_for(document, variables)}
       }
     end
 
@@ -194,7 +194,7 @@ RSpec.describe Agentilda::Linear::Push, :tree do
     end
 
     it "keeps going, so one bad plan does not strand the rest" do
-      plans { |t| t.plan "008.00", :new, "next-one", files: { "spec.md" => spec_body } }
+      plans { |t| t.plan "008.00", :new, "next-one", files: {"spec.md" => spec_body} }
 
       expect(push.call.map { |r| r.action.ordinal }.uniq).to include("002.00", "008.00")
     end

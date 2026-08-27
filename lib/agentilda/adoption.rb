@@ -171,7 +171,7 @@ module Agentilda
 
       FileUtils.mkdir_p(path)
       File.write(File.join(path, PullRequests::FILENAME),
-                 PullRequests.render([pull_request_for(adoptee)]))
+        PullRequests.render([pull_request_for(adoptee)]))
 
       adoptee.with(path:)
     end
@@ -185,8 +185,8 @@ module Agentilda
       pull = adoptee.pull
       github.pull_request(pull[:number].to_s)
     rescue Agentilda::Error
-      { number: pull[:number], title: pull[:title], url: pull[:url],
-        state: pull[:state] || "Unknown", body: "" }
+      {number: pull[:number], title: pull[:title], url: pull[:url],
+       state: pull[:state] || "Unknown", body: ""}
     end
   end
 end

@@ -22,7 +22,7 @@ RSpec.describe Agentilda::CLI::Run, :tree do
       # The log always lands in the example's own temp dir, never in the
       # shared system one where parallel suites would interleave into it.
       command.call(dir: plans_root, isolation: "shared",
-                   log: File.join(plans_root, "..", "progress.log"), **options)
+        log: File.join(plans_root, "..", "progress.log"), **options)
     rescue SystemExit => e
       status = e.status
     ensure
@@ -40,7 +40,7 @@ RSpec.describe Agentilda::CLI::Run, :tree do
   # 🟡, so the first round's resync advances it before any agent has run,
   # and every "nothing happened" assertion below would be false.
   def building_plan(ordinal = "001.00", slug = "tax-rule-dsl")
-    plans { |t| t.plan(ordinal, :building, slug, files: { "spec.md" => spec_body, "plan.md" => "# Plan" }) }
+    plans { |t| t.plan(ordinal, :building, slug, files: {"spec.md" => spec_body, "plan.md" => "# Plan"}) }
   end
 
   # The `--commit` seam. The block sees the subject before answering, so an
@@ -97,7 +97,7 @@ RSpec.describe Agentilda::CLI::Run, :tree do
     # "dry" run renamed a ⭐️ folder whose plan.md already existed. A preview
     # that moves folders is not a preview.
     it "renames nothing, even a folder the resync would promote" do
-      plans { |t| t.plan("002.00", :planned, "stays-put", files: { "spec.md" => spec_body, "plan.md" => "# Plan" }) }
+      plans { |t| t.plan("002.00", :planned, "stays-put", files: {"spec.md" => spec_body, "plan.md" => "# Plan"}) }
       run
 
       expect(Dir.children(plans_root).grep(/stays-put/)).to eq(["002.00-⭐️-stays-put"])
@@ -170,7 +170,7 @@ RSpec.describe Agentilda::CLI::Run, :tree do
       # own serial resync advances it — which is the property under test: the
       # harness reads the disk after the round rather than trusting what the
       # agent claimed to have done.
-      plans { |t| t.plan("002.00", :planned, "moves", files: { "spec.md" => spec_body, "plan.md" => "# Plan" }) }
+      plans { |t| t.plan("002.00", :planned, "moves", files: {"spec.md" => spec_body, "plan.md" => "# Plan"}) }
       with_executor
       out, err, = run(commit: true)
 
@@ -208,7 +208,7 @@ RSpec.describe Agentilda::CLI::Run, :tree do
       building_plan
       checkout = Agentilda::Worktree::Checkout.new(
         ordinal: Agentilda::Ordinal.parse("001.00"), branch: "kig/001.00-tax-rule-dsl",
-        path: plans_root, created: true,
+        path: plans_root, created: true
       )
       worktree = instance_double(Agentilda::Worktree, repository?: true, checkout_for: checkout)
       allow(Agentilda::Worktree).to receive(:new).and_return(worktree)
@@ -233,7 +233,7 @@ RSpec.describe Agentilda::CLI::Run, :tree do
     # ⭕️ is stepped around, never assigned — and stepping around in silence
     # would leave the human unaware they are the bottleneck.
     it "names the plans waiting on a human, with the unblock line to type" do
-      plans { |t| t.plan("001.00", :blocked, "stuck", files: { "blocked.md" => "# Blocked\n\n## B1. Which vendor\n" }) }
+      plans { |t| t.plan("001.00", :blocked, "stuck", files: {"blocked.md" => "# Blocked\n\n## B1. Which vendor\n"}) }
       _out, err, = run
 
       expect(unwrapped(err)).to include("1 plan need", "agentilda unblock 001.00 --commit")

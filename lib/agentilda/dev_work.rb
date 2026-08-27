@@ -22,7 +22,7 @@ module Agentilda
     TITLES = [
       /\Abump\s+\S+\s+from\s+\S+\s+to\s+\S+/i,
       /\A(?:chore|ci|build|deps|style|refactor)(?:\([^)]*\))?:/i,
-      /\Abump\s+(?:to\s+)?v?\d+\.\d+/i,
+      /\Abump\s+(?:to\s+)?v?\d+\.\d+/i
     ].freeze
 
     # Paths that are how the project is built rather than what it does.

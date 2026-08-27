@@ -7,19 +7,19 @@ module Agentilda
       desc "Run specialist agents over the plans until nothing changes"
 
       option :commit, type: :boolean, default: false,
-                      desc: "Actually invoke the agents (default: dry run, prints the plan of work)"
+        desc: "Actually invoke the agents (default: dry run, prints the plan of work)"
       option :rounds, default: "10", desc: "Hard ceiling on loop iterations"
       option :agent, desc: "Only run this one agent"
       option :plan, aliases: ["--plans"],
-                    desc: "Only these plans, comma separated: NNN or NNN.MM, e.g. --plan 003,005.01. Default: the whole tree"
+        desc: "Only these plans, comma separated: NNN or NNN.MM, e.g. --plan 003,005.01. Default: the whole tree"
       option :root, desc: "Repository root the agents work in (default: the .plans parent)"
       option :isolation, default: "worktree", values: %w[worktree shared],
-                         desc: "worktree: a checkout and branch per plan, run in parallel. shared: one tree, serial"
+        desc: "worktree: a checkout and branch per plan, run in parallel. shared: one tree, serial"
       option :jobs, aliases: ["-j"],
-                    desc: "Agents to run at once (default: cores - 2, capped at 12)"
+        desc: "Agents to run at once (default: cores - 2, capped at 12)"
       option :dont_push_anything, type: :boolean, default: false,
-                                  desc: "With --commit and --isolation worktree, a finished branch is pushed and its pull request " \
-                                        "opened as soon as it lands, titled [NNN.MM](X). Pass this to turn that off and leave it uncommitted."
+        desc: "With --commit and --isolation worktree, a finished branch is pushed and its pull request " \
+              "opened as soon as it lands, titled [NNN.MM](X). Pass this to turn that off and leave it uncommitted."
       option :log, desc: "Append progress to this file (default: a per-project file under the system temp dir)"
 
       example [
@@ -28,7 +28,7 @@ module Agentilda
         "--commit -j 4          # …with four at a time",
         "--isolation shared     # one tree, serial — no git required",
         "--commit --rounds 3    # …with a tighter ceiling",
-        "--commit --plan 005,006,007  # only the plans a batch step just created",
+        "--commit --plan 005,006,007  # only the plans a batch step just created"
       ]
 
       # @param options [Hash]
@@ -61,7 +61,7 @@ module Agentilda
           worktree: (Worktree.new(root:) if isolation == :worktree),
           max_rounds: options.fetch(:rounds, 10).to_i,
           executor: Executor.new(root:, dry_run: !commit?(options)), dry_run: !commit?(options),
-          publisher: publisher_for(root, isolation, options),
+          publisher: publisher_for(root, isolation, options)
         )
 
         started = UI.monotonic
@@ -135,12 +135,12 @@ module Agentilda
           puts "round #{round.number}"
           round.attempts.each do |a|
             mark = if !a.ok
-                "FAIL"
-              elsif a.advanced?
-                "#{a.from} -> #{a.to}"
-              else
-                "no change"
-              end
+              "FAIL"
+            elsif a.advanced?
+              "#{a.from} -> #{a.to}"
+            else
+              "no change"
+            end
             puts "  #{a.ordinal}\t#{a.agent}\t#{mark}\t#{a.note}"
           end
         end

@@ -75,7 +75,7 @@ module Agentilda
       MINIMUM_WORDS = 3
 
       NOISE = %w[the and for with from into that this add adds added fix fixes
-                 update updates use uses spec plan pull request pr tax app web api].freeze
+        update updates use uses spec plan pull request pr tax app web api].freeze
 
       # @param tree [Agentilda::Tree]
       def initialize(tree:)

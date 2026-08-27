@@ -10,11 +10,11 @@ RSpec.describe Agentilda::Linear::Issues, :tree do
 
   let(:issues) do
     [Agentilda::Linear::Issue.new(unit: "PR-1", identifier: "TAX-41",
-                                  url: "https://linear.app/team/TAX/issue/TAX-41", title: "PR-1 — Test rig | rigging",
-                                  state: "Done", digest: "9f2c1a04")]
+      url: "https://linear.app/team/TAX/issue/TAX-41", title: "PR-1 — Test rig | rigging",
+      state: "Done", digest: "9f2c1a04")]
   end
 
-  let(:project) { { name: "US Tax Law: Self Contained Ruby Gem", url: "https://linear.app/p-1" } }
+  let(:project) { {name: "US Tax Law: Self Contained Ruby Gem", url: "https://linear.app/p-1"} }
 
   before do
     plans { |t| t.plan "002.00", :approved, "dev-foundation", prs: [t.merged(2, "Test rig")] }

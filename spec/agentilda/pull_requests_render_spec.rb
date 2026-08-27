@@ -15,7 +15,7 @@ RSpec.describe Agentilda::PullRequests do
   end
 
   def pr(number:, title: "A change", state: "Merged 🟣", body: "It did a thing.")
-    { number:, title:, state:, body:, url: "https://github.com/o/r/pull/#{number}" }
+    {number:, title:, state:, body:, url: "https://github.com/o/r/pull/#{number}"}
   end
 
   describe ".render" do
@@ -64,8 +64,8 @@ RSpec.describe Agentilda::PullRequests do
     let(:round_trip) do
       Dir.mktmpdir do |dir|
         File.write(File.join(dir, "pull-requests.md"),
-                   described_class.render([{ number: 4, title:, url: "https://example.com/repo/pull/4",
-                                             state: "Merged 🟣", body: "why" }]))
+          described_class.render([{number: 4, title:, url: "https://example.com/repo/pull/4",
+                                   state: "Merged 🟣", body: "why"}]))
         Agentilda::PullRequests.new(dir:).all.first
       end
     end

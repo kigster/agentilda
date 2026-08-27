@@ -26,7 +26,7 @@ RSpec.describe Agentilda::CLI::Index, :tree do
 
   def unwrapped(text) = text.tr("║╔╗╚╝═", " ").gsub(/\s+/, " ")
 
-  before { plans { |t| t.plan("001.00", :new, "tax-rule-dsl", files: { "spec.md" => spec_body }) } }
+  before { plans { |t| t.plan("001.00", :new, "tax-rule-dsl", files: {"spec.md" => spec_body}) } }
 
   it "writes INDEX.md into the plans directory and prints where" do
     out, err, = run

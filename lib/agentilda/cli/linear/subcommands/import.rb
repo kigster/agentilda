@@ -9,17 +9,17 @@ module Agentilda
         desc "Create Linear issues from the plans: one per folder, one child per work unit"
 
         option :project, aliases: ["-p", "--project-url", "--project-id"],
-                         desc: "The project to file everything under: its URL, its name, or its id"
+          desc: "The project to file everything under: its URL, its name, or its id"
         option :commit, type: :boolean, default: false,
-                        desc: "Actually create and update in Linear (default: dry run)"
+          desc: "Actually create and update in Linear (default: dry run)"
         option :format, default: "text", values: %w[text json],
-                        desc: "json emits the exact arguments the Linear MCP tools take"
+          desc: "json emits the exact arguments the Linear MCP tools take"
         option :since, aliases: ["-s"],
-                       desc: "Skip plans numbered below this, e.g. 010.00"
+          desc: "Skip plans numbered below this, e.g. 010.00"
         option :status,
           desc: "Only plans in these states: a comma-separated list of status keys"
         option :force, type: :boolean, default: false,
-                       desc: "Update everything, whether the plan has changed or not"
+          desc: "Update everything, whether the plan has changed or not"
 
         example [
           "TAX -p 'US Tax Law: Self Contained Ruby Gem'   # show what would be created",
@@ -27,7 +27,7 @@ module Agentilda
           "TAX -p 'Ruby Gem' --commit                     # do it, using LINEAR_API_KEY",
           "TAX -p 'Ruby Gem' --format json                # hand it to the MCP transport instead",
           "TAX -p 'Ruby Gem' --since 010.00               # only the recent plans",
-          "TAX -p 'Ruby Gem' --status building,in_review",
+          "TAX -p 'Ruby Gem' --status building,in_review"
         ]
 
         # @param team [String]
@@ -61,7 +61,7 @@ module Agentilda
         def resolve_project(team, tree, options)
           reference = options[:project].to_s
           looks_up = reference.match?(%r{\Ahttps?://}) || reference.match?(/\A[0-9a-f-]{32,}\z/)
-          return { "id" => nil, "name" => reference, "url" => nil } if !looks_up && offline?
+          return {"id" => nil, "name" => reference, "url" => nil} if !looks_up && offline?
 
           _api, survey = survey_for(team, tree)
           survey.project(reference)
@@ -85,8 +85,8 @@ module Agentilda
         # @return [Agentilda::Linear::Import]
         def build(tree, team, project, options)
           Agentilda::Linear::Import.new(tree:, team: Agentilda::Linear.key!(team), project:,
-                                        since: options[:since], statuses: statuses(options),
-                                        force: options.fetch(:force, false))
+            since: options[:since], statuses: statuses(options),
+            force: options.fetch(:force, false))
         end
 
         # @param options [Hash]
@@ -116,7 +116,7 @@ module Agentilda
         # @return [String]
         def row(action)
           [action.op, action.kind, action.ordinal, action.unit || "-",
-           action.identifier || "-", action.title].join("\t")
+            action.identifier || "-", action.title].join("\t")
         end
 
         # @param action [Agentilda::Linear::Action]

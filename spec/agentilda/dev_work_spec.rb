@@ -26,7 +26,7 @@ RSpec.describe Agentilda::DevWork do
     context "judged by the files in the diff" do
       it "asserts [dev] when every judged file is build plumbing" do
         expect(described_class.developer?("Tighten the release pipeline",
-                                          [".github/workflows/ci.yml", "Gemfile.lock"])).to be(true)
+          [".github/workflows/ci.yml", "Gemfile.lock"])).to be(true)
       end
 
       # `.plans` and the README prove nothing either way — every pull request
@@ -34,7 +34,7 @@ RSpec.describe Agentilda::DevWork do
       # evidence that tips a real feature into [dev].
       it "ignores neutral files rather than counting them as plumbing" do
         expect(described_class.developer?("Add Schedule K-1 support",
-                                          [".plans/004.00-🟡-k1/plan.md", "lib/k1.rb"])).to be(false)
+          [".plans/004.00-🟡-k1/plan.md", "lib/k1.rb"])).to be(false)
       end
 
       it "refuses to judge when only neutral files remain" do

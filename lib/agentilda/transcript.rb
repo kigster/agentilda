@@ -67,7 +67,7 @@ module Agentilda
       "MultiEdit" => "editing", "NotebookEdit" => "editing",
       "Bash" => "running", "Grep" => "searching for", "Glob" => "looking for",
       "Task" => "delegating", "TodoWrite" => "planning",
-      "WebFetch" => "fetching", "WebSearch" => "searching the web for",
+      "WebFetch" => "fetching", "WebSearch" => "searching the web for"
     }.freeze
 
     # The input key worth naming, per tool, in the order we would rather say it.
@@ -92,7 +92,7 @@ module Agentilda
       @trace_path = trace
       @trace = trace && File.open(trace, "a")
       @tools = 0
-      @main = { up: 0, down: 0 }
+      @main = {up: 0, down: 0}
       @streamed = {}
       @tasks = {}
       @spawned = 0
@@ -189,11 +189,11 @@ module Agentilda
       end
 
       event = begin
-          JSON.parse(text)
-        rescue JSON::ParserError
-          @plain << text
-          return
-        end
+        JSON.parse(text)
+      rescue JSON::ParserError
+        @plain << text
+        return
+      end
 
       handle(event)
     end
@@ -253,7 +253,7 @@ module Agentilda
       usage = event.dig("event", "usage") or return
       bucket = bucket_for(event["parent_tool_use_id"])
       bucket[:up] += usage.values_at("input_tokens", "cache_creation_input_tokens",
-                                     "cache_read_input_tokens").compact.sum
+        "cache_read_input_tokens").compact.sum
       bucket[:down] += usage["output_tokens"].to_i
       publish
     end
@@ -263,12 +263,12 @@ module Agentilda
     def bucket_for(parent)
       return @main if parent.nil?
 
-      @streamed[parent] ||= { up: 0, down: 0 }
+      @streamed[parent] ||= {up: 0, down: 0}
     end
 
     # @return [Hash] every streamed sub-agent's counters, added together
     def streamed
-      @streamed.values.each_with_object({ up: 0, down: 0 }) do |b, sum|
+      @streamed.values.each_with_object({up: 0, down: 0}) do |b, sum|
         sum[:up] += b[:up]
         sum[:down] += b[:down]
       end
@@ -297,7 +297,7 @@ module Agentilda
     def start_task(event)
       id = event["task_id"] or return
 
-      @tasks[id] ||= { tool_use_id: event["tool_use_id"], total: 0 }
+      @tasks[id] ||= {tool_use_id: event["tool_use_id"], total: 0}
       @spawned = @tasks.size
       publish
     end
@@ -307,7 +307,7 @@ module Agentilda
     def update_task(event)
       id = event["task_id"] or return
 
-      task = (@tasks[id] ||= { tool_use_id: event["tool_use_id"], total: 0 })
+      task = (@tasks[id] ||= {tool_use_id: event["tool_use_id"], total: 0})
       task[:tool_use_id] ||= event["tool_use_id"]
       task[:total] = event.dig("usage", "total_tokens").to_i
       @spawned = @tasks.size
@@ -399,8 +399,8 @@ module Agentilda
 
       @main = {
         up: usage.values_at("input_tokens", "cache_creation_input_tokens",
-                            "cache_read_input_tokens").compact.sum,
-        down: usage["output_tokens"].to_i,
+          "cache_read_input_tokens").compact.sum,
+        down: usage["output_tokens"].to_i
       }
     end
 

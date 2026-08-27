@@ -29,7 +29,7 @@ module Agentilda
     Row = Data.define(:name, :invocations, :subagents, :up, :down, :seconds)
 
     # Cells per column, so the header, the rows and the rule cannot drift.
-    WIDTHS = { name: 22, invocations: 6, subagents: 11, up: 9, down: 9, seconds: 8 }.freeze
+    WIDTHS = {name: 22, invocations: 6, subagents: 11, up: 9, down: 9, seconds: 8}.freeze
 
     # @param attempts [Array<Agentilda::Runner::Attempt>]
     # @param seconds [Float] wall clock for the whole loop, which is not the
@@ -86,7 +86,7 @@ module Agentilda
     def by_agent
       attempts.group_by(&:agent).map { |name, list|
         Row.new(name:, invocations: list.size, subagents: list.sum(&:subagents),
-                up: list.sum(&:up), down: list.sum(&:down), seconds: list.sum(&:seconds))
+          up: list.sum(&:up), down: list.sum(&:down), seconds: list.sum(&:seconds))
       }.sort_by { |row| -row.up }
     end
 
@@ -104,7 +104,7 @@ module Agentilda
         "#{rounds} round#{"s" unless rounds == 1}",
         duration(seconds),
         "#{format("%.1f", concurrency)} agents at a time",
-        "↑ #{UI.abbreviate(up)} ↓ #{UI.abbreviate(down)}",
+        "↑ #{UI.abbreviate(up)} ↓ #{UI.abbreviate(down)}"
       ].join(" · ") + delegation
     end
 

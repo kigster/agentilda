@@ -18,8 +18,8 @@ RSpec.describe Agentilda::Linear::Attribution, :tree do
 
   def pull(title, number: "90")
     Agentilda::PullRequest.new(number:, title:,
-                               url: "https://github.com/example/repo/pull/#{number}",
-                               state: "Merged 🟣")
+      url: "https://github.com/example/repo/pull/#{number}",
+      state: "Merged 🟣")
   end
 
   def place(title, bodies: {})
@@ -97,7 +97,7 @@ RSpec.describe Agentilda::Linear::Attribution, :tree do
       aggregate_failures do
         expect(placed).not_to be_placed
         expect(placed.rivals).to match_array(%w[102.00-⚪️-invoice-export-pipeline
-                                                103.00-⚪️-pipeline-invoice-export])
+          103.00-⚪️-pipeline-invoice-export])
         expect(placed.why).to eq("2 folders matched equally well (100%)")
       end
     end
@@ -106,7 +106,7 @@ RSpec.describe Agentilda::Linear::Attribution, :tree do
   describe "the second pass through the description" do
     it "reads the description when the title said nothing useful" do
       placed = place("Big improvement",
-                     bodies: { "90" => "Rework the ledger carryforward vintages handling." })
+        bodies: {"90" => "Rework the ledger carryforward vintages handling."})
 
       aggregate_failures do
         expect(placed).to be_placed
@@ -118,14 +118,14 @@ RSpec.describe Agentilda::Linear::Attribution, :tree do
 
     it "gives up when the description is all boilerplate the cleaning removes" do
       placed = place("Big improvement",
-                     bodies: { "90" => "<!-- template -->\n```ruby\ncode\n```" })
+        bodies: {"90" => "<!-- template -->\n```ruby\ncode\n```"})
 
       expect(placed).not_to be_placed
     end
 
     it "returns the title's own refusal when the description matches nothing either" do
       placed = place("Big improvement",
-                     bodies: { "90" => "Nothing relevant whatsoever, honestly speaking." })
+        bodies: {"90" => "Nothing relevant whatsoever, honestly speaking."})
 
       aggregate_failures do
         expect(placed).not_to be_placed

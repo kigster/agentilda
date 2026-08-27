@@ -49,12 +49,12 @@ module Agentilda
     # @return [Array<Agentilda::Ordinal>] every number already taken
     def existing
       @existing ||= begin
-          return [] unless File.directory?(dir)
+        return [] unless File.directory?(dir)
 
-          Dir.children(dir)
-            .select { |c| File.directory?(File.join(dir, c)) }
-            .filter_map { |c| Ordinal.from_dirname(c) }
-        end
+        Dir.children(dir)
+          .select { |c| File.directory?(File.join(dir, c)) }
+          .filter_map { |c| Ordinal.from_dirname(c) }
+      end
     end
 
     # Turn free text into the kebab tail of a folder name.
