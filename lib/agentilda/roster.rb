@@ -1,12 +1,14 @@
 # frozen_string_literal: true
 
 module Agentilda
-  # `agentilda agents` — who the specialists are, what each is offered
-  # work from, and what one of them actually says when you open it.
+  # `agentilda agents` — who the specialists are and what each is offered
+  # work from. Reading one in full is {Viewer}'s job: the definition file is
+  # already the whole truth, so `agents describe` opens it rather than
+  # restating it.
   #
-  # {#list} and {#describe} return strings and print nothing, the same bargain
-  # {Reporter} makes, so the caller decides where the text goes and the table
-  # stays pipeable.
+  # {#list} returns a string and prints nothing, the same bargain {Reporter}
+  # makes, so the caller decides where the text goes and the table stays
+  # pipeable.
   #
   # Everything here is read from the definition files. Nothing about a
   # specialty is restated in Ruby, because a second copy of "who does what" is
@@ -35,20 +37,6 @@ module Agentilda
       return "No agent definitions in #{agents.dir}\n" if all.empty?
 
       [header(all), *all.map { |agent| row(agent, all) }].join("\n") + "\n"
-    end
-
-    # One agent in full, prompt included.
-    #
-    # @param name [String, nil] nil describes every agent
-    # @return [String] newline-terminated
-    # @raise [Agentilda::Error] when no agent goes by that name
-    def describe(name = nil)
-      return agents.all.map { |agent| detail(agent) }.join("\n") if name.nil?
-
-      agent = agents.find(name) or
-        raise Error, "No agent called #{name}. Known: #{agents.all.map(&:name).join(", ")}"
-
-      detail(agent)
     end
 
     private
@@ -119,34 +107,5 @@ module Agentilda
            UI.paint(agent.model.to_s, :bright_black))
     end
 
-    # An agent in full: the frontmatter the loop routes on, then the prompt
-    # itself, because the prompt is the definition and a summary of it would be
-    # one more thing to keep true.
-    #
-    # @param agent [Agentilda::Agent]
-    # @return [String]
-    def detail(agent)
-      [
-        UI.paint(agent.name, :bold),
-        agent.description,
-        "",
-        field("Handles", handles(agent)),
-        field("Advances to", advances(agent)),
-        field("Model", agent.model.to_s),
-        field("Network", agent.network ? "yes" : "no"),
-        field("Allowed tools", agent.allowed_tools.empty? ? "(inherits the default set)" : agent.allowed_tools.join(", ")),
-        field("May", agent.may.empty? ? "(nothing lifted)" : agent.may.join(", ")),
-        field("Defined in", agent.path),
-        "",
-        UI.paint("─" * 60, :bright_yellow),
-        agent.prompt,
-        "",
-      ].join("\n")
-    end
-
-    # @param label [String]
-    # @param value [String]
-    # @return [String]
-    def field(label, value) = "#{UI.paint(UI.fit("#{label}:", 16), :bright_black)} #{value}"
   end
 end

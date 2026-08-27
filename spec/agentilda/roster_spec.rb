@@ -68,32 +68,4 @@ RSpec.describe Agentilda::Roster do
       end
     end
   end
-
-  describe "#describe" do
-    it "prints the prompt itself, because the prompt is the definition" do
-      expect(plain(roster.describe("luke-backend"))).to include("You are implementing one work unit.")
-    end
-
-    it "carries the frontmatter the loop actually routes on" do
-      text = plain(roster.describe("luke-backend"))
-
-      aggregate_failures do
-        expect(text).to include("🟡 Building", "🔴 Changes Requested")
-        expect(text).to include("🟢 Ready for Review")
-        expect(text).to include("Read, Write")
-      end
-    end
-
-    it "describes every agent when given no name" do
-      text = plain(roster.describe)
-
-      expect(text).to include("You are implementing one work unit.", "You are reviewing.")
-    end
-
-    # Refused with the list, not with a bare "not found": the name is almost
-    # always a typo for one of six, and the six are right there.
-    it "names the agents it does know when asked for one it does not" do
-      expect { roster.describe("nope") }.to raise_error(Agentilda::Error, /No agent called nope.*luke-backend/m)
-    end
-  end
 end

@@ -1160,22 +1160,50 @@ module Agentilda
     class AgentDescribe < Dry::CLI::Command
       include UI
 
-      desc "Print one specialist in full, prompt included"
+      desc "Open one specialist's definition in a Markdown viewer"
 
       argument :name, required: false,
-                      desc: "Which specialist, e.g. luke-backend (default: every one)"
+                      desc: "Which specialist, full name or a fragment, e.g. leah (default: every one)"
+
+      option :mdfried, type: :boolean, default: false, aliases: ["-m"],
+                       desc: "Render in the terminal through mdfried instead of the system viewer"
 
       example [
-        "luke-backend       # one agent, prompt and all",
-        "                       # every agent",
-        "hansolo-reviewer | less -R",
+        "leah               # leah-researcher, in the system Markdown viewer",
+        "luke-backend -m    # the same, rendered in this terminal by mdfried",
+        "                       # every agent, one viewer window each",
       ]
 
+      # The registry instantiates commands bare, so both collaborators default
+      # to the real thing; the suite hands in its own to keep viewers from
+      # opening on the box running it.
+      #
+      # @param agents [Agentilda::Agents]
+      # @param viewer [Agentilda::Viewer]
+      def initialize(agents: Agents.new, viewer: Viewer.new)
+        super()
+        @agents = agents
+        @viewer = viewer
+      end
+
       # @param name [String, nil]
-      # @param options [Hash]
+      # @param mdfried [Boolean]
       # @return [void]
-      def call(name: nil, **_options)
-        $stdout.write(Roster.new.describe(name))
+      def call(name: nil, mdfried: false, **_options)
+        agents = @agents
+        found = name ? agents.match(name) : agents.all
+
+        if found.empty?
+          known = agents.all.map(&:name).join(", ")
+          raise Error, name ? "No agent matches #{name}. Known: #{known}" : "No agent definitions in #{agents.dir}"
+        end
+
+        # A fragment that fits several agents is a question, not an order:
+        # opening all of them would bury the one that was meant.
+        raise Error, "#{name} could be any of #{found.map(&:name).join(", ")} — say which" if name && found.size > 1
+
+        paths = found.map(&:path)
+        mdfried ? @viewer.mdfried(paths) : @viewer.open(paths)
       rescue Agentilda::Error => e
         error(e.message)
         exit 65
