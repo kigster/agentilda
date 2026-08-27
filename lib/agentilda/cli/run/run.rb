@@ -60,7 +60,7 @@ module Agentilda
           tree:, agents:, isolation:, jobs:, plans:,
           worktree: (Worktree.new(root:) if isolation == :worktree),
           max_rounds: options.fetch(:rounds, 10).to_i,
-          executor: Executor.new(root:, dry_run: !commit?(options)),
+          executor: Executor.new(root:, dry_run: !commit?(options)), dry_run: !commit?(options),
           publisher: publisher_for(root, isolation, options),
         )
 

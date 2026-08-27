@@ -96,8 +96,12 @@ module Agentilda
     #   worktree and opens its pull request as soon as one lands, rather than
     #   once at the very end of the whole loop. nil (the default) never
     #   pushes anything — the caller's opt-out.
+    # @param dry_run [Boolean] no agent is invoked, so the per-round resync
+    #   must not rename anything either — a preview that moves folders is
+    #   not a preview.
     def initialize(tree:, executor:, agents: Agents.new, max_rounds: 10,
-                   isolation: :shared, jobs: 1, worktree: nil, plans: nil, publisher: nil)
+                   isolation: :shared, jobs: 1, worktree: nil, plans: nil, publisher: nil,
+                   dry_run: false)
       @tree = tree
       @executor = executor
       @agents = agents
@@ -106,6 +110,7 @@ module Agentilda
       @worktree = worktree
       @plans = plans
       @publisher = publisher
+      @dry_run = dry_run
       @rounds = []
 
       # Concurrency without isolation is the exact failure the worktree exists
@@ -184,7 +189,11 @@ module Agentilda
       # the hazard a worktree exists to prevent for code, just aimed at
       # `.plans` instead. Doing it here, after `UI.concurrently` has already
       # joined every thread, costs nothing: nobody is still writing.
-      Resync::Dirs.new(tree:).call(commit: true)
+      #
+      # It renames only what a real round may have moved: a dry run invoked
+      # no agent, and "dry run" that renames a folder anyway is a preview
+      # that already happened.
+      Resync::Dirs.new(tree:).call(commit: !@dry_run)
 
       attempts = tasks.zip(results).map { |task, r| r.is_a?(Attempt) ? finish(task, r) : failed(r) }
       Round.new(number:, attempts:)
