@@ -45,7 +45,7 @@ module Agentilda
       approved: :deployed,
       rejected: :building_ui,
       rolled_back: :ready_for_review,
-      shit: :planned,
+      shit: :planned
     }.freeze
 
     # Preference order when several states fit a folder's contents at once.
@@ -77,7 +77,7 @@ module Agentilda
     # family justify only its floor, never its ceiling.
     FAMILIES = [
       %i[blocked product_blocked],
-      %i[building ready_for_review in_review rejected],
+      %i[building ready_for_review in_review rejected]
     ].freeze
 
     # States the agent loop leaves alone: work that is finished (✅ 😎), work

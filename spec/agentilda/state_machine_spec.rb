@@ -23,7 +23,7 @@ RSpec.describe Agentilda::StateMachine do
 
   # A folder far enough along to have pull requests at all.
   def built(key, prs:, files: {})
-    folder(key, files: { "spec.md" => "x", "plan.md" => "y", "pull-requests.md" => "z" }.merge(files), prs:)
+    folder(key, files: {"spec.md" => "x", "plan.md" => "y", "pull-requests.md" => "z"}.merge(files), prs:)
   end
 
   describe "the derived topology" do
@@ -72,11 +72,11 @@ RSpec.describe Agentilda::StateMachine do
       aggregate_failures do
         expect(Agentilda::STATUS_BY_KEY[:new].satisfied_by?(folder(:new))).to be(false)
         expect(Agentilda::STATUS_BY_KEY[:new]
-          .satisfied_by?(folder(:new, files: { "spec.md" => "x" }))).to be(true)
+          .satisfied_by?(folder(:new, files: {"spec.md" => "x"}))).to be(true)
         expect(Agentilda::STATUS_BY_KEY[:planned]
-          .satisfied_by?(folder(:planned, files: { "spec.md" => "x" }))).to be(false)
+          .satisfied_by?(folder(:planned, files: {"spec.md" => "x"}))).to be(false)
         expect(Agentilda::STATUS_BY_KEY[:planned]
-          .satisfied_by?(folder(:planned, files: { "spec.md" => "x", "plan.md" => "y" }))).to be(true)
+          .satisfied_by?(folder(:planned, files: {"spec.md" => "x", "plan.md" => "y"}))).to be(true)
       end
     end
 
@@ -106,9 +106,9 @@ RSpec.describe Agentilda::StateMachine do
     it "insists a deferral names its trigger, so deferrals cannot rot quietly" do
       aggregate_failures do
         expect(Agentilda::STATUS_BY_KEY[:deferred]
-          .satisfied_by?(folder(:deferred, files: { "delayed.md" => "not now" }))).to be(false)
+          .satisfied_by?(folder(:deferred, files: {"delayed.md" => "not now"}))).to be(false)
         expect(Agentilda::STATUS_BY_KEY[:deferred]
-          .satisfied_by?(folder(:deferred, files: { "delayed.md" => "revisit once 018 ships" }))).to be(true)
+          .satisfied_by?(folder(:deferred, files: {"delayed.md" => "revisit once 018 ships"}))).to be(true)
       end
     end
 
@@ -119,8 +119,8 @@ RSpec.describe Agentilda::StateMachine do
       aggregate_failures do
         %i[blocked product_blocked].each do |key|
           status = Agentilda::STATUS_BY_KEY.fetch(key)
-          open = folder(key, files: { "blocked.md" => "### B2. Which rate source?" })
-          drained = folder(key, files: { "blocked.md" => "- **B2** \u2014 2026-08-21, CTO: the vendor feed." })
+          open = folder(key, files: {"blocked.md" => "### B2. Which rate source?"})
+          drained = folder(key, files: {"blocked.md" => "- **B2** \u2014 2026-08-21, CTO: the vendor feed."})
 
           expect(status).to be_satisfied_by(open)
           expect(status.violation(drained)).to include("names no open question")
@@ -129,7 +129,7 @@ RSpec.describe Agentilda::StateMachine do
     end
 
     it "stops a folder being Retroactive once it has been documented" do
-      subject = folder(:retroactive, files: { "spec.md" => "written up" }, prs: ["Merged 🟣"])
+      subject = folder(:retroactive, files: {"spec.md" => "written up"}, prs: ["Merged 🟣"])
 
       expect(Agentilda::STATUS_BY_KEY[:retroactive].violation(subject)).to include("already exists")
     end
@@ -137,13 +137,13 @@ RSpec.describe Agentilda::StateMachine do
 
   describe "#allowed" do
     it "offers the next spine state once its guard is satisfied" do
-      machine = machine_for(:new, files: { "spec.md" => "x", "plan.md" => "y" })
+      machine = machine_for(:new, files: {"spec.md" => "x", "plan.md" => "y"})
 
       expect(machine.allowed).to include(:planned)
     end
 
     it "withholds it while the guard fails" do
-      machine = machine_for(:new, files: { "spec.md" => "x" })
+      machine = machine_for(:new, files: {"spec.md" => "x"})
 
       expect(machine.allowed).not_to include(:planned)
     end
@@ -157,7 +157,7 @@ RSpec.describe Agentilda::StateMachine do
 
   describe "#promote!" do
     it "walks the spine when given no destination, and renames the folder" do
-      subject = folder(:new, files: { "spec.md" => "# S\n\n## Research\n\nWhat was found." })
+      subject = folder(:new, files: {"spec.md" => "# S\n\n## Research\n\nWhat was found."})
 
       expect(described_class.new(subject).promote!.key).to eq(:researched)
       expect(subject.renames).to eq([:researched])
@@ -167,13 +167,13 @@ RSpec.describe Agentilda::StateMachine do
     # the two states are the same folder wearing different names, and the
     # relay that keeps yoda-writer off unresearched specifications collapses.
     it "refuses to call a specification researched when nobody has researched it" do
-      subject = folder(:new, files: { "spec.md" => "# S\n\n## Goal\n\nShip it." })
+      subject = folder(:new, files: {"spec.md" => "# S\n\n## Goal\n\nShip it."})
 
       expect { described_class.new(subject).promote! }.to raise_error(described_class::Refused, /no `## Research` chapter/)
     end
 
     it "moves to a named destination off the spine" do
-      subject = folder(:new, files: { "spec.md" => "x", "blocked.md" => "B1" })
+      subject = folder(:new, files: {"spec.md" => "x", "blocked.md" => "B1"})
 
       expect(described_class.new(subject).promote!(:blocked).key).to eq(:blocked)
       expect(subject.renames).to eq([:blocked])
@@ -181,7 +181,7 @@ RSpec.describe Agentilda::StateMachine do
 
     # A refusal is information: it says the phase has not actually happened.
     it "refuses with the destination's own violation when the guard fails" do
-      subject = folder(:new, files: { "spec.md" => "x" })
+      subject = folder(:new, files: {"spec.md" => "x"})
 
       expect { described_class.new(subject).promote!(:planned) }.to raise_error(described_class::Refused, /Planned requires `plan.md`/)
       expect(subject.renames).to be_empty
@@ -194,7 +194,7 @@ RSpec.describe Agentilda::StateMachine do
     end
 
     it "says so plainly at a terminal state" do
-      expect { machine_for(:discarded, files: { "discarded.md" => "no" }).promote! }.to raise_error(described_class::Refused, /terminal/)
+      expect { machine_for(:discarded, files: {"discarded.md" => "no"}).promote! }.to raise_error(described_class::Refused, /terminal/)
     end
 
     # Not straight to 🟢. Building is two halves, and a change request reopens
@@ -207,7 +207,7 @@ RSpec.describe Agentilda::StateMachine do
     end
 
     it "sends a review that found slop to 💩, keeping the plan and dropping the work" do
-      subject = built(:in_review, files: { "rewrite.md" => "start over" }, prs: ["Open 🟡"])
+      subject = built(:in_review, files: {"rewrite.md" => "start over"}, prs: ["Open 🟡"])
 
       expect(described_class.new(subject).promote!(:shit).key).to eq(:shit)
     end
@@ -220,7 +220,7 @@ RSpec.describe Agentilda::StateMachine do
         planned: :building, building: :building_ui, building_ui: :ready_for_review,
         ready_for_review: :in_review, in_review: :approved, approved: :deployed,
         rejected: :building_ui, rolled_back: :ready_for_review, shit: :planned,
-        discarded: nil, blocked: nil, deployed: nil,
+        discarded: nil, blocked: nil, deployed: nil
       }
 
       aggregate_failures do
@@ -237,7 +237,7 @@ RSpec.describe Agentilda::StateMachine do
     end
 
     it "reaches Building on spec.md and plan.md alone — no pull request has to exist yet" do
-      machine = machine_for(:planned, files: { "spec.md" => "x", "plan.md" => "y" })
+      machine = machine_for(:planned, files: {"spec.md" => "x", "plan.md" => "y"})
 
       expect(machine.best_fit.key).to eq(:building)
     end
@@ -247,19 +247,19 @@ RSpec.describe Agentilda::StateMachine do
     # implementer advances the plan out of 🎨, and neither implementer gets
     # a turn without the folder already being in a building state.
     it "does not require a pull request to arrive at Building" do
-      machine = machine_for(:building, files: { "spec.md" => "x", "plan.md" => "y" })
+      machine = machine_for(:building, files: {"spec.md" => "x", "plan.md" => "y"})
 
       expect(machine.best_fit.key).to eq(:building)
     end
 
     it "prefers a block over spine progress, because a block is the louder fact" do
-      machine = machine_for(:building, files: { "spec.md" => "x", "plan.md" => "y", "blocked.md" => "B1" })
+      machine = machine_for(:building, files: {"spec.md" => "x", "plan.md" => "y", "blocked.md" => "B1"})
 
       expect(machine.best_fit.key).to eq(:blocked)
     end
 
     it "leaves a folder alone when its current status already holds, and nothing further is justified" do
-      machine = machine_for(:new, files: { "spec.md" => "x" })
+      machine = machine_for(:new, files: {"spec.md" => "x"})
 
       expect(machine.best_fit.key).to eq(:new)
     end
@@ -270,7 +270,7 @@ RSpec.describe Agentilda::StateMachine do
     it "never reclassifies between the two blocked states" do
       aggregate_failures do
         %i[blocked product_blocked].each do |key|
-          expect(machine_for(key, files: { "blocked.md" => "B1. Who decides?" }).best_fit.key).to eq(key)
+          expect(machine_for(key, files: {"blocked.md" => "B1. Who decides?"}).best_fit.key).to eq(key)
         end
       end
     end

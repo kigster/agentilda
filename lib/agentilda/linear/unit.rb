@@ -245,15 +245,15 @@ module Agentilda
       # @return [Array<String>]
       def readable
         @readable ||= begin
-            fenced = false
-            subject.read("plan.md").to_s.each_line(chomp: true).each_with_object([]) do |line, kept|
-              if line.match?(FENCE)
-                fenced = !fenced
-              elsif !fenced
-                kept << line
-              end
+          fenced = false
+          subject.read("plan.md").to_s.each_line(chomp: true).each_with_object([]) do |line, kept|
+            if line.match?(FENCE)
+              fenced = !fenced
+            elsif !fenced
+              kept << line
             end
           end
+        end
       end
 
       # @param title [String]

@@ -25,7 +25,7 @@ RSpec.describe Agentilda::CLI::ListPlans, :tree do
   end
 
   it "prints every plan on STDOUT and exits zero when the names hold" do
-    plans { |t| t.plan("001.00", :new, "tax-rule-dsl", files: { "spec.md" => spec_body }) }
+    plans { |t| t.plan("001.00", :new, "tax-rule-dsl", files: {"spec.md" => spec_body}) }
     out, _err, status = run
 
     expect(out).to include("001.00", "Tax Rule DSL")
@@ -35,7 +35,7 @@ RSpec.describe Agentilda::CLI::ListPlans, :tree do
   # ⭕️ with an unreadable blocked.md is a name the contents do not justify.
   # Exiting zero here would let CI treat a lying tree as a healthy one.
   it "exits non-zero when a folder's contents do not justify its name" do
-    plans { |t| t.plan("002.00", :blocked, "stuck", files: { "blocked.md" => "# Blocked\n\nno numbered question\n" }) }
+    plans { |t| t.plan("002.00", :blocked, "stuck", files: {"blocked.md" => "# Blocked\n\nno numbered question\n"}) }
     _out, _err, status = run
 
     expect(status).to eq(1)

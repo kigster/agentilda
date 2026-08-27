@@ -32,7 +32,7 @@ module Agentilda
       "rewrite.md" => "Rewrite",
       "deployed.md" => "Deployed",
       "rollback.md" => "Rollback",
-      "discarded.md" => "Discarded",
+      "discarded.md" => "Discarded"
     }.freeze
 
     # @param tree [Agentilda::Tree]

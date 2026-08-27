@@ -19,8 +19,8 @@ RSpec.describe Agentilda::GitHub do
         "title" => "Send transactional mail through Resend",
         "url" => "https://github.com/example/repo/pull/92",
         "headRefName" => "kig/018.01-resend",
-        "files" => [{ "path" => ".plans/018.01-🟡-deploy/plan.md" }, { "path" => "rails/Gemfile" }],
-      },
+        "files" => [{"path" => ".plans/018.01-🟡-deploy/plan.md"}, {"path" => "rails/Gemfile"}]
+      }
     ])
   end
 
@@ -52,12 +52,12 @@ RSpec.describe Agentilda::GitHub do
         branch: "kig/018.01-resend",
         files: [".plans/018.01-🟡-deploy/plan.md", "rails/Gemfile"],
         state: "Unknown",
-        open: false,
+        open: false
       )
     end
 
     context "when a pull request has no files attached" do
-      let(:payload) { JSON.generate([{ "number" => 1, "title" => "x", "headRefName" => "b" }]) }
+      let(:payload) { JSON.generate([{"number" => 1, "title" => "x", "headRefName" => "b"}]) }
 
       it "yields an empty list rather than nil, so callers need no guard" do
         expect(github.pulls.first[:files]).to eq([])
@@ -97,8 +97,8 @@ RSpec.describe Agentilda::GitHub do
     context "when gh exits non-zero" do
       before do
         allow(command).to receive(:run)
-                            .and_raise(TTY::Command::ExitError.new("gh pr list", instance_double(TTY::Command::Result,
-                                                                                                 exit_status: 1, out: "", err: "could not determine base repository")))
+          .and_raise(TTY::Command::ExitError.new("gh pr list", instance_double(TTY::Command::Result,
+            exit_status: 1, out: "", err: "could not determine base repository")))
       end
 
       it "surfaces gh's own complaint instead of a stack trace" do
@@ -119,8 +119,8 @@ RSpec.describe Agentilda::GitHub do
     context "when the edit is refused" do
       before do
         allow(command).to receive(:run)
-                            .and_raise(TTY::Command::ExitError.new("gh pr edit", instance_double(TTY::Command::Result,
-                                                                                                 exit_status: 1, out: "", err: "pull request is closed")))
+          .and_raise(TTY::Command::ExitError.new("gh pr edit", instance_double(TTY::Command::Result,
+            exit_status: 1, out: "", err: "pull request is closed")))
       end
 
       it "names the pull request that could not be changed" do
@@ -132,7 +132,7 @@ RSpec.describe Agentilda::GitHub do
   describe "#available?" do
     it "reports whether gh is installed and authenticated" do
       allow(command).to receive(:run!).with("gh", "auth", "status")
-                          .and_return(instance_double(TTY::Command::Result, success?: true))
+        .and_return(instance_double(TTY::Command::Result, success?: true))
 
       expect(github).to be_available
     end
@@ -161,25 +161,25 @@ RSpec.describe Agentilda::GitHub do
   describe ".state_label" do
     it "translates gh's enums into the words the state machine parses" do
       aggregate_failures do
-        expect(described_class.state_label({ "mergedAt" => "2026-01-01", "state" => "MERGED" })).to eq("Merged 🟣")
-        expect(described_class.state_label({ "state" => "OPEN", "isDraft" => true })).to eq("WIP 🟡")
-        expect(described_class.state_label({ "state" => "OPEN" })).to eq("Open 🟡")
-        expect(described_class.state_label({ "state" => "CLOSED" })).to eq("Closed 🔴")
+        expect(described_class.state_label({"mergedAt" => "2026-01-01", "state" => "MERGED"})).to eq("Merged 🟣")
+        expect(described_class.state_label({"state" => "OPEN", "isDraft" => true})).to eq("WIP 🟡")
+        expect(described_class.state_label({"state" => "OPEN"})).to eq("Open 🟡")
+        expect(described_class.state_label({"state" => "CLOSED"})).to eq("Closed 🔴")
       end
     end
 
     # A closed-unmerged pull request is finished business; a merged one is not
     # the same thing, and the folder's invariants turn on the difference.
     it "does not call a closed pull request merged" do
-      expect(described_class.state_label({ "state" => "CLOSED", "mergedAt" => nil })).to eq("Closed 🔴")
+      expect(described_class.state_label({"state" => "CLOSED", "mergedAt" => nil})).to eq("Closed 🔴")
     end
   end
 
   describe "#pull_request" do
     let(:payload) do
-      { number: 12, title: "Add health checks", url: "https://github.com/o/r/pull/12",
-        state: "MERGED", isDraft: false, mergedAt: "2026-08-01T10:00:00Z",
-        body: "Adds /healthz." }.to_json
+      {number: 12, title: "Add health checks", url: "https://github.com/o/r/pull/12",
+       state: "MERGED", isDraft: false, mergedAt: "2026-08-01T10:00:00Z",
+       body: "Adds /healthz."}.to_json
     end
 
     it "reads one pull request by number or URL" do
@@ -199,8 +199,8 @@ RSpec.describe Agentilda::GitHub do
     it "names the pull request it could not read when gh exits non-zero" do
       command = instance_double(TTY::Command)
       allow(command).to receive(:run)
-                          .and_raise(TTY::Command::ExitError.new("gh pr view", instance_double(TTY::Command::Result,
-                                                                                               exit_status: 1, out: "", err: "no pull requests found for branch")))
+        .and_raise(TTY::Command::ExitError.new("gh pr view", instance_double(TTY::Command::Result,
+          exit_status: 1, out: "", err: "no pull requests found for branch")))
 
       expect { described_class.new(command:).pull_request("12") }.to raise_error(Agentilda::Error, /could not read pull request 12/)
     end
@@ -215,8 +215,8 @@ RSpec.describe Agentilda::GitHub do
 
   describe "#pull_requests" do
     let(:payload) do
-      { number: 12, title: "Add health checks", url: "https://github.com/o/r/pull/12",
-        state: "OPEN", isDraft: false, mergedAt: nil, body: "Adds /healthz." }.to_json
+      {number: 12, title: "Add health checks", url: "https://github.com/o/r/pull/12",
+       state: "OPEN", isDraft: false, mergedAt: nil, body: "Adds /healthz."}.to_json
     end
 
     # `--prs 12,15` fetches each in turn; the order given is the order the

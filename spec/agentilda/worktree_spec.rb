@@ -29,7 +29,7 @@ RSpec.describe Agentilda::Worktree do
       status: Agentilda::STATUS_BY_KEY.fetch(:new),
       slug: "tenancy-households",
       dirname: "002.00-⚪️-tenancy-households",
-      path: File.join(repo, Agentilda::PLANS_DIR, "002.00-⚪️-tenancy-households"),
+      path: File.join(repo, Agentilda::PLANS_DIR, "002.00-⚪️-tenancy-households")
     )
   end
 

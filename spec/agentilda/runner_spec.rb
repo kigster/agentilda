@@ -22,11 +22,11 @@ RSpec.describe Agentilda::Runner, :tree do
     context "with plans in several states" do
       let!(:built) do
         plans do |t|
-          t.plan "000.00", :new, "needs-a-spec", files: { "spec.md" => spec_body }
+          t.plan "000.00", :new, "needs-a-spec", files: {"spec.md" => spec_body}
           t.plan "000.01", :researched, "needs-a-writer",
-            files: { "spec.md" => "#{spec_body}\n## Research\n\nWhat was found.\n" }
-          t.plan "001.00", :planned, "needs-a-plan", files: { "spec.md" => spec_body, "plan.md" => "# P" }
-          t.plan "002.00", :blocked, "needs-a-human", files: { "blocked.md" => "B1. Which?" }
+            files: {"spec.md" => "#{spec_body}\n## Research\n\nWhat was found.\n"}
+          t.plan "001.00", :planned, "needs-a-plan", files: {"spec.md" => spec_body, "plan.md" => "# P"}
+          t.plan "002.00", :blocked, "needs-a-human", files: {"blocked.md" => "B1. Which?"}
           t.plan "003.00", :approved, "finished", prs: [t.merged(3, "done")]
         end
       end
@@ -39,7 +39,7 @@ RSpec.describe Agentilda::Runner, :tree do
         runner.call
 
         expect(calls.uniq).to contain_exactly(["leah-researcher", "000.00"],
-                                              ["yoda-writer", "000.01"], ["palpatine-planner", "001.00"], ["luke-backend", "001.00"])
+          ["yoda-writer", "000.01"], ["palpatine-planner", "001.00"], ["luke-backend", "001.00"])
       end
 
       # The relay's whole point. Both used to declare `handles: [new]`, agents
@@ -77,7 +77,7 @@ RSpec.describe Agentilda::Runner, :tree do
 
     describe "termination" do
       let!(:built) do
-        plans { |t| t.plan "000.00", :new, "stuck", files: { "spec.md" => spec_body } }
+        plans { |t| t.plan "000.00", :new, "stuck", files: {"spec.md" => spec_body} }
       end
 
       it "stops after consecutive dry rounds rather than running to the ceiling" do
@@ -88,10 +88,10 @@ RSpec.describe Agentilda::Runner, :tree do
 
       it "never exceeds max_rounds even when every round changes something" do
         churn = described_class.new(tree:, agents:, max_rounds: 3, executor: lambda { |agent, subject, **|
-                                      # Simulate real progress: write the file the next state requires.
-                                      File.write(File.join(subject.feature.path, "plan.md"), "# P")
-                                      record(agent, subject)
-                                    })
+          # Simulate real progress: write the file the next state requires.
+          File.write(File.join(subject.feature.path, "plan.md"), "# P")
+          record(agent, subject)
+        })
         churn.call
 
         expect(churn.rounds.size).to be <= 3
@@ -99,7 +99,7 @@ RSpec.describe Agentilda::Runner, :tree do
 
       it "stops immediately when nothing is actionable" do
         empty = described_class.new(
-          tree: Agentilda::Tree.new(dir: plans_root), agents:, executor:,
+          tree: Agentilda::Tree.new(dir: plans_root), agents:, executor:
         )
         FileUtils.rm_rf(Dir.glob(File.join(plans_root, "*")))
         empty.call
@@ -110,14 +110,14 @@ RSpec.describe Agentilda::Runner, :tree do
 
     describe "progress is read from disk, not from what the agent claims" do
       let!(:built) do
-        plans { |t| t.plan "000.00", :new, "advances", files: { "spec.md" => spec_body } }
+        plans { |t| t.plan "000.00", :new, "advances", files: {"spec.md" => spec_body} }
       end
 
       it "records an advance only when the folder actually moved" do
         writer = described_class.new(tree:, agents:, max_rounds: 2, executor: lambda { |_a, subject, **|
-                                       File.write(File.join(subject.feature.path, "plan.md"), "# P")
-                                       [true, "wrote plan.md"]
-                                     })
+          File.write(File.join(subject.feature.path, "plan.md"), "# P")
+          [true, "wrote plan.md"]
+        })
         writer.call
 
         expect(writer.rounds.first.attempts.first).to be_advanced
@@ -125,7 +125,7 @@ RSpec.describe Agentilda::Runner, :tree do
 
       it "records no advance when the agent only says it succeeded" do
         liar = described_class.new(tree:, agents:, max_rounds: 2,
-                                   executor: ->(_a, _s, **) { [true, "I totally did it"] })
+          executor: ->(_a, _s, **) { [true, "I totally did it"] })
         liar.call
 
         expect(liar.rounds.first.attempts.first).not_to be_advanced
@@ -136,14 +136,14 @@ RSpec.describe Agentilda::Runner, :tree do
       it "is true when every plan is done or deliberately parked" do
         plans do |t|
           t.plan "000.00", :approved, "shipped", prs: [t.merged(1, "x")]
-          t.plan "001.00", :blocked, "waiting", files: { "blocked.md" => "B1" }
+          t.plan "001.00", :blocked, "waiting", files: {"blocked.md" => "B1"}
         end
 
         expect(runner).to be_settled
       end
 
       it "is false while anything is still workable" do
-        plans { |t| t.plan "000.00", :new, "todo", files: { "spec.md" => spec_body } }
+        plans { |t| t.plan "000.00", :new, "todo", files: {"spec.md" => spec_body} }
 
         expect(runner).not_to be_settled
       end
@@ -157,8 +157,8 @@ RSpec.describe Agentilda::Runner, :tree do
 
       let!(:built) do
         plans do |t|
-          t.plan "000.00", :new, "in-scope", files: { "spec.md" => spec_body }
-          t.plan "001.00", :new, "out-of-scope", files: { "spec.md" => spec_body }
+          t.plan "000.00", :new, "in-scope", files: {"spec.md" => spec_body}
+          t.plan "001.00", :new, "out-of-scope", files: {"spec.md" => spec_body}
         end
       end
 
@@ -190,7 +190,7 @@ RSpec.describe Agentilda::Runner, :tree do
         let!(:built) do
           plans do |t|
             t.plan "000.00", :approved, "in-scope", prs: [t.merged(1, "x")]
-            t.plan "001.00", :new, "out-of-scope", files: { "spec.md" => spec_body }
+            t.plan "001.00", :new, "out-of-scope", files: {"spec.md" => spec_body}
           end
         end
 
@@ -199,7 +199,7 @@ RSpec.describe Agentilda::Runner, :tree do
         end
 
         it "does not report an out-of-scope block" do
-          plans { |t| t.plan "002.00", :blocked, "out-of-scope-block", files: { "blocked.md" => "B1" } }
+          plans { |t| t.plan "002.00", :blocked, "out-of-scope-block", files: {"blocked.md" => "B1"} }
 
           expect(described_class.new(tree:, executor:, agents:, plans: [ordinal("000.00")]).blocked).to be_empty
         end
@@ -229,14 +229,14 @@ RSpec.describe Agentilda::Runner, :tree do
       let(:ordinal) { Agentilda::Ordinal.parse("004.00") }
       let(:checkout) do
         instance_double(Agentilda::Worktree::Checkout,
-                        branch: "kig/004.00-needs-a-reviewer", path: "/does-not-exist",
-                        plans_dir: "/does-not-exist/.plans", dirty?: true)
+          branch: "kig/004.00-needs-a-reviewer", path: "/does-not-exist",
+          plans_dir: "/does-not-exist/.plans", dirty?: true)
       end
       let(:worktree) { instance_double(Agentilda::Worktree, checkout_for: checkout) }
       let(:publication) do
         Agentilda::Publisher::Publication.new(
           ordinal:, branch: checkout.branch, title: "[004.00](A) Needs a Reviewer",
-          url: "https://github.com/example/repo/pull/9", refusal: nil,
+          url: "https://github.com/example/repo/pull/9", refusal: nil
         )
       end
       let(:publisher) { instance_double(Agentilda::Publisher, publish: publication) }
@@ -255,7 +255,7 @@ RSpec.describe Agentilda::Runner, :tree do
         plans do |t|
           # 🎨, not 🟡: publishing is triggered by an agent whose advances_to is
           # ready_for_review, and since building split in two that is rey-frontend.
-          t.plan "004.00", :building_ui, "needs-a-reviewer", files: { "spec.md" => spec_body, "plan.md" => "# P" }
+          t.plan "004.00", :building_ui, "needs-a-reviewer", files: {"spec.md" => spec_body, "plan.md" => "# P"}
         end
       end
 
@@ -276,12 +276,12 @@ RSpec.describe Agentilda::Runner, :tree do
         runner.call
 
         expect(publisher).to have_received(:publish)
-                               .with(checkout:, subject: an_instance_of(Agentilda::Subject))
+          .with(checkout:, subject: an_instance_of(Agentilda::Subject))
       end
 
       it "still honours the rename without a publisher, but opens no pull request — --dont-push-anything" do
         without_publisher = described_class.new(
-          tree:, executor:, agents:, max_rounds: 1, isolation: :worktree, worktree:, publisher: nil,
+          tree:, executor:, agents:, max_rounds: 1, isolation: :worktree, worktree:, publisher: nil
         )
         without_publisher.call
 
@@ -314,7 +314,7 @@ RSpec.describe Agentilda::Runner, :tree do
         let!(:built) do
           plans do |t|
             t.plan "004.00", :building_ui, "needs-a-reviewer",
-              files: { "spec.md" => spec_body, "plan.md" => "# P" },
+              files: {"spec.md" => spec_body, "plan.md" => "# P"},
               prs: [t.open(3, "The earlier half")]
           end
         end
@@ -332,7 +332,7 @@ RSpec.describe Agentilda::Runner, :tree do
       it "does not publish while the agent leaves the folder as Building — more units remain" do
         keeps_building = ->(_agent, _subject, **) { [true, "one of several units"] }
         mid_plan = described_class.new(
-          tree:, executor: keeps_building, agents:, max_rounds: 1, isolation: :worktree, worktree:, publisher:,
+          tree:, executor: keeps_building, agents:, max_rounds: 1, isolation: :worktree, worktree:, publisher:
         )
         mid_plan.call
 
@@ -350,12 +350,12 @@ RSpec.describe Agentilda::Runner, :tree do
     describe "an executor that raises mid-round, in parallel" do
       subject(:runner) do
         described_class.new(tree:, executor: explosive, agents:, max_rounds: 1,
-                            isolation: :worktree, jobs: 2, worktree:)
+          isolation: :worktree, jobs: 2, worktree:)
       end
 
       let(:checkout) do
         instance_double(Agentilda::Worktree::Checkout,
-                        branch: "kig/000.00-x", path: "/does-not-exist", dirty?: false)
+          branch: "kig/000.00-x", path: "/does-not-exist", dirty?: false)
       end
       let(:worktree) { instance_double(Agentilda::Worktree, checkout_for: checkout) }
 
@@ -369,8 +369,8 @@ RSpec.describe Agentilda::Runner, :tree do
 
       let!(:built) do
         plans do |t|
-          t.plan "000.00", :new, "explodes", files: { "spec.md" => spec_body }
-          t.plan "001.00", :new, "survives", files: { "spec.md" => spec_body }
+          t.plan "000.00", :new, "explodes", files: {"spec.md" => spec_body}
+          t.plan "001.00", :new, "survives", files: {"spec.md" => spec_body}
         end
       end
 

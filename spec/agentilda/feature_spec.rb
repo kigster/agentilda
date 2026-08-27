@@ -9,19 +9,19 @@ RSpec.describe Agentilda::Subject, :tree do
   let!(:tree) do
     plans do |t|
       t.plan "001.00", :blocked, "asks", files: {
-                                           "spec.md" => "x", "plan.md" => "y",
-                                           "blocked.md" => <<~MD,
-                                             ## B1. Which rate source?
-                                             ## B2. Who owns the perimeter?
-                                             ## A1
-                                             Decided 2026-08-21 by the CTO: the vendor feed.
-                                           MD
-                                         }
+        "spec.md" => "x", "plan.md" => "y",
+        "blocked.md" => <<~MD
+          ## B1. Which rate source?
+          ## B2. Who owns the perimeter?
+          ## A1
+          Decided 2026-08-21 by the CTO: the vendor feed.
+        MD
+      }
       t.plan "002.00", :building, "unreadable", files: {
-                                                  "spec.md" => "x", "plan.md" => "y",
-                                                  "blocked.md" => "## 1. Item health\n## Q1 — suppress or annotate?\n",
-                                                }
-      t.plan "003.00", :building, "clean", files: { "spec.md" => "x", "plan.md" => "y" }
+        "spec.md" => "x", "plan.md" => "y",
+        "blocked.md" => "## 1. Item health\n## Q1 — suppress or annotate?\n"
+      }
+      t.plan "003.00", :building, "clean", files: {"spec.md" => "x", "plan.md" => "y"}
     end
   end
 

@@ -25,7 +25,7 @@ module Agentilda
   #   @return [Array<String>] commands lifted from {Executor::FORBIDDEN_COMMANDS}
   #     for this agent alone. Nothing in {Executor::UNGRANTABLE} can be lifted.
   Agent = Data.define(:name, :description, :handles, :advances_to, :model,
-                      :allowed_tools, :may, :network, :prompt, :path) do
+    :allowed_tools, :may, :network, :prompt, :path) do
     # @return [Boolean] whether this agent changes anything on disk
     def read_only? = advances_to.nil?
 
@@ -105,7 +105,7 @@ module Agentilda
         may: Array(meta["may"]).map { |c| c.to_s.strip.squeeze(" ") },
         network: meta["network"] == true,
         prompt: match[2].strip,
-        path: path,
+        path: path
       )
     end
   end

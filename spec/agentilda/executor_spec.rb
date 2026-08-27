@@ -9,7 +9,7 @@ RSpec.describe Agentilda::Executor, :tree do
   let(:agent) { agents.find("yoda-writer") }
 
   let!(:built) do
-    plans { |t| t.plan "000.00", :new, "a-feature", files: { "spec.md" => spec_body } }
+    plans { |t| t.plan "000.00", :new, "a-feature", files: {"spec.md" => spec_body} }
   end
 
   let(:subject_plan) { Agentilda::Tree.new(dir: plans_root).subjects.first }
@@ -47,7 +47,7 @@ RSpec.describe Agentilda::Executor, :tree do
   def agent_with(network: false, may: [])
     Agentilda::Agent.new(
       name: "x", description: "", handles: [:new], advances_to: :planned, model: nil,
-      allowed_tools: [], may:, network:, prompt: "do it", path: "x.md",
+      allowed_tools: [], may:, network:, prompt: "do it", path: "x.md"
     )
   end
 
@@ -61,7 +61,7 @@ RSpec.describe Agentilda::Executor, :tree do
   describe ".failure_reason" do
     def exit_error(status:, stdout: "Nothing written", stderr: "Nothing written")
       TTY::Command::ExitError.new("claude -p …", instance_double(TTY::Command::Result,
-                                                                 exit_status: status, out: stdout, err: stderr))
+        exit_status: status, out: stdout, err: stderr))
     end
 
     it "leads with what the agent said, not with the command that said it" do
@@ -74,7 +74,7 @@ RSpec.describe Agentilda::Executor, :tree do
     # 401 case only stderr named the cause. Dropping either loses half the answer.
     it "keeps both streams, because they carry different halves of the reason" do
       error = exit_error(status: 1, stdout: "401 API key is invalid.",
-                         stderr: "ANTHROPIC_API_KEY takes precedence over your claude.ai login")
+        stderr: "ANTHROPIC_API_KEY takes precedence over your claude.ai login")
 
       expect(described_class.failure_reason(error)).to eq("exited 1: 401 API key is invalid. | ANTHROPIC_API_KEY takes precedence over your claude.ai login")
     end
@@ -92,11 +92,11 @@ RSpec.describe Agentilda::Executor, :tree do
 
   describe ".foreign_credentials" do
     it "names the credentials an agent would authenticate with instead of the login" do
-      expect(described_class.foreign_credentials({ "ANTHROPIC_API_KEY" => "sk-ant-x" })).to eq(["ANTHROPIC_API_KEY"])
+      expect(described_class.foreign_credentials({"ANTHROPIC_API_KEY" => "sk-ant-x"})).to eq(["ANTHROPIC_API_KEY"])
     end
 
     it "ignores one that is set to nothing, which is how a shell unsets it in practice" do
-      expect(described_class.foreign_credentials({ "ANTHROPIC_API_KEY" => "  " })).to be_empty
+      expect(described_class.foreign_credentials({"ANTHROPIC_API_KEY" => "  "})).to be_empty
     end
   end
 
@@ -196,7 +196,7 @@ RSpec.describe Agentilda::Executor, :tree do
 
     def event(hash) = "#{JSON.generate(hash)}\n"
 
-    def tool(name, input) = event(type: "assistant", message: { content: [{ type: "tool_use", name:, input: }] })
+    def tool(name, input) = event(type: "assistant", message: {content: [{type: "tool_use", name:, input:}]})
 
     it "asks claude for the streaming format, which needs --verbose to work at all" do
       expect(streaming.invocation(agent, subject_plan).each_cons(2).to_a).to include(["--output-format", "stream-json"]).and include(["stream-json", "--verbose"])
@@ -205,7 +205,7 @@ RSpec.describe Agentilda::Executor, :tree do
     # A tool name is a noun and says nothing on its own. The spinner has room
     # for a phrase, so it gets one.
     it "hands each tool call to whoever is drawing the progress, as something being done" do
-      chunks << tool("Read", { file_path: "/repo/spec.md" })
+      chunks << tool("Read", {file_path: "/repo/spec.md"})
       streaming.call(agent, subject_plan) { |progress| seen << progress.activity }
 
       expect(seen).to eq(["reading spec.md"])
@@ -220,8 +220,8 @@ RSpec.describe Agentilda::Executor, :tree do
 
     it "reports what the invocation spent, not only whether it worked" do
       chunks << event(type: "stream_event",
-                      event: { type: "message_delta", usage: { input_tokens: 2, cache_creation_input_tokens: 100,
-                                                              cache_read_input_tokens: 900, output_tokens: 40 } })
+        event: {type: "message_delta", usage: {input_tokens: 2, cache_creation_input_tokens: 100,
+                                               cache_read_input_tokens: 900, output_tokens: 40}})
 
       expect(streaming.call(agent, subject_plan)).to have_attributes(up: 1002, down: 40)
     end
@@ -230,7 +230,7 @@ RSpec.describe Agentilda::Executor, :tree do
     # different fact from one that failed to authenticate and spent nothing.
     it "reports what a failed invocation spent too" do
       chunks << event(type: "stream_event",
-                      event: { type: "message_delta", usage: { input_tokens: 500, output_tokens: 7 } })
+        event: {type: "message_delta", usage: {input_tokens: 500, output_tokens: 7}})
       chunks << event(type: "result", is_error: true, result: "it went wrong")
 
       expect(streaming.call(agent, subject_plan)).to have_attributes(ok: false, up: 500, down: 7)
@@ -239,7 +239,7 @@ RSpec.describe Agentilda::Executor, :tree do
     it "counts the sub-agents an agent spawned" do
       chunks << event(type: "system", subtype: "task_started", task_id: "t1", tool_use_id: "toolu_1")
       chunks << event(type: "system", subtype: "task_notification", task_id: "t1",
-                      usage: { total_tokens: 34_116 })
+        usage: {total_tokens: 34_116})
 
       expect(streaming.call(agent, subject_plan)).to have_attributes(subagents: 1, delegated: 34_116)
     end
@@ -286,7 +286,7 @@ RSpec.describe Agentilda::Executor, :tree do
     describe "when claude exits non-zero" do
       def exit_error
         TTY::Command::ExitError.new("claude -p …", instance_double(TTY::Command::Result,
-                                                                   exit_status: 1, out: "boom on stdout", err: "Nothing written"))
+          exit_status: 1, out: "boom on stdout", err: "Nothing written"))
       end
 
       before do
@@ -300,7 +300,7 @@ RSpec.describe Agentilda::Executor, :tree do
         chunks << event(type: "result", is_error: true, result: "model refused the tool")
 
         expect(streaming.call(agent, subject_plan)).to have_attributes(
-          ok: false, note: a_string_including("claude failed: model refused the tool"),
+          ok: false, note: a_string_including("claude failed: model refused the tool")
         )
       end
 
@@ -361,7 +361,7 @@ RSpec.describe Agentilda::Executor, :tree do
       end
 
       expect(streaming.call(agent, subject_plan)).to have_attributes(
-        ok: false, note: a_string_including("agent committed", "HEAD moved"),
+        ok: false, note: a_string_including("agent committed", "HEAD moved")
       )
     end
   end

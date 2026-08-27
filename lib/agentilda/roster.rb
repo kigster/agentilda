@@ -88,9 +88,9 @@ module Agentilda
     # @return [String]
     def header(all)
       text = line(UI.fit(HEADINGS[0], name_width(all)),
-                  UI.fit(HEADINGS[1], handles_width(all)),
-                  UI.fit(HEADINGS[2], advances_width(all)),
-                  HEADINGS[3])
+        UI.fit(HEADINGS[1], handles_width(all)),
+        UI.fit(HEADINGS[2], advances_width(all)),
+        HEADINGS[3])
 
       rule = "  " + ("─" * (UI.display_width(text) - 2))
 
@@ -102,9 +102,9 @@ module Agentilda
     # @return [String]
     def row(agent, all)
       line(UI.paint(UI.fit(agent.name, name_width(all)), :bright_cyan),
-           UI.fit(handles(agent), handles_width(all)),
-           UI.paint(UI.fit(advances(agent), advances_width(all)), agent.read_only? ? :bright_black : :green),
-           UI.paint(agent.model.to_s, :bright_black))
+        UI.fit(handles(agent), handles_width(all)),
+        UI.paint(UI.fit(advances(agent), advances_width(all)), agent.read_only? ? :bright_black : :green),
+        UI.paint(agent.model.to_s, :bright_black))
     end
   end
 end

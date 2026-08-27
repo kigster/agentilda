@@ -9,7 +9,7 @@ module Agentilda
         desc "List the Linear projects a team owns, and which plans they already cover"
 
         example [
-          "TAX        # every project the team owns, matched against .plans",
+          "TAX        # every project the team owns, matched against .plans"
         ]
 
         # @param team [String]

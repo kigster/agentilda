@@ -62,7 +62,7 @@ module Agentilda
       "git push", "git commit",
       "gh pr create", "gh pr edit", "gh pr merge",
       "gh pr review", "gh pr comment",
-      "gh release create",
+      "gh release create"
     ].freeze
 
     # The subset no agent's `may:` can lift, however its definition is written.
@@ -185,7 +185,7 @@ module Agentilda
     # @param dry_run [Boolean] plan the invocation, do not run it
     # @param trace_dir [String] where each invocation's raw stream is kept
     def initialize(root:, command: TTY::Command.new(printer: :null), timeout: 900, dry_run: false,
-                   trace_dir: TRACE_DIR)
+      trace_dir: TRACE_DIR)
       @root = File.expand_path(root)
       @command = command
       @timeout = timeout
@@ -207,7 +207,7 @@ module Agentilda
       started = UI.monotonic
       if @dry_run
         return Result.new(ok: true, note: "dry run — would invoke #{agent.name}", up: 0, down: 0,
-                          subagents: 0, delegated: 0, seconds: 0.0)
+          subagents: 0, delegated: 0, seconds: 0.0)
       end
 
       before = head(root)
@@ -222,7 +222,7 @@ module Agentilda
       rescue TTY::Command::TimeoutExceeded
         transcript.finish
         return failure(transcript, started,
-                       "timed out after #{@timeout}s, last seen #{transcript.activity || "starting up"} — trace: #{trace}")
+          "timed out after #{@timeout}s, last seen #{transcript.activity || "starting up"} — trace: #{trace}")
       rescue TTY::Command::ExitError => e
         transcript.finish
         return failure(transcript, started, "claude #{reason_for(e, transcript)} — trace: #{trace}")
@@ -236,7 +236,7 @@ module Agentilda
       return failure(transcript, started, violation) if violation
 
       spent(transcript, started, ok: true,
-                                 note: "completed#{" · #{transcript.tools} tool calls" if transcript.tools.positive?}")
+        note: "completed#{" · #{transcript.tools} tool calls" if transcript.tools.positive?}")
     end
 
     # A failed invocation still spent what it spent, and a run that burned two
@@ -257,8 +257,8 @@ module Agentilda
     # @return [Agentilda::Executor::Result]
     def spent(transcript, started, ok:, note:)
       Result.new(ok:, note:, up: transcript.up, down: transcript.down,
-                 subagents: transcript.spawned, delegated: transcript.delegated,
-                 seconds: UI.monotonic - started)
+        subagents: transcript.spawned, delegated: transcript.delegated,
+        seconds: UI.monotonic - started)
     end
 
     # The exact argv, exposed so a spec can assert the boundary flags without
@@ -273,7 +273,7 @@ module Agentilda
       # count — 2 for a four-thousand-token answer — and a spinner counting
       # what came back would read zero all run. See {Transcript#meter}.
       argv = ["claude", "-p", prompt_for(agent, subject, root), "--add-dir", root,
-              "--output-format", "stream-json", "--verbose", "--include-partial-messages"]
+        "--output-format", "stream-json", "--verbose", "--include-partial-messages"]
       denied = denied_for(agent)
       argv += ["--disallowedTools", denied.join(",")] unless denied.empty?
       argv += ["--allowedTools", agent.allowed_tools.join(",")] unless agent.allowed_tools.empty?
@@ -313,7 +313,7 @@ module Agentilda
     def trace_path(agent, subject)
       FileUtils.mkdir_p(@trace_dir)
       name = format("%s-%s-%s-%d-%04x.ndjson", Time.now.strftime("%Y%m%d-%H%M%S"),
-                    subject.feature.ordinal, agent.name, Process.pid, rand(0x10000))
+        subject.feature.ordinal, agent.name, Process.pid, rand(0x10000))
       File.join(@trace_dir, name)
     end
 

@@ -83,7 +83,7 @@ module PlansFixture
     # @param state [String]
     # @return [Hash]
     def pr(number, title, state)
-      { number:, title:, state:, url: "https://github.com/example/repo/pull/#{number}" }
+      {number:, title:, state:, url: "https://github.com/example/repo/pull/#{number}"}
     end
 
     private

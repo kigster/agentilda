@@ -18,23 +18,23 @@ module Agentilda
       # What each token turned out to be, for whoever has to fix it.
       PROBLEMS = {
         missing: "no plan of that number",
-        not_blocked: "no blocked.md, so there is nothing to drain",
+        not_blocked: "no blocked.md, so there is nothing to drain"
       }.freeze
 
       desc "Fold answered blocks into a plan's documents and retire blocked.md"
 
       argument :plans, type: :array, required: true,
-                       desc: "Which plans to drain: NNN or NNN.MM, e.g. 003 005.01"
+        desc: "Which plans to drain: NNN or NNN.MM, e.g. 003 005.01"
 
       option :commit, type: :boolean, default: false,
-                      desc: "Actually invoke the agent (default: dry run, prints the questions still open)"
+        desc: "Actually invoke the agent (default: dry run, prints the questions still open)"
       option :agent, default: DEFAULT_AGENT, desc: "Hand the folder to a different agent"
       option :root, desc: "Repository root the agent works in (default: the .plans parent)"
 
       example [
         "003                # what 003 is still waiting on",
         "003 --commit       # fold in whatever has been answered",
-        "003,005 --commit   # both",
+        "003,005 --commit   # both"
       ]
 
       # @param plans [Array<String>]
@@ -44,8 +44,8 @@ module Agentilda
         tree = tree_for(options)
         quiet?(options)
         unblocker = Unblocker.new(tree:, agent: agent_for(options), root: options[:root],
-                                  commit: commit?(options), executor: Executor.new(root: options[:root] || File.dirname(tree.dir),
-                                                                                   dry_run: !commit?(options)))
+          commit: commit?(options), executor: Executor.new(root: options[:root] || File.dirname(tree.dir),
+            dry_run: !commit?(options)))
 
         targets = unblocker.resolve(plans)
         refused(targets, tree, options)
@@ -137,9 +137,9 @@ module Agentilda
       def detail(subject, questions)
         if subject.unreadable_block?
           say("  #{paint("blocked.md names no `## B<n>` question, so nothing here can be drained", :red)}",
-              bullet: " ")
+            bullet: " ")
           say("  #{paint("Number each open question `## B1`, `## B2`, and each answer `## A1`, `## A2`.", :yellow)}",
-              bullet: " ")
+            bullet: " ")
         elsif questions.empty?
           say("  #{paint("nothing left open", :green)}", bullet: " ")
         else

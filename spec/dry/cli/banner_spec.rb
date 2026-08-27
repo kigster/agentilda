@@ -22,13 +22,15 @@ module BannerFixture
 
     example ["prod # ship to production", "staging v2 # rehearse first"]
 
-    def call(**); end
+    def call(**)
+    end
   end
 
   # A command declaring nothing optional, so every `return if empty` guard in
   # the banner takes its early exit rather than rendering an empty section.
   class Bare < Dry::CLI::Command
-    def call(**); end
+    def call(**)
+    end
   end
 
   # A parent whose registration gains a child, so `command.subcommands` is the
@@ -36,13 +38,15 @@ module BannerFixture
   class Parent < Dry::CLI::Command
     desc "Groups related commands"
 
-    def call(**); end
+    def call(**)
+    end
   end
 
   class Child < Dry::CLI::Command
     desc "Does the actual work"
 
-    def call(**); end
+    def call(**)
+    end
   end
 
   extend Dry::CLI::Registry

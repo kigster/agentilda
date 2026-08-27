@@ -27,7 +27,7 @@ RSpec.describe Agentilda::CLI::Unblock, :tree do
   def unwrapped(text) = text.tr("║╔╗╚╝═", " ").gsub(/\s+/, " ")
 
   def blocked_plan(ordinal)
-    plans { |t| t.plan(ordinal, :blocked, "stuck-#{ordinal.tr(".", "-")}", files: { "blocked.md" => "# Blocked\n\n## B1. Which vendor\n" }) }
+    plans { |t| t.plan(ordinal, :blocked, "stuck-#{ordinal.tr(".", "-")}", files: {"blocked.md" => "# Blocked\n\n## B1. Which vendor\n"}) }
   end
 
   describe "--agent naming nobody" do

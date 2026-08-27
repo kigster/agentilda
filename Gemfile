@@ -13,7 +13,7 @@ gem "yard"
 group :development do
   gem "colored2"
   gem "irb"
-  gem "rufo"
+  gem "standard"
 end
 
 group :test do

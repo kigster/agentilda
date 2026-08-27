@@ -1,0 +1,4 @@
+parallel: true
+ruby_version: 4.0
+ignore:
+  - "vendor/**/*"

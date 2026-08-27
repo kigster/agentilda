@@ -25,7 +25,7 @@ module Agentilda
         rejoin_section,
         other_section,
         terminal_section,
-        family_section,
+        family_section
       ].compact.join("\n\n") + "\n"
     end
 
@@ -35,7 +35,7 @@ module Agentilda
     def heading
       paint("Spec → Plan → Build — the state machine", :bold) + "\n" +
         paint("(derived from lib/agentilda/state_machine.rb — `agentilda docs` for the Markdown form)",
-              :bright_black)
+          :bright_black)
     end
 
     # The path a bare `promote!` walks: {StateMachine::SPINE}, followed from
@@ -44,7 +44,7 @@ module Agentilda
     # @return [String]
     def spine_section
       section("MAIN SPINE", "a bare `promote` walks this path",
-              ["  " + spine_chain.map { |key| node(key) }.join(" #{ARROW} ")])
+        ["  " + spine_chain.map { |key| node(key) }.join(" #{ARROW} ")])
     end
 
     # {StateMachine::SPINE} entries whose source never appears on the walk

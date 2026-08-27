@@ -9,9 +9,9 @@ module Agentilda
       def self.inherited(klass)
         super
         klass.option :dir, default: Agentilda::PLANS_DIR, aliases: ["-D"],
-                           desc: "The .plans directory"
+          desc: "The .plans directory"
         klass.option :quiet, type: :boolean, default: false, aliases: ["-q"],
-                             desc: "Suppress progress output on STDERR"
+          desc: "Suppress progress output on STDERR"
       end
 
       private

@@ -29,13 +29,13 @@ RSpec.describe "agentilda linear", :tree do
 
   def with_api(projects)
     allow(Agentilda::Linear::API).to receive_messages(token_from_env: "lin_api_test", new: api)
-    allow(api).to receive(:team).with("TAX").and_return({ id: "team-1" })
+    allow(api).to receive(:team).with("TAX").and_return({id: "team-1"})
     allow(api).to receive(:projects).with("team-1").and_return(projects)
   end
 
   def project(name, url: "https://linear.app/acme/project/#{name.downcase.tr(" ", "-")}", description: "")
-    { "id" => "proj-#{name.downcase.tr(" ", "-")}", "name" => name, "url" => url,
-      "status" => { "name" => "Planned" }, "description" => description }
+    {"id" => "proj-#{name.downcase.tr(" ", "-")}", "name" => name, "url" => url,
+     "status" => {"name" => "Planned"}, "description" => description}
   end
 
   describe Agentilda::CLI::Linear::Projects do
@@ -74,7 +74,7 @@ RSpec.describe "agentilda linear", :tree do
 
     before do
       plans do |t|
-        t.plan("001.00", :new, "tax-rule-dsl", files: { "spec.md" => spec_body })
+        t.plan("001.00", :new, "tax-rule-dsl", files: {"spec.md" => spec_body})
       end
     end
 
@@ -130,7 +130,7 @@ RSpec.describe "agentilda linear", :tree do
       # 💩 and 😱 have no decided place on a board; guessing would file them
       # in a column that reads exactly like the right one.
       it "reports the states nothing knows where to file" do
-        plans { |t| t.plan("002.00", :shit, "scrapped", files: { "rewrite.md" => "# Rewrite" }) }
+        plans { |t| t.plan("002.00", :shit, "scrapped", files: {"rewrite.md" => "# Rewrite"}) }
         _out, err, = run(command, team: "TAX", project: "Tax Rule DSL")
 
         expect(unwrapped(err)).to include("Not imported", "002.00", "Linear::PLACEMENTS")
@@ -141,7 +141,7 @@ RSpec.describe "agentilda linear", :tree do
     it "resolves a project URL through the API" do
       with_api([project("Tax Rule DSL")])
       out, = run(command, team: "TAX",
-                          project: "https://linear.app/acme/project/tax-rule-dsl")
+        project: "https://linear.app/acme/project/tax-rule-dsl")
 
       expect(out).to include("create\tissue\t001.00")
     end

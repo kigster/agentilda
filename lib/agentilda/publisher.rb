@@ -104,7 +104,7 @@ module Agentilda
 
     # @return [Hash]
     def base_fields(subject, checkout, title)
-      { ordinal: subject.feature.ordinal, branch: checkout.branch, title: }
+      {ordinal: subject.feature.ordinal, branch: checkout.branch, title:}
     end
 
     # @return [Agentilda::Publisher::Publication]

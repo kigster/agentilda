@@ -9,15 +9,15 @@ RSpec.describe Agentilda::Tally do
 
   def attempt(agent, ordinal, up:, down:, seconds:, subagents: 0, delegated: 0)
     Agentilda::Runner::Attempt.new(ordinal:, agent:, from: :planned, to: :building, ok: true,
-                                   note: "completed", up:, down:, subagents:, delegated:, seconds:)
+      note: "completed", up:, down:, subagents:, delegated:, seconds:)
   end
 
   let(:attempts) do
     [
       attempt("luke-backend", "003.00", up: 1_200_000, down: 18_400, seconds: 300.0),
       attempt("luke-backend", "004.00", up: 800_000, down: 12_000, seconds: 240.0, subagents: 3,
-                                        delegated: 68_000),
-      attempt("hansolo-reviewer", "003.00", up: 300_000, down: 4_000, seconds: 90.0),
+        delegated: 68_000),
+      attempt("hansolo-reviewer", "003.00", up: 300_000, down: 4_000, seconds: 90.0)
     ]
   end
 
@@ -47,7 +47,7 @@ RSpec.describe Agentilda::Tally do
     # attribute anything to, and used to be counted as a plan.
     it "ignores an attempt that never reached a plan" do
       broken = Agentilda::Runner::Attempt.new(ordinal: "?", agent: "?", from: :unknown,
-                                              to: :unknown, ok: false, note: "boom", up: 0, down: 0, subagents: 0, delegated: 0, seconds: 0.0)
+        to: :unknown, ok: false, note: "boom", up: 0, down: 0, subagents: 0, delegated: 0, seconds: 0.0)
 
       expect(described_class.new(attempts: attempts + [broken], seconds: 600.0).plans).to eq(2)
     end

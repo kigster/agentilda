@@ -11,20 +11,20 @@ RSpec.describe Agentilda::Adoption, :tree do
 
   let!(:tree) do
     plans do |t|
-      t.plan "001.00", :new, "initial-spec", files: { "spec.md" => spec_body }
+      t.plan "001.00", :new, "initial-spec", files: {"spec.md" => spec_body}
       t.plan "024.00", :approved, "engine-core", prs: [t.merged(2, "Ship it")]
     end
   end
 
   def pull(number, title, branch: "kig/work-#{number}", files: [])
-    { number:, title:, branch:, files:, state: "Open 🟡", open: true,
-      url: "https://github.com/example/repo/pull/#{number}" }
+    {number:, title:, branch:, files:, state: "Open 🟡", open: true,
+     url: "https://github.com/example/repo/pull/#{number}"}
   end
 
   before do
     allow(github).to receive(:pull_request) { |ref|
-      { number: ref.to_i, title: "PR #{ref}", url: "https://github.com/example/repo/pull/#{ref}",
-        state: "Open 🟡", body: "What #{ref} did." }
+      {number: ref.to_i, title: "PR #{ref}", url: "https://github.com/example/repo/pull/#{ref}",
+       state: "Open 🟡", body: "What #{ref} did."}
     }
   end
 
@@ -72,7 +72,7 @@ RSpec.describe Agentilda::Adoption, :tree do
     end
 
     it "refuses to run past the last retroactive slot rather than wrapping" do
-      crowded = plans { |t| (1..99).each { |m| t.plan(format("024.%02d", m), :new, "p#{m}", files: { "spec.md" => spec_body }) } }
+      crowded = plans { |t| (1..99).each { |m| t.plan(format("024.%02d", m), :new, "p#{m}", files: {"spec.md" => spec_body}) } }
       fresh = described_class.new(tree: Agentilda::Tree.new(dir: crowded), github:, root: crowded)
 
       expect(fresh.plan([pull(95, "One too many")])).to be_empty

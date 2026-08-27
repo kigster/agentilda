@@ -8,8 +8,8 @@ RSpec.describe Agentilda::Linear::Survey, :tree do
   let!(:tree) do
     plans do |t|
       t.plan "201.00", :new, "ledger-carryforward-vintages",
-             files: { "spec.md" => spec_body(title: "Ledger Carryforward Vintages",
-                                            goal: "Track ledger vintages precisely.") }
+        files: {"spec.md" => spec_body(title: "Ledger Carryforward Vintages",
+          goal: "Track ledger vintages precisely.")}
       t.plan "202.00", :new, "plaid-integration"
       t.plan "203.00", :new, "app-web"
     end
@@ -20,14 +20,14 @@ RSpec.describe Agentilda::Linear::Survey, :tree do
   end
 
   def project(id, name, **extra)
-    { "id" => id, "name" => name, "url" => "https://linear.app/t/project/#{id}" }.merge(extra)
+    {"id" => id, "name" => name, "url" => "https://linear.app/t/project/#{id}"}.merge(extra)
   end
 
   describe "#matches" do
     let(:reconciled) do
       survey([project("p-ord", "Gem work 201.00 continued"),
-              project("p-slug", "Plaid Integration"),
-              project("p-hand", "Payments Platform")])
+        project("p-slug", "Plaid Integration"),
+        project("p-hand", "Payments Platform")])
     end
 
     it "recognises a project whose name carries the plan number" do
@@ -67,7 +67,7 @@ RSpec.describe Agentilda::Linear::Survey, :tree do
 
     it "ranks the projects sharing the plan's words, best first" do
       near = survey([project("g-2", "Vintages Board", "description" => "Wine cellar"),
-                     project("g-1", "Ledger Carryforward Work")]).near(ledger)
+        project("g-1", "Ledger Carryforward Work")]).near(ledger)
 
       expect(near.map { |p| p["id"] }).to eq(%w[g-1 g-2])
     end
@@ -101,8 +101,8 @@ RSpec.describe Agentilda::Linear::Survey, :tree do
   describe "#undescribed" do
     it "reads whichever field the team writes in, and flags only true silence" do
       surveyed = survey([project("d-1", "Short line", "description" => "It exists for reasons."),
-                         project("d-2", "Long form", "content" => "A whole document."),
-                         project("d-3", "Bare")])
+        project("d-2", "Long form", "content" => "A whole document."),
+        project("d-3", "Bare")])
 
       aggregate_failures do
         expect(surveyed.undescribed.map { |p| p["id"] }).to eq(%w[d-3])
@@ -113,8 +113,8 @@ RSpec.describe Agentilda::Linear::Survey, :tree do
 
   describe "#project" do
     let(:surveyed) do
-      survey([{ "id" => "p-pay", "name" => "Payments Platform",
-                "url" => "https://linear.app/t/project/payments-platform" }])
+      survey([{"id" => "p-pay", "name" => "Payments Platform",
+               "url" => "https://linear.app/t/project/payments-platform"}])
     end
 
     it "finds a project by the URL a human can actually copy out of Linear" do

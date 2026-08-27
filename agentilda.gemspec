@@ -22,7 +22,7 @@ Gem::Specification.new do |spec|
   spec.metadata = {
     "homepage_uri" => spec.homepage,
     "source_code_uri" => spec.homepage,
-    "rubygems_mfa_required" => "true",
+    "rubygems_mfa_required" => "true"
   }
 
   # Globbed rather than taken from `git ls-files`, so building the gem does not

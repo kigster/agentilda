@@ -165,8 +165,8 @@ module Agentilda
         return nil if identifier.empty?
 
         Issue.new(unit: cell["unit"].strip, identifier:, url: link && link[2],
-                  title: cell["title"].gsub(/\\([|\\])/, '\1').strip,
-                  state: cell["state"].strip, digest: cell["synced"].gsub(/[`\s]/, ""))
+          title: cell["title"].gsub(/\\([|\\])/, '\1').strip,
+          state: cell["state"].strip, digest: cell["synced"].gsub(/[`\s]/, ""))
       end
 
       # @return [Hash, nil]
@@ -177,7 +177,7 @@ module Agentilda
         link = line.match(/project\s+\[([^\]]+)\]\((\S+?)\)/i)
         return nil unless link
 
-        { name: link[1].strip.gsub(/\\([|\\])/, '\1'), url: link[2] }
+        {name: link[1].strip.gsub(/\\([|\\])/, '\1'), url: link[2]}
       end
     end
   end

@@ -17,7 +17,7 @@ RSpec.describe Agentilda::Creator, :tree do
     context "with plans already present" do
       let!(:tree) do
         plans do |t|
-          t.plan "001.00", :new, "initial-spec", files: { "spec.md" => spec_body }
+          t.plan "001.00", :new, "initial-spec", files: {"spec.md" => spec_body}
           t.plan "002.00", :approved, "dev-foundation", prs: [t.merged(2, "Ship it")]
         end
       end
@@ -52,7 +52,7 @@ RSpec.describe Agentilda::Creator, :tree do
     end
 
     context "when the same topic is created twice" do
-      let!(:tree) { plans { |t| t.plan "001.00", :new, "tax-rule-dsl", files: { "spec.md" => spec_body } } }
+      let!(:tree) { plans { |t| t.plan "001.00", :new, "tax-rule-dsl", files: {"spec.md" => spec_body} } }
 
       it "gives the second one its own number rather than colliding" do
         expect(created).to eq("002.00-⚪️-tax-rule-dsl")
@@ -69,9 +69,9 @@ RSpec.describe Agentilda::Creator, :tree do
   describe "#create with :after — a plan written after the fact" do
     let!(:tree) do
       plans do |t|
-        t.plan "001.00", :new, "initial-spec", files: { "spec.md" => spec_body }
+        t.plan "001.00", :new, "initial-spec", files: {"spec.md" => spec_body}
         t.plan "002.00", :approved, "dev-foundation", prs: [t.merged(2, "Ship it")]
-        t.plan "003.00", :new, "tenancy", files: { "spec.md" => spec_body }
+        t.plan "003.00", :new, "tenancy", files: {"spec.md" => spec_body}
       end
     end
 
@@ -116,10 +116,10 @@ RSpec.describe Agentilda::Creator, :tree do
   # and only what this produces.
   describe "creating from pull requests" do
     let(:prs) do
-      [{ number: 12, title: "Add health checks", url: "https://github.com/o/r/pull/12",
-         state: "Merged 🟣", body: "Adds /healthz and /readyz." },
-       { number: 15, title: "Structured logging", url: "https://github.com/o/r/pull/15",
-         state: "Merged 🟣", body: "JSON lines." }]
+      [{number: 12, title: "Add health checks", url: "https://github.com/o/r/pull/12",
+        state: "Merged 🟣", body: "Adds /healthz and /readyz."},
+        {number: 15, title: "Structured logging", url: "https://github.com/o/r/pull/15",
+         state: "Merged 🟣", body: "JSON lines."}]
     end
 
     let!(:anchor) { plans { |t| t.plan "018.00", :approved, "deploy", prs: [t.merged(1, "x")] } }

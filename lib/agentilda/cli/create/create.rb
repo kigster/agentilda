@@ -7,20 +7,20 @@ module Agentilda
       desc "Create the next numbered plan folder"
 
       argument :words, type: :array, required: true,
-                       desc: "The topic, two to five words; becomes the folder slug"
+        desc: "The topic, two to five words; becomes the folder slug"
 
       option :after, aliases: ["-a"],
-                     desc: "Create a retroactive plan in the gap after this plan, e.g. 002"
+        desc: "Create a retroactive plan in the gap after this plan, e.g. 002"
       option :status, aliases: ["-s"],
-                      desc: "Open in a state other than the default"
+        desc: "Open in a state other than the default"
       option :prs, aliases: ["--pr"],
-                   desc: "Document work that already shipped: pull request numbers or URLs, comma separated. Requires --after"
+        desc: "Document work that already shipped: pull request numbers or URLs, comma separated. Requires --after"
       option :spec, type: :boolean, default: true,
-                    desc: "With --prs, write spec.md from what the pull requests did. --no-spec records them and stops, which is fast and offline"
+        desc: "With --prs, write spec.md from what the pull requests did. --no-spec records them and stops, which is fast and offline"
       option :draft, type: :boolean, default: true,
-                     desc: "For a new feature (no --prs), attempt spec.md's four headings from project context via `claude`. --no-draft leaves them bare"
+        desc: "For a new feature (no --prs), attempt spec.md's four headings from project context via `claude`. --no-draft leaves them bare"
       option :open, type: :boolean, default: true,
-                    desc: "Open the new spec.md in the system editor when done (macOS `open`). --no-open leaves it for you to open"
+        desc: "Open the new spec.md in the system editor when done (macOS `open`). --no-open leaves it for you to open"
 
       # noinspection RubyMismatchedArgumentType
       example [
@@ -29,7 +29,7 @@ module Agentilda
         "--after 002 schedule k1             # 002.01-🕰️-schedule-k1 (documented after the fact)",
         "--after 018 --prs 12,15 verify      # …and write spec.md from what those PRs did",
         "--after 018 --pr https://…/pull/12 verify",
-        "--status ready billing sync         # opens at ⭐️ instead of ⚪️",
+        "--status ready billing sync         # opens at ⭐️ instead of ⚪️"
       ]
 
       # @param words [Array<String>]
@@ -41,7 +41,7 @@ module Agentilda
 
         prs = fetch_prs(options)
         result = Creator.new(dir:).create(words:, after: options[:after],
-                                          status: options[:status], prs:)
+          status: options[:status], prs:)
 
         result.either(
           ->(path) { created(path, prs, options) },
@@ -81,9 +81,9 @@ module Agentilda
       def created(path, prs, options)
         from_prs = prs && !prs.empty?
         path = if from_prs
-          synthesize(path, options) if options.fetch(:spec, true)
-        else
-          brief(path, options)
+                 synthesize(path, options) if options.fetch(:spec, true)
+               else
+                 brief(path, options)
         end || path
         puts path
         return if quiet?(options)

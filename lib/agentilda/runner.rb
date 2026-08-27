@@ -37,7 +37,7 @@ module Agentilda
     # @!attribute [r] seconds
     #   @return [Float] how long the agent ran
     Attempt = Data.define(:ordinal, :agent, :from, :to, :ok, :note, :up, :down, :subagents,
-                          :delegated, :seconds) do
+      :delegated, :seconds) do
       # @return [Boolean] whether the plan actually moved
       def advanced? = ok && from != to
     end
@@ -74,7 +74,7 @@ module Agentilda
       # are columns rather than a sentence.
       #
       # @return [Hash]
-      def log_fields = { plan: subject.feature.ordinal.to_s, status: subject.status.to_s, agent: agent.name }
+      def log_fields = {plan: subject.feature.ordinal.to_s, status: subject.status.to_s, agent: agent.name}
     end
 
     # Rounds with no movement before the loop concedes. One is not enough: an
@@ -100,8 +100,8 @@ module Agentilda
     #   must not rename anything either — a preview that moves folders is
     #   not a preview.
     def initialize(tree:, executor:, agents: Agents.new, max_rounds: 10,
-                   isolation: :shared, jobs: 1, worktree: nil, plans: nil, publisher: nil,
-                   dry_run: false)
+      isolation: :shared, jobs: 1, worktree: nil, plans: nil, publisher: nil,
+      dry_run: false)
       @tree = tree
       @executor = executor
       @agents = agents
@@ -177,7 +177,7 @@ module Agentilda
       return Round.new(number:, attempts: []) if tasks.empty?
 
       results = UI.concurrently(tasks, "round #{number} — #{tasks.size} plans", jobs:,
-                                                                                label: :label.to_proc, fields: :log_fields.to_proc) do |task, progress|
+        label: :label.to_proc, fields: :log_fields.to_proc) do |task, progress|
         attempt(task, &progress)
       end
 
@@ -226,8 +226,8 @@ module Agentilda
     # @return [Agentilda::Runner::Attempt]
     def failed(error)
       Attempt.new(ordinal: "?", agent: "?", from: :unknown, to: :unknown, ok: false,
-                  note: error.is_a?(Exception) ? error.message.lines.first.to_s.strip : error.to_s,
-                  up: 0, down: 0, subagents: 0, delegated: 0, seconds: 0.0)
+        note: error.is_a?(Exception) ? error.message.lines.first.to_s.strip : error.to_s,
+        up: 0, down: 0, subagents: 0, delegated: 0, seconds: 0.0)
     end
 
     # Exactly one agent per plan per round — the first that handles its state.
@@ -264,8 +264,8 @@ module Agentilda
       note = "#{note} (#{task.checkout.branch})" if task.checkout
 
       Attempt.new(ordinal:, agent: task.agent.name, from:, ok: !!ok, note: note.to_s, to: from,
-                  up: spend(result, :up), down: spend(result, :down), subagents: spend(result, :subagents),
-                  delegated: spend(result, :delegated), seconds: spend(result, :seconds))
+        up: spend(result, :up), down: spend(result, :down), subagents: spend(result, :subagents),
+        delegated: spend(result, :delegated), seconds: spend(result, :seconds))
     end
 
     # An executor is anything that answers `call` and returns something that
@@ -308,12 +308,12 @@ module Agentilda
 
       publication = publish(task, current)
       note = if publication&.published?
-          "#{settled.note}; opened #{publication.url}"
-        elsif publication&.refusal
-          "#{settled.note}; publish refused: #{publication.refusal}"
-        else
-          settled.note
-        end
+        "#{settled.note}; opened #{publication.url}"
+      elsif publication&.refusal
+        "#{settled.note}; publish refused: #{publication.refusal}"
+      else
+        settled.note
+      end
 
       settled.with(note:)
     end
@@ -344,9 +344,9 @@ module Agentilda
     def record_pull_request(path, publication)
       number = publication.url.to_s[%r{/pull/(\d+)}, 1]
       rows = PullRequests.new(dir: path).all.map { |pr|
-        { number: pr.number, title: pr.title, url: pr.url, state: pr.state, body: "" }
+        {number: pr.number, title: pr.title, url: pr.url, state: pr.state, body: ""}
       }
-      rows << { number:, title: publication.title, url: publication.url, state: "Open 🟡", body: "" }
+      rows << {number:, title: publication.title, url: publication.url, state: "Open 🟡", body: ""}
       File.write(File.join(path, PullRequests::FILENAME), PullRequests.render(rows))
     end
   end

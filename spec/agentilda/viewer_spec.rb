@@ -11,7 +11,12 @@ RSpec.describe Agentilda::Viewer do
 
   let(:launched) { [] }
   let(:piped) { [] }
-  let(:launch) { ->(*cmd) { launched << cmd; true } }
+  let(:launch) {
+    ->(*cmd) {
+      launched << cmd
+      true
+    }
+  }
   let(:pipe) do
     lambda do |cmd, &block|
       io = StringIO.new
@@ -27,7 +32,10 @@ RSpec.describe Agentilda::Viewer do
   end
 
   around do |example|
-    Dir.mktmpdir("viewer") { |tmp| @dir = tmp; example.run }
+    Dir.mktmpdir("viewer") { |tmp|
+      @dir = tmp
+      example.run
+    }
   end
 
   describe "#open" do
@@ -56,12 +64,17 @@ RSpec.describe Agentilda::Viewer do
         viewer.mdfried(paths)
 
         expect(piped).to eq([["mdfried", "# leah-researcher\n"],
-                             ["mdfried", "# luke-backend\n"]])
+          ["mdfried", "# luke-backend\n"]])
       end
     end
 
     context "when mdfried is missing" do
-      let(:launch) { ->(*cmd) { launched << cmd; cmd != [described_class::DETECT] } }
+      let(:launch) {
+        ->(*cmd) {
+          launched << cmd
+          cmd != [described_class::DETECT]
+        }
+      }
 
       it "installs it through brew before rendering" do
         viewer.mdfried(paths.first)
@@ -72,7 +85,12 @@ RSpec.describe Agentilda::Viewer do
     end
 
     context "when brew cannot install it either" do
-      let(:launch) { ->(*cmd) { launched << cmd; false } }
+      let(:launch) {
+        ->(*cmd) {
+          launched << cmd
+          false
+        }
+      }
 
       it "raises instead of piping into a command that is not there" do
         expect { viewer.mdfried(paths) }.to raise_error(Agentilda::Error, /brew install mdfried/)

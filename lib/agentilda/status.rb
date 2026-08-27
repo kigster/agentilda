@@ -137,7 +137,7 @@ module Agentilda
     Status.new(
       key: :new, emoji: "⚪️", label: "New", requires: %w[spec.md],
       note: "a specification exists; it has not been planned yet",
-      invariant: nil,
+      invariant: nil
     ),
     Status.new(
       key: :researched, emoji: "🔎", label: "Researched", requires: %w[spec.md],
@@ -145,12 +145,12 @@ module Agentilda
       invariant: lambda { |s|
         body = s.read("spec.md").to_s
         "Researched, but `spec.md` has no `## Research` chapter" unless body.match?(RESEARCH_CHAPTER)
-      },
+      }
     ),
     Status.new(
       key: :planned, emoji: "⭐️", label: "Planned", requires: %w[spec.md plan.md],
       note: "specified and planned; nobody has started building",
-      invariant: nil,
+      invariant: nil
     ),
     # `pull-requests.md` is deliberately absent from `requires` on both of the
     # building states, though it names the file they are about. That file is
@@ -164,7 +164,7 @@ module Agentilda
     Status.new(
       key: :building, emoji: "🟡", label: "Building", requires: %w[spec.md plan.md],
       note: "the back end is under way: data, domain and the API the interface will call",
-      invariant: nil,
+      invariant: nil
     ),
     # Two building states rather than one, because the order is not a
     # preference: an interface is written against an API that already answers.
@@ -174,22 +174,22 @@ module Agentilda
     Status.new(
       key: :building_ui, emoji: "🎨", label: "Building UI", requires: %w[spec.md plan.md],
       note: "the back end holds; the interface is being built against it",
-      invariant: nil,
+      invariant: nil
     ),
     Status.new(
       key: :ready_for_review, emoji: "🟢", label: "Ready for Review", requires: %w[spec.md plan.md pull-requests.md],
       note: "every pull request is green on CI and waiting for a reviewer",
-      invariant: open_pull_request("Ready for Review"),
+      invariant: open_pull_request("Ready for Review")
     ),
     Status.new(
       key: :in_review, emoji: "👀", label: "In Review", requires: %w[spec.md plan.md pull-requests.md],
       note: "a reviewer has picked it up and has not ruled yet",
-      invariant: open_pull_request("In Review"),
+      invariant: open_pull_request("In Review")
     ),
     Status.new(
       key: :rejected, emoji: "🔴", label: "Changes Requested", requires: %w[spec.md plan.md pull-requests.md],
       note: "the review asked for fixes; resubmit once they are made",
-      invariant: open_pull_request("Changes Requested"),
+      invariant: open_pull_request("Changes Requested")
     ),
     Status.new(
       key: :approved, emoji: "✅", label: "Approved & Merged", requires: %w[pull-requests.md],
@@ -199,32 +199,32 @@ module Agentilda
 
         open = s.pull_requests.count(&:open?)
         "Approved & Merged, but #{Agentilda.pull_request_count(open)} still open" if open.positive?
-      },
+      }
     ),
     Status.new(
       key: :deployed, emoji: "😎", label: "Deployed", requires: %w[deployed.md],
       note: "live in production; `deployed.md` names the release, date and SHA",
-      invariant: nil,
+      invariant: nil
     ),
     Status.new(
       key: :rolled_back, emoji: "😱", label: "Rolled Back", requires: %w[rollback.md],
       note: "it shipped and was pulled; `rollback.md` names what broke",
-      invariant: nil,
+      invariant: nil
     ),
     Status.new(
       key: :shit, emoji: "💩", label: "Scrapped by Review", requires: %w[rewrite.md],
       note: "the review scrapped the work; the plan survives, the pull requests do not",
-      invariant: nil,
+      invariant: nil
     ),
     Status.new(
       key: :blocked, emoji: "⭕️", label: "Technical Block", requires: %w[blocked.md],
       note: "cannot proceed; `blocked.md` names what an engineer or the CTO must decide",
-      invariant: open_block("Technical Block"),
+      invariant: open_block("Technical Block")
     ),
     Status.new(
       key: :product_blocked, emoji: "🅱️", label: "Product Block", requires: %w[blocked.md],
       note: "cannot proceed; `blocked.md` names what a product manager must decide",
-      invariant: open_block("Product Block"),
+      invariant: open_block("Product Block")
     ),
     Status.new(
       key: :deferred, emoji: "☢️", label: "Deferred", requires: %w[delayed.md],
@@ -232,7 +232,7 @@ module Agentilda
       invariant: lambda { |s|
         body = s.read("delayed.md").to_s
         "Deferred, but `delayed.md` names no trigger" unless body.match?(/trigger|revisit|when\b|until\b|once\b/i)
-      },
+      }
     ),
     Status.new(
       key: :retroactive, emoji: "🕰️", label: "Retroactive", requires: [],
@@ -241,13 +241,13 @@ module Agentilda
         next "Retroactive, but a `spec.md` already exists — it has been documented" if s.file?("spec.md")
 
         "Retroactive, but no pull requests are recorded" if s.pull_requests.empty?
-      },
+      }
     ),
     Status.new(
       key: :discarded, emoji: "❌", label: "Discarded", requires: %w[discarded.md],
       note: "dropped for good; `discarded.md` says why. A terminal state",
-      invariant: nil,
-    ),
+      invariant: nil
+    )
   ].freeze
 
   # Emoji => status, folded so ⚪ and ⚪️ both resolve.

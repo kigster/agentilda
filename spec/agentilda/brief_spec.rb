@@ -137,7 +137,7 @@ RSpec.describe Agentilda::Brief, :tree do
 
     it "turns a non-zero exit into a note rather than an unhandled exception" do
       allow(command).to receive(:run).and_raise(TTY::Command::ExitError.new("claude",
-                                                                            instance_double(TTY::Command::Result, exit_status: 1, out: "", err: "boom")))
+        instance_double(TTY::Command::Result, exit_status: 1, out: "", err: "boom")))
 
       ok, note = brief.attempt!
 
@@ -152,8 +152,8 @@ RSpec.describe Agentilda::Brief, :tree do
     # Reporting it said an invocation failed, at length, and never why.
     it "reports what claude said, not the several-thousand-character prompt it said it about" do
       allow(command).to receive(:run).and_raise(TTY::Command::ExitError.new("claude -p #{"x" * 3000}",
-                                                                            instance_double(TTY::Command::Result, exit_status: 1,
-                                                                                                                  out: "API Error: 401 API key is invalid.", err: "")))
+        instance_double(TTY::Command::Result, exit_status: 1,
+          out: "API Error: 401 API key is invalid.", err: "")))
 
       ok, note = brief.attempt!
 

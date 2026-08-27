@@ -25,7 +25,7 @@ RSpec.describe Agentilda::Unblocker, :tree do
   end
 
   def blocked_plan(ordinal = "001.00", body: blocked_body)
-    plans { |t| t.plan(ordinal, :blocked, "a-feature", files: { "spec.md" => spec_body, "blocked.md" => body }) }
+    plans { |t| t.plan(ordinal, :blocked, "a-feature", files: {"spec.md" => spec_body, "blocked.md" => body}) }
     tree.reload.find(ordinal)
   end
 
@@ -57,14 +57,14 @@ RSpec.describe Agentilda::Unblocker, :tree do
     end
 
     it "refuses a folder that was never stopped, and says which" do
-      plans { |t| t.plan("002.00", :new, "unstopped", files: { "spec.md" => spec_body }) }
+      plans { |t| t.plan("002.00", :new, "unstopped", files: {"spec.md" => spec_body}) }
 
       expect(unblocker.resolve(["002"]).first.problem).to eq(:not_blocked)
     end
 
     it "splits a comma separated list the way a shell hands one over" do
       blocked_plan
-      plans { |t| t.plan("002.00", :blocked, "another", files: { "spec.md" => spec_body, "blocked.md" => blocked_body }) }
+      plans { |t| t.plan("002.00", :blocked, "another", files: {"spec.md" => spec_body, "blocked.md" => blocked_body}) }
 
       expect(tree.reload && unblocker.resolve(["001,002"]).size).to eq(2)
     end
@@ -73,7 +73,7 @@ RSpec.describe Agentilda::Unblocker, :tree do
     # the tool circular: a file numbered some other way never earned the emoji,
     # so `unblock` refused it, so it could never be fixed.
     it "gates on the file, not on the folder's emoji" do
-      plans { |t| t.plan("003.00", :new, "mislabelled", files: { "spec.md" => spec_body, "blocked.md" => "## Q1 huh" }) }
+      plans { |t| t.plan("003.00", :new, "mislabelled", files: {"spec.md" => spec_body, "blocked.md" => "## Q1 huh"}) }
 
       expect(tree.reload && unblocker.resolve(["003"]).first).to be_drainable
     end
@@ -93,7 +93,7 @@ RSpec.describe Agentilda::Unblocker, :tree do
     end
 
     it "finds nothing in a file that numbers its questions some other way" do
-      plans { |t| t.plan("004.00", :new, "unreadable", files: { "blocked.md" => "## Question one\n" }) }
+      plans { |t| t.plan("004.00", :new, "unreadable", files: {"blocked.md" => "## Question one\n"}) }
 
       expect(described_class.questions(tree.reload.find("004.00"))).to be_empty
     end
@@ -144,7 +144,7 @@ RSpec.describe Agentilda::Unblocker, :tree do
     it "hands the executor the plan and the repository root" do
       seen = nil
       described_class.new(tree:, agent:, commit: true,
-                          executor: ->(_a, s, **kw) { seen = [s.feature.ordinal.to_s, kw[:root]] and [true, "ok"] })
+        executor: ->(_a, s, **kw) { seen = [s.feature.ordinal.to_s, kw[:root]] and [true, "ok"] })
         .call([blocked_plan])
 
       expect(seen).to eq(["001.00", File.dirname(plans_root)])

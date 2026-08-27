@@ -74,9 +74,9 @@ module Agentilda
 
     parent = File.dirname(source)
     tracked = system("git", "-C", parent, "ls-files", "--error-unmatch", source,
-                     out: File::NULL, err: File::NULL)
+      out: File::NULL, err: File::NULL)
     moved = tracked && system("git", "-C", parent, "mv", source, target,
-                              out: File::NULL, err: File::NULL)
+      out: File::NULL, err: File::NULL)
     FileUtils.mv(source, target) unless moved
     true
   end

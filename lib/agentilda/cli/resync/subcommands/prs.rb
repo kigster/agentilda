@@ -9,17 +9,17 @@ module Agentilda
         desc "Add missing [NNN.MM] prefixes to pull request titles"
 
         option :commit, type: :boolean, default: false,
-                        desc: "Actually retitle the pull requests (default: dry run)"
+          desc: "Actually retitle the pull requests (default: dry run)"
         option :state, default: "all", values: %w[open closed merged all],
-                       desc: "Which pull requests to consider"
+          desc: "Which pull requests to consider"
         option :adopt, type: :boolean, default: true,
-                       desc: "Mint a retroactive plan folder for every pull request that resolves to none. --no-adopt flags them for a human instead"
+          desc: "Mint a retroactive plan folder for every pull request that resolves to none. --no-adopt flags them for a human instead"
 
         example [
           "                # show what would be retitled, and what would be adopted",
           "--state open    # only open pull requests",
           "--no-adopt      # never create a folder; flag the unresolvable ones",
-          "--commit        # do it",
+          "--commit        # do it"
         ]
 
         # @param options [Hash]
@@ -28,7 +28,7 @@ module Agentilda
           github = GitHub.new
           tree = tree_for(options)
           changes = Agentilda::Resync::Prs.new(tree:, github:,
-                                               adopt: options.fetch(:adopt, true), root: File.dirname(tree.dir))
+            adopt: options.fetch(:adopt, true), root: File.dirname(tree.dir))
             .call(commit: commit?(options))
 
           if changes.empty?
@@ -58,10 +58,10 @@ module Agentilda
 
           applicable.each do |c|
             note = if c.adopted?
-                paint("   (new plan)", :magenta)
-              elsif c.assumed?
-                paint("   (assumed)", :yellow)
-              end
+              paint("   (new plan)", :magenta)
+            elsif c.assumed?
+              paint("   (assumed)", :yellow)
+            end
             say("##{c.number}  #{c.new_title}#{note}")
           end
 

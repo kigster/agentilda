@@ -7,7 +7,7 @@ require "tmpdir"
 # it did not write — hand-edited tables, prose with bare links, GitLab URLs —
 # because a folder that plainly has pull requests must never report none.
 RSpec.describe Agentilda::PullRequests do
-  def parse(filename: described_class::FILENAME, body:)
+  def parse(body:, filename: described_class::FILENAME)
     Dir.mktmpdir do |dir|
       File.write(File.join(dir, filename), body)
       described_class.new(dir:).all
@@ -57,7 +57,7 @@ RSpec.describe Agentilda::PullRequests do
 
     it "keeps the URL and admits it does not know the state" do
       expect(parse(body:).first).to have_attributes(
-        url: "https://github.com/o/r/pull/12", state: "Unknown", title: "Pull request #12",
+        url: "https://github.com/o/r/pull/12", state: "Unknown", title: "Pull request #12"
       )
     end
   end

@@ -79,15 +79,15 @@ module Agentilda
       def apply(action, subject, parent)
         if parent && !parent.ok?
           return Result.new(action:, identifier: action.identifier, url: nil,
-                            error: "the issue for its plan could not be created")
+            error: "the issue for its plan could not be created")
         end
 
         attempt(action) do
           node = case action.op
-            when :skip then recorded(action, subject)
-            when :update then attach(api.update_issue(action.args[:id], input(action, parent)), action)
-            else attach(api.create_issue(input(action, parent).merge(teamId: team[:id], projectId: project_id)), action)
-            end
+          when :skip then recorded(action, subject)
+          when :update then attach(api.update_issue(action.args[:id], input(action, parent)), action)
+          else attach(api.create_issue(input(action, parent).merge(teamId: team[:id], projectId: project_id)), action)
+          end
 
           [node["identifier"], node["url"]]
         end
@@ -100,8 +100,8 @@ module Agentilda
       # @param parent [Agentilda::Linear::Result, nil]
       # @return [Hash]
       def input(action, parent)
-        base = { title: action.args[:title], description: action.args[:description],
-                 stateId: state_id(action.args[:state]), labelIds: label_ids(action.args[:labels]) }.compact
+        base = {title: action.args[:title], description: action.args[:description],
+                stateId: state_id(action.args[:state]), labelIds: label_ids(action.args[:labels])}.compact
         return base unless parent&.identifier
 
         base.merge(parentId: parent.identifier)
@@ -125,7 +125,7 @@ module Agentilda
       # @return [Hash]
       def recorded(action, subject)
         was = Issues.new(dir: subject.feature.path).by_unit[action.unit]
-        { "identifier" => was&.identifier || action.identifier, "url" => was&.url }
+        {"identifier" => was&.identifier || action.identifier, "url" => was&.url}
       end
 
       # A team names its own workflow states, so the name we would prefer is a
@@ -178,12 +178,12 @@ module Agentilda
       def record(subject, results)
         issues = results.select { |r| r.ok? && r.identifier }.map { |r|
           Issue.new(unit: r.action.unit, identifier: r.identifier, url: r.url,
-                    title: r.action.title, state: r.action.args[:state] || "", digest: r.action.digest)
+            title: r.action.title, state: r.action.args[:state] || "", digest: r.action.digest)
         }
         return if issues.empty?
 
         Issues.new(dir: subject.feature.path).write(team: import.team, issues:,
-                                                    project: { name: import.project_name, url: import.project["url"] })
+          project: {name: import.project_name, url: import.project["url"]})
       end
     end
   end

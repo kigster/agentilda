@@ -77,7 +77,7 @@ module Agentilda
     # @return [Integer]
     def pr_column
       @pr_column ||= row(" ", " " * ORDINAL_WIDTH, " " * EMOJI_WIDTH,
-                         " " * label_width, " " * title_width, "").length
+        " " * label_width, " " * title_width, "").length
     end
 
     # @return [Integer] cell at which the feature name starts
@@ -86,11 +86,11 @@ module Agentilda
     # @return [String]
     def header
       text = row(" ",
-                 UI.fit(HEADINGS[0], ORDINAL_WIDTH),
-                 UI.fit(HEADINGS[1], EMOJI_WIDTH),
-                 UI.fit(HEADINGS[2], label_width),
-                 UI.fit(HEADINGS[3], title_width),
-                 HEADINGS[4])
+        UI.fit(HEADINGS[0], ORDINAL_WIDTH),
+        UI.fit(HEADINGS[1], EMOJI_WIDTH),
+        UI.fit(HEADINGS[2], label_width),
+        UI.fit(HEADINGS[3], title_width),
+        HEADINGS[4])
 
       rule = "  " + ("─" * (UI.display_width(text) - 2))
 
@@ -130,15 +130,21 @@ module Agentilda
       colour = state_colour(pr)
 
       format("#%4s %s %s",
-             pr.number,
-             UI.paint(UI.fit(pr.state, STATE_WIDTH), colour),
-             UI.paint(pr.url.to_s, colour))
+        pr.number,
+        UI.paint(UI.fit(pr.state, STATE_WIDTH), colour),
+        UI.paint(pr.url.to_s, colour))
     end
 
     # @param pr [Agentilda::PullRequest]
     # @return [Symbol] a pastel style name
     def state_colour(pr)
-      if pr.merged? then :magenta elsif pr.open? then :yellow else :blue end
+      if pr.merged?
+        :magenta
+      elsif pr.open?
+        :yellow
+      else
+        :blue
+      end
     end
 
     # @param subject [Agentilda::Subject]
