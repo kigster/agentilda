@@ -143,10 +143,17 @@ module Agentilda
       # @param spec_path [String]
       # @return [void]
       def open_spec(spec_path)
-        return unless RbConfig::CONFIG["host_os"].to_s.match?(/darwin/)
+        return unless macos?
 
         system("open", spec_path, out: File::NULL, err: File::NULL)
       end
+
+      # `open` is a macOS command; anywhere else the viewer step is skipped
+      # rather than failed. A named seam so a spec can assert the viewer was
+      # asked for without inheriting the platform CI happens to run on.
+      #
+      # @return [Boolean]
+      def macos? = RbConfig::CONFIG["host_os"].to_s.match?(/darwin/)
 
       # @param path [String]
       # @return [String] where the folder ended up

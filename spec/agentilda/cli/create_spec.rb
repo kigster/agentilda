@@ -32,9 +32,12 @@ RSpec.describe Agentilda::CLI::Create, :tree do
 
   # `--open` shells out to macOS `open`, which would put a real editor window
   # on the box running the suite. The stub also lets an example assert the
-  # viewer was asked for, which "nothing visibly happened" cannot.
+  # viewer was asked for, which "nothing visibly happened" cannot. The
+  # platform gate is stubbed too: CI runs on Linux, where the command would
+  # otherwise skip the viewer and the example would assert against nothing.
   def intercept_open
     opened = []
+    allow(command).to receive(:macos?).and_return(true)
     allow(command).to receive(:system) { |*args| opened << args; true }
     opened
   end
@@ -146,7 +149,7 @@ RSpec.describe Agentilda::CLI::Create, :tree do
 
     it "reports pull requests it could not read, not a stack trace" do
       allow(github).to receive(:pull_requests)
-        .and_raise(Agentilda::Error, "could not read pull request 12: gone")
+                         .and_raise(Agentilda::Error, "could not read pull request 12: gone")
       plans { |t| t.plan("002.00", :new, "anchor", files: { "spec.md" => spec_body }) }
       _out, err, status = run("verify", after: "002", prs: "12")
 
