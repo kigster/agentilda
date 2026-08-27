@@ -68,10 +68,8 @@ module Agentilda
       def agent_for(options)
         name = options.fetch(:agent, DEFAULT_AGENT)
         agents = Agentilda::Agents.new
-        agents.find(name) or begin
-          error("No agent called #{name}.\n\nKnown: #{agents.all.map(&:name).join(", ")}")
-          exit 65
-        end
+        agents.find(name) or
+          refuse("No agent called #{name}.\n\nKnown: #{agents.all.map(&:name).join(", ")}", 65)
       end
 
       # A number that names no folder, or a folder that was never stopped, is

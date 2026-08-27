@@ -44,9 +44,8 @@ module Agentilda
         jobs = (options[:jobs] || UI.default_jobs).to_i
 
         if isolation == :worktree && !Worktree.new(root:).repository?
-          error("#{root} is not a git repository, so plans cannot be isolated.\n\n" \
-                "Run with --isolation shared to work in one tree, serially.")
-          exit 66
+          refuse("#{root} is not a git repository, so plans cannot be isolated.\n\n" \
+                 "Run with --isolation shared to work in one tree, serially.", 66)
         end
 
         # Set before the loop starts, not after: `UI.animate?` (and therefore
@@ -77,10 +76,8 @@ module Agentilda
       # @param name [String]
       # @return [Agentilda::Agents]
       def filtered(agents, name)
-        agents.find(name) or begin
-          error("No agent called #{name}.\n\nKnown: #{agents.all.map(&:name).join(", ")}")
-          exit 65
-        end
+        agents.find(name) or
+          refuse("No agent called #{name}.\n\nKnown: #{agents.all.map(&:name).join(", ")}", 65)
         agents
       end
 
@@ -98,9 +95,8 @@ module Agentilda
         text.split(",").map(&:strip).reject(&:empty?).map { |token|
           ordinal = Ordinal.parse(token)
           unless ordinal && known.include?(ordinal)
-            error("No plan #{token} in #{tree.dir}.\n\n" \
-                  "Known: #{known.join(", ")}")
-            exit 66
+            refuse("No plan #{token} in #{tree.dir}.\n\n" \
+                   "Known: #{known.join(", ")}", 66)
           end
           ordinal
         }

@@ -27,8 +27,7 @@ module Agentilda
           end
           report_descriptions(survey)
         rescue Agentilda::Error => e
-          error(e.message)
-          exit 69
+          refuse(e.message, 69)
         end
 
         private
