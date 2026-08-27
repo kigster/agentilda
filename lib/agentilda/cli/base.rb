@@ -21,11 +21,22 @@ module Agentilda
       def tree_for(options)
         tree = Tree.new(dir: options.fetch(:dir, Agentilda::PLANS_DIR))
         unless tree.exist?
-          error("No #{Agentilda::PLANS_DIR} directory at\n#{tree.dir}\n\n" \
-                "Run this from the project root, or pass -D.")
-          exit 66
+          refuse("No #{Agentilda::PLANS_DIR} directory at\n#{tree.dir}\n\n" \
+                 "Run this from the project root, or pass -D.", 66)
         end
         tree
+      end
+
+      # Report and stop, in the shape every refusal here takes. The statuses
+      # follow sysexits where one fits: 64 usage, 65 bad data, 66 no input,
+      # 69 a service (GitHub, Linear) refused us.
+      #
+      # @param message [String]
+      # @param status [Integer]
+      # @return [void] never returns
+      def refuse(message, status)
+        error(message)
+        exit status
       end
 
       # @param options [Hash]
