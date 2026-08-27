@@ -93,6 +93,16 @@ RSpec.describe Agentilda::CLI::Run, :tree do
       expect(out).not_to include("tokens")
     end
 
+    # The per-round resync used to run with commit: true even here, so a
+    # "dry" run renamed a ⭐️ folder whose plan.md already existed. A preview
+    # that moves folders is not a preview.
+    it "renames nothing, even a folder the resync would promote" do
+      plans { |t| t.plan("002.00", :planned, "stays-put", files: { "spec.md" => spec_body, "plan.md" => "# Plan" }) }
+      run
+
+      expect(Dir.children(plans_root).grep(/stays-put/)).to eq(["002.00-⭐️-stays-put"])
+    end
+
     it "says where the progress log is going before the loop starts" do
       _out, err, = run
 
