@@ -106,6 +106,5 @@ module Agentilda
            UI.paint(UI.fit(advances(agent), advances_width(all)), agent.read_only? ? :bright_black : :green),
            UI.paint(agent.model.to_s, :bright_black))
     end
-
   end
 end

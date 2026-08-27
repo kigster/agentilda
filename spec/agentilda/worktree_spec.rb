@@ -240,8 +240,7 @@ RSpec.describe Agentilda::Worktree do
       FileUtils.mkdir_p(worktree_dir)
       File.write(File.join(worktree_dir, "002.00-tenancy-households"), "in the way")
 
-      expect { worktrees.checkout_for(feature) }
-        .to raise_error(Agentilda::Error, /could not create a worktree for tester\/002\.00-tenancy-households/)
+      expect { worktrees.checkout_for(feature) }.to raise_error(Agentilda::Error, /could not create a worktree for tester\/002\.00-tenancy-households/)
     end
   end
 

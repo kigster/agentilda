@@ -341,7 +341,7 @@ RSpec.describe Agentilda::UI do
       line.call(progress("reading spec.md"))
 
       expect(spinner).to have_received(:update)
-        .with(meter: a_string_including("↑10"), activity: a_string_including("reading spec.md"))
+                           .with(meter: a_string_including("↑10"), activity: a_string_including("reading spec.md"))
     end
 
     it "logs a phrase once, however many times the stream repeats it" do

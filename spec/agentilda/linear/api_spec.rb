@@ -130,8 +130,7 @@ RSpec.describe Agentilda::Linear::API do
       # A 400/401 here is nearly always the Bearer-prefix mistake, so the
       # error says so instead of leaving the reader to discover it.
       it "points at the token and the Bearer trap" do
-        expect { api.query("query { x }") }
-          .to raise_error(Agentilda::Error, /HTTP 401.*Check LINEAR_API_KEY.*without a `Bearer` prefix/m)
+        expect { api.query("query { x }") }.to raise_error(Agentilda::Error, /HTTP 401.*Check LINEAR_API_KEY.*without a `Bearer` prefix/m)
       end
     end
 
@@ -139,8 +138,7 @@ RSpec.describe Agentilda::Linear::API do
       let(:http_response) { failure("503") }
 
       it "reports the status without the token hint, which would mislead" do
-        expect { api.query("query { x }") }
-          .to raise_error(Agentilda::Error) { |e| expect(e.message).to eq("Linear returned HTTP 503") }
+        expect { api.query("query { x }") }.to raise_error(Agentilda::Error) { |e| expect(e.message).to eq("Linear returned HTTP 503") }
       end
     end
 
@@ -156,8 +154,7 @@ RSpec.describe Agentilda::Linear::API do
       before { allow(Net::HTTP).to receive(:start).and_raise(Errno::ECONNREFUSED) }
 
       it "names the endpoint it could not reach" do
-        expect { api.query("query { x }") }
-          .to raise_error(Agentilda::Error, /could not reach Linear at #{described_class::ENDPOINT}/)
+        expect { api.query("query { x }") }.to raise_error(Agentilda::Error, /could not reach Linear at #{described_class::ENDPOINT}/)
       end
     end
   end

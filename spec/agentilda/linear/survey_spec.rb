@@ -8,8 +8,8 @@ RSpec.describe Agentilda::Linear::Survey, :tree do
   let!(:tree) do
     plans do |t|
       t.plan "201.00", :new, "ledger-carryforward-vintages",
-        files: { "spec.md" => spec_body(title: "Ledger Carryforward Vintages",
-                                        goal: "Track ledger vintages precisely.") }
+             files: { "spec.md" => spec_body(title: "Ledger Carryforward Vintages",
+                                            goal: "Track ledger vintages precisely.") }
       t.plan "202.00", :new, "plaid-integration"
       t.plan "203.00", :new, "app-web"
     end
@@ -136,8 +136,7 @@ RSpec.describe Agentilda::Linear::Survey, :tree do
     end
 
     it "names what this team actually has when nothing matches" do
-      expect { surveyed.project("mystery") }
-        .to raise_error(Agentilda::Error, /no project matches "mystery".*Payments Platform\n\s+https:/m)
+      expect { surveyed.project("mystery") }.to raise_error(Agentilda::Error, /no project matches "mystery".*Payments Platform\n\s+https:/m)
     end
   end
 end

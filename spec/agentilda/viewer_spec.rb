@@ -75,8 +75,7 @@ RSpec.describe Agentilda::Viewer do
       let(:launch) { ->(*cmd) { launched << cmd; false } }
 
       it "raises instead of piping into a command that is not there" do
-        expect { viewer.mdfried(paths) }
-          .to raise_error(Agentilda::Error, /brew install mdfried/)
+        expect { viewer.mdfried(paths) }.to raise_error(Agentilda::Error, /brew install mdfried/)
         expect(piped).to be_empty
       end
     end

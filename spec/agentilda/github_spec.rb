@@ -199,19 +199,17 @@ RSpec.describe Agentilda::GitHub do
     it "names the pull request it could not read when gh exits non-zero" do
       command = instance_double(TTY::Command)
       allow(command).to receive(:run)
-        .and_raise(TTY::Command::ExitError.new("gh pr view", instance_double(TTY::Command::Result,
-                                                                             exit_status: 1, out: "", err: "no pull requests found for branch")))
+                          .and_raise(TTY::Command::ExitError.new("gh pr view", instance_double(TTY::Command::Result,
+                                                                                               exit_status: 1, out: "", err: "no pull requests found for branch")))
 
-      expect { described_class.new(command:).pull_request("12") }
-        .to raise_error(Agentilda::Error, /could not read pull request 12/)
+      expect { described_class.new(command:).pull_request("12") }.to raise_error(Agentilda::Error, /could not read pull request 12/)
     end
 
     it "wraps garbage output the same way, so the caller sees one error shape" do
       command = instance_double(TTY::Command)
       allow(command).to receive(:run).and_return(instance_double(TTY::Command::Result, out: "not json"))
 
-      expect { described_class.new(command:).pull_request("12") }
-        .to raise_error(Agentilda::Error, /could not read pull request 12/)
+      expect { described_class.new(command:).pull_request("12") }.to raise_error(Agentilda::Error, /could not read pull request 12/)
     end
   end
 
