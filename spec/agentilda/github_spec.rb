@@ -195,5 +195,46 @@ RSpec.describe Agentilda::GitHub do
 
       expect { described_class.new(command:).pull_request("12") }.to raise_error(Agentilda::Error, /gh auth status/)
     end
+
+    it "names the pull request it could not read when gh exits non-zero" do
+      command = instance_double(TTY::Command)
+      allow(command).to receive(:run)
+        .and_raise(TTY::Command::ExitError.new("gh pr view", instance_double(TTY::Command::Result,
+                                                                             exit_status: 1, out: "", err: "no pull requests found for branch")))
+
+      expect { described_class.new(command:).pull_request("12") }
+        .to raise_error(Agentilda::Error, /could not read pull request 12/)
+    end
+
+    it "wraps garbage output the same way, so the caller sees one error shape" do
+      command = instance_double(TTY::Command)
+      allow(command).to receive(:run).and_return(instance_double(TTY::Command::Result, out: "not json"))
+
+      expect { described_class.new(command:).pull_request("12") }
+        .to raise_error(Agentilda::Error, /could not read pull request 12/)
+    end
+  end
+
+  describe "#pull_requests" do
+    let(:payload) do
+      { number: 12, title: "Add health checks", url: "https://github.com/o/r/pull/12",
+        state: "OPEN", isDraft: false, mergedAt: nil, body: "Adds /healthz." }.to_json
+    end
+
+    # `--prs 12,15` fetches each in turn; the order given is the order the
+    # roll-up is written in, so it must survive the fetch.
+    it "fetches each reference and keeps the order asked for" do
+      results = github.pull_requests(["12", "#15"])
+
+      aggregate_failures do
+        expect(results.size).to eq(2)
+        expect(command).to have_received(:run).with("gh", "pr", "view", "12", anything, anything)
+        expect(command).to have_received(:run).with("gh", "pr", "view", "#15", anything, anything)
+      end
+    end
+
+    it "returns the same normalised hashes as a single fetch would" do
+      expect(github.pull_requests(["12"]).first).to include(number: 12, state: "Open 🟡")
+    end
   end
 end

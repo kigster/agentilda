@@ -299,6 +299,37 @@ RSpec.describe Agentilda::Runner, :tree do
         expect(publisher).not_to have_received(:publish)
       end
 
+      # The refusal is news the round report must carry: a publisher that
+      # declined (no commits on the branch, say) and a publisher that was
+      # never asked look identical without it.
+      it "carries a publish refusal into the attempt's note" do
+        refused = publication.with(url: nil, refusal: "the branch has no commits of its own")
+        allow(publisher).to receive(:publish).and_return(refused)
+        runner.call
+
+        expect(runner.rounds.first.attempts.first.note)
+          .to include("publish refused: the branch has no commits of its own")
+      end
+
+      context "when the plan already recorded earlier pull requests" do
+        let!(:built) do
+          plans do |t|
+            t.plan "004.00", :building_ui, "needs-a-reviewer",
+              files: { "spec.md" => spec_body, "plan.md" => "# P" },
+              prs: [t.open(3, "The earlier half")]
+          end
+        end
+
+        # Rewriting pull-requests.md must append, not replace: dropping the
+        # earlier #3 would erase half the plan's recorded history.
+        it "keeps them alongside the one just opened" do
+          runner.call
+
+          prs = Agentilda::PullRequests.new(dir: tree.reload.find(ordinal).feature.path).all
+          expect(prs.map(&:number)).to contain_exactly("3", "9")
+        end
+      end
+
       it "does not publish while the agent leaves the folder as Building — more units remain" do
         keeps_building = ->(_agent, _subject, **) { [true, "one of several units"] }
         mid_plan = described_class.new(
@@ -310,6 +341,60 @@ RSpec.describe Agentilda::Runner, :tree do
           expect(tree.reload.find(ordinal).status.key).to eq(:building)
           expect(publisher).not_to have_received(:publish)
         end
+      end
+    end
+
+    # An executor that raises — a crashed harness, not an agent that failed
+    # politely — must land in the round as a failed attempt, not abort the
+    # thread pool or vanish. This is the parallel path: serially, the same
+    # exception propagates and the caller sees it.
+    describe "an executor that raises mid-round, in parallel" do
+      subject(:runner) do
+        described_class.new(tree:, executor: explosive, agents:, max_rounds: 1,
+                            isolation: :worktree, jobs: 2, worktree:)
+      end
+
+      let(:checkout) do
+        instance_double(Agentilda::Worktree::Checkout,
+                        branch: "kig/000.00-x", path: "/does-not-exist", dirty?: false)
+      end
+      let(:worktree) { instance_double(Agentilda::Worktree, checkout_for: checkout) }
+
+      let(:explosive) do
+        ->(_agent, subject, **) {
+          raise "the harness blew up" if subject.feature.ordinal.to_s == "000.00"
+
+          [true, "noop"]
+        }
+      end
+
+      let!(:built) do
+        plans do |t|
+          t.plan "000.00", :new, "explodes", files: { "spec.md" => spec_body }
+          t.plan "001.00", :new, "survives", files: { "spec.md" => spec_body }
+        end
+      end
+
+      it "records the crash as a failed attempt and keeps the other plan's result" do
+        runner.call
+
+        attempts = runner.rounds.first.attempts
+        crashed = attempts.find { |a| !a.ok }
+        aggregate_failures do
+          expect(attempts.size).to eq(2)
+          expect(crashed.note).to eq("the harness blew up")
+          expect(attempts.count(&:ok)).to eq(1)
+        end
+      end
+
+      # The crash arrives with no task attached — the thread died before the
+      # attempt was built — so the row cannot name a plan or an agent, and
+      # must say so rather than borrow a neighbour's identity.
+      it "marks the crashed row unknown rather than guessing whose it was" do
+        runner.call
+
+        crashed = runner.rounds.first.attempts.find { |a| !a.ok }
+        expect(crashed).to have_attributes(ordinal: "?", agent: "?", from: :unknown, to: :unknown)
       end
     end
   end
