@@ -76,6 +76,63 @@ RSpec.describe Agentilda::CLI::Run, :tree do
     end
   end
 
+  describe "--timeout and the config file" do
+    before { building_plan }
+
+    it "hands --timeout to the executor" do
+      with_executor
+      run(commit: true, timeout: "1800")
+
+      expect(Agentilda::Executor).to have_received(:new).with(hash_including(timeout: 1800))
+    end
+
+    it "reads the default timeout from ~/.local/config/agentilda.json" do
+      allow(Agentilda::Config).to receive(:for).with(:run).and_return(timeout: 2400)
+      with_executor
+      run(commit: true)
+
+      expect(Agentilda::Executor).to have_received(:new).with(hash_including(timeout: 2400))
+    end
+
+    it "lets the typed flag beat the config file" do
+      allow(Agentilda::Config).to receive(:for).with(:run).and_return(timeout: 2400)
+      with_executor
+      run(commit: true, timeout: "600")
+
+      expect(Agentilda::Executor).to have_received(:new).with(hash_including(timeout: 600))
+    end
+
+    it "falls back to 900 seconds when neither names one" do
+      with_executor
+      run(commit: true)
+
+      expect(Agentilda::Executor).to have_received(:new).with(hash_including(timeout: 900))
+    end
+
+    it "refuses an unreadable config file rather than silently ignoring it" do
+      allow(Agentilda::Config).to receive(:for)
+        .and_raise(Agentilda::Error, "config.json is not valid JSON")
+      _out, err, status = run
+
+      expect(unwrapped(err)).to include("not valid JSON")
+      expect(status).to eq(66)
+    end
+  end
+
+  describe "chaining defaults" do
+    before { building_plan }
+
+    it "chains by default, and --agent forces it off" do
+      allow(Agentilda::Runner).to receive(:new).and_call_original
+      with_executor
+      run(commit: true)
+      run(commit: true, agent: "luke-backend")
+
+      expect(Agentilda::Runner).to have_received(:new).with(hash_including(chain: true)).once
+      expect(Agentilda::Runner).to have_received(:new).with(hash_including(chain: false)).once
+    end
+  end
+
   describe "a dry run" do
     before { building_plan }
 
