@@ -277,5 +277,107 @@ RSpec.describe Agentilda::Executor, :tree do
 
       expect(Dir.children(@traces).size).to eq(2)
     end
+
+    # `claude` reports failure two ways, and the readable one wins. A crash
+    # that got far enough emits a `result` event; one that died on startup
+    # printed prose on stdout; one that printed nothing at all leaves only
+    # the exit error to quote. Each used to be reported as the least readable
+    # of the three: the shell-escaped prompt, ten times per round.
+    describe "when claude exits non-zero" do
+      def exit_error
+        TTY::Command::ExitError.new("claude -p …", instance_double(TTY::Command::Result,
+                                                                   exit_status: 1, out: "boom on stdout", err: "Nothing written"))
+      end
+
+      before do
+        allow(streamer).to receive(:run) do |*, **, &block|
+          chunks.each { |chunk| block&.call(chunk, nil) }
+          raise exit_error
+        end
+      end
+
+      it "prefers the stream's own result event over anything else" do
+        chunks << event(type: "result", is_error: true, result: "model refused the tool")
+
+        expect(streaming.call(agent, subject_plan)).to have_attributes(
+          ok: false, note: a_string_including("claude failed: model refused the tool"),
+        )
+      end
+
+      it "falls back to what claude printed before dying, when no event arrived" do
+        chunks << "Failed to authenticate. 401 API key is invalid.\n"
+
+        expect(streaming.call(agent, subject_plan).note).to include("failed: Failed to authenticate. 401 API key is invalid.")
+      end
+
+      it "quotes the exit error last, for a failure that printed nothing at all" do
+        expect(streaming.call(agent, subject_plan).note).to include("exited 1: boom on stdout")
+      end
+
+      it "still names the trace, since a failure is when it is wanted" do
+        expect(streaming.call(agent, subject_plan).note).to include(".ndjson")
+      end
+    end
+  end
+
+  # The after-check half of the boundary. A prompt is a request; this is the
+  # guarantee — an agent that committed anyway is reported as a failure, not
+  # trusted because it said "completed".
+  describe "the after-check on HEAD" do
+    subject(:streaming) { described_class.new(root:, command: streamer, trace_dir: @traces) }
+
+    let(:chunks) { [%({"type":"result","subtype":"success","result":"done"}\n)] }
+    let(:streamer) do
+      instance_double(TTY::Command).tap do |double|
+        allow(double).to receive(:run) { |*, **, &block| chunks.each { |chunk| block&.call(chunk, nil) } }
+      end
+    end
+
+    around do |example|
+      Dir.mktmpdir("executor-traces") do |dir|
+        @traces = dir
+        example.run
+      end
+    end
+
+    before do
+      system("git", "-C", root, "init", "-q", "--initial-branch=main", out: File::NULL, err: File::NULL)
+      system("git", "-C", root, "config", "user.email", "alan.turing@manchester.edu")
+      system("git", "-C", root, "config", "user.name", "Alan Turing")
+      system("git", "-C", root, "add", "-A", out: File::NULL, err: File::NULL)
+      system("git", "-C", root, "commit", "-qm", "initial", out: File::NULL, err: File::NULL)
+    end
+
+    it "passes an invocation that left HEAD alone" do
+      expect(streaming.call(agent, subject_plan).ok).to be(true)
+    end
+
+    it "reports an invocation that committed, however successful it claims to be" do
+      allow(streamer).to receive(:run) do |*, **, &block|
+        chunks.each { |chunk| block&.call(chunk, nil) }
+        File.write(File.join(root, "sneaky.txt"), "x")
+        system("git", "-C", root, "add", "-A", out: File::NULL, err: File::NULL)
+        system("git", "-C", root, "commit", "-qm", "agent commit", out: File::NULL, err: File::NULL)
+      end
+
+      expect(streaming.call(agent, subject_plan)).to have_attributes(
+        ok: false, note: a_string_including("agent committed", "HEAD moved"),
+      )
+    end
+  end
+
+  # The prompt tells the agent when its folder's name is a lie, because the
+  # agent that can fix that is the one being invoked on it.
+  describe "the prompt, for a folder whose name is not justified" do
+    let!(:built) do
+      plans { |t| t.plan "010.00", :approved, "lying", prs: [t.open(5, "still open")] }
+    end
+
+    it "names the violation" do
+      lying = Agentilda::Tree.new(dir: plans_root).subjects.first
+      argv = executor.invocation(agent, lying)
+
+      expect(argv.join(" ")).to include("The folder's name is not currently justified")
+    end
   end
 end

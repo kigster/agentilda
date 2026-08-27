@@ -180,6 +180,71 @@ RSpec.describe Agentilda::Worktree do
     end
   end
 
+  describe "#seed when the seeder is present" do
+    def fake_seeder(exit_status)
+      path = File.join(File.dirname(repo), "setup-worktree")
+      File.write(path, "#!/bin/sh\nexit #{exit_status}\n")
+      FileUtils.chmod(0o755, path)
+      stub_const("Agentilda::Worktree::SEEDER", path)
+    end
+
+    it "answers true when the seeder succeeds, saying nothing" do
+      fake_seeder(0)
+
+      expect(worktrees.seed(repo)).to be(true)
+    end
+
+    context "when the seeder runs and fails" do
+      before { fake_seeder(1) }
+
+      # Never fatal: a plan is not worth abandoning over a seeding step, but
+      # a suite dying later on a missing key needs this line to explain it.
+      it "answers false and says the suite may fail on a missing key" do
+        captured = StringIO.new
+        original = $stderr
+        begin
+          $stderr = captured
+          result = worktrees.seed(repo)
+        ensure
+          $stderr = original
+        end
+
+        aggregate_failures do
+          expect(result).to be(false)
+          expect(captured.string).to include("could not seed")
+        end
+      end
+
+      it "still hands back a usable checkout" do
+        expect(File.directory?(worktrees.checkout_for(feature).path)).to be(true)
+      end
+    end
+  end
+
+  describe "#canonical" do
+    # git reports resolved paths and macOS routes temp dirs through symlinks
+    # (/var -> /private/var), so prune compares canonical paths — but a path
+    # whose directory is already gone cannot be resolved, and raising there
+    # would make pruning die on exactly the stale entries it exists to drop.
+    it "hands a vanished path back as given rather than raising" do
+      gone = File.join(repo, "no-such-dir", "worktree")
+
+      expect(worktrees.canonical(gone)).to eq(gone)
+    end
+  end
+
+  describe "when git refuses to create the worktree" do
+    # A regular file squatting on the worktree's path: not a directory, so the
+    # reuse branch does not take it, and `git worktree add` cannot either.
+    it "raises a named error instead of returning a checkout that does not exist" do
+      FileUtils.mkdir_p(worktree_dir)
+      File.write(File.join(worktree_dir, "002.00-tenancy-households"), "in the way")
+
+      expect { worktrees.checkout_for(feature) }
+        .to raise_error(Agentilda::Error, /could not create a worktree for tester\/002\.00-tenancy-households/)
+    end
+  end
+
   describe "a worktree directory deleted by hand" do
     # git keeps the registration, marks it `prunable`, and then refuses to
     # create a new worktree at that path — reporting "already exists" about a

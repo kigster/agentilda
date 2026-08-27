@@ -310,6 +310,145 @@ RSpec.describe Agentilda::UI do
     end
   end
 
+  # `Line#call` arrives several times a second from an agent's stream. The
+  # spinner is redrawn every time, but the log takes a line only when the
+  # phrase itself changes — otherwise an animated run writes nothing about
+  # what any agent was doing, and a quiet run writes the same phrase hundreds
+  # of times.
+  describe "Line" do
+    subject(:line) { Agentilda::UI::Line.new(fields: { plan: "003.00" }, spinner:) }
+
+    let(:spinner) { instance_double(TTY::Spinner, update: nil, success: nil, error: nil) }
+
+    def progress(activity, up: 10, down: 2)
+      Agentilda::Transcript::Progress.new(activity:, up:, down:, subagents: 0)
+    end
+
+    around do |example|
+      Dir.mktmpdir do |dir|
+        @log_dir = dir
+        example.run
+      ensure
+        Agentilda::UI.log_path = nil
+      end
+    end
+
+    # A `before`, not part of the `around`: the suite-wide `UI.reset!` hook
+    # runs between the two and nils whatever log_path the around had set.
+    before { Agentilda::UI.log_path = File.join(@log_dir, "run.log") }
+
+    it "redraws the spinner's meter and phrase on every update" do
+      line.call(progress("reading spec.md"))
+
+      expect(spinner).to have_received(:update)
+        .with(meter: a_string_including("↑10"), activity: a_string_including("reading spec.md"))
+    end
+
+    it "logs a phrase once, however many times the stream repeats it" do
+      3.times { line.call(progress("reading spec.md")) }
+
+      expect(File.read(Agentilda::UI.log_path).scan("reading spec.md").size).to eq(1)
+    end
+
+    it "logs again when the agent moves on to something new" do
+      line.call(progress("reading spec.md"))
+      line.call(progress("editing plan.md"))
+
+      log = File.read(Agentilda::UI.log_path)
+      aggregate_failures do
+        expect(log).to include("reading spec.md")
+        expect(log).to include("editing plan.md")
+      end
+    end
+
+    # A usage-only delta carries token counts and no phrase. The meter must
+    # still move, and the log must not fill with blank lines.
+    it "updates the meter and skips the log when the update has no phrase" do
+      line.call(progress(nil, up: 999))
+
+      aggregate_failures do
+        expect(spinner).to have_received(:update).with(meter: a_string_including("↑999"), activity: "")
+        expect(File.exist?(Agentilda::UI.log_path)).to be(false)
+      end
+    end
+
+    it "runs with no spinner at all — a piped run still logs" do
+      bare = Agentilda::UI::Line.new(fields: { plan: "003.00" })
+      bare.call(progress("reading spec.md"))
+
+      expect(File.read(Agentilda::UI.log_path)).to include("reading spec.md")
+    end
+
+    # Executor passes the line straight on as its stream callback.
+    it "converts to a proc that behaves exactly like #call" do
+      line.to_proc.call(progress("reading spec.md"))
+
+      expect(spinner).to have_received(:update).with(hash_including(activity: a_string_including("reading spec.md")))
+    end
+  end
+
+  # The multi-spinner path: several items, several jobs, a terminal to draw
+  # on. TTY::Spinner::Multi is stubbed — the suite has no terminal — but the
+  # registration blocks are real, and they are where results are collected
+  # and failures caught.
+  describe ".concurrently, several items on a terminal" do
+    let(:child) { instance_double(TTY::Spinner, update: nil, success: nil, error: nil) }
+    let(:multi) { instance_double(TTY::Spinner::Multi, auto_spin: nil) }
+
+    before do
+      allow($stderr).to receive(:tty?).and_return(true)
+      allow(TTY::Spinner::Multi).to receive(:new).and_return(multi)
+      # The real Multi runs each registered block on its own thread once
+      # auto_spin starts; running them at registration keeps the same
+      # observable contract — every block runs, every result lands.
+      allow(multi).to receive(:register) do |_format, &block|
+        block.call(child)
+        child
+      end
+    end
+
+    it "returns results in input order with one spinner line per item" do
+      result = described_class.concurrently(%i[a b], "round", jobs: 2) { |item, _line| item }
+
+      aggregate_failures do
+        expect(result).to eq(%i[a b])
+        expect(multi).to have_received(:register).twice
+        expect(multi).to have_received(:auto_spin)
+      end
+    end
+
+    # Every line must start with a zeroed meter and an empty phrase: an unset
+    # token renders as the literal ":activity", and a meter that appears once
+    # the first number arrives shifts the whole line sideways.
+    it "primes each line so no template token ever shows" do
+      described_class.concurrently(%i[a b], "round", jobs: 2) { |item, _line| item }
+
+      expect(child).to have_received(:update).with(meter: a_string_including("↑0"), activity: "").at_least(:twice)
+    end
+
+    it "marks a failing item's own line failed and keeps the error as its result" do
+      result = described_class.concurrently(%i[a b], "round", jobs: 2) { |item, _line|
+        raise "boom" if item == :a
+
+        :ok
+      }
+
+      aggregate_failures do
+        expect(result[0]).to be_a(RuntimeError)
+        expect(result[1]).to eq(:ok)
+        expect(child).to have_received(:error).once
+        expect(child).to have_received(:success).once
+      end
+    end
+
+    it "hands each item a live Line it can stream progress through" do
+      seen = []
+      described_class.concurrently(%i[a b], "round", jobs: 2) { |_item, line| seen << line }
+
+      expect(seen).to all(be_a(Agentilda::UI::Line))
+    end
+  end
+
   # Column alignment in a terminal is measured in cells, and a character is
   # not a cell. Every example here is a case where counting characters — what
   # `format("%-4s")` does — gets the width wrong.

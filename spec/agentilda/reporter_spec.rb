@@ -92,6 +92,17 @@ RSpec.describe Agentilda::Reporter, :tree do
     it "explains what is wrong, not merely that something is" do
       expect(reporter.inconsistent.first.violation).to include("1 pull request still open")
     end
+
+    # The violation must reach the rendered table itself — a reader of
+    # `list-plans` never calls #inconsistent, so a table without the arrow
+    # line simply looks fine.
+    it "prints the violation under the plan's own row" do
+      expect(table).to match(/↳ .*1 pull request still open/)
+    end
+
+    it "counts the liars in the footer, so the problem survives scrolling" do
+      expect(table).to include("1 with a status their contents do not justify")
+    end
   end
 
   describe "duplicate plan numbers" do

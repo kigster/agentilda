@@ -64,6 +64,40 @@ RSpec.describe Agentilda::Linear do
     end
   end
 
+  describe ".placement_for" do
+    def pull(state)
+      Agentilda::PullRequest.new(number: "9", title: "t", url: "https://github.com/x/y/pull/9", state:)
+    end
+
+    it "gives a unit with no pull requests its plan's own place" do
+      placement = described_class.placement_for(Agentilda.status(:blocked), [])
+
+      expect(placement).to have_attributes(name: "Todo", labels: %w[blocked])
+    end
+
+    # A plan in 🟡 Building has some units merged and some not started;
+    # the unit's own pull requests are the better evidence.
+    it "puts a unit with an open pull request in review, whatever the plan says" do
+      placement = described_class.placement_for(Agentilda.status(:new), [pull("Open 🟡")])
+
+      expect(placement).to have_attributes(type: "started", name: "In Review")
+    end
+
+    it "marks a unit done once every pull request merged" do
+      placement = described_class.placement_for(Agentilda.status(:building), [pull("Merged 🟣")])
+
+      expect(placement).to have_attributes(type: "completed", name: "Done")
+    end
+
+    # Closed-unmerged is finished business that finished nothing: neither
+    # open nor merged, so the evidence is inconclusive and the plan decides.
+    it "falls back to the plan when the pull requests were closed without merging" do
+      placement = described_class.placement_for(Agentilda.status(:building), [pull("Closed 🔴")])
+
+      expect(placement).to have_attributes(type: "started", name: "In Progress")
+    end
+  end
+
   describe ".reason_unplaced" do
     it "gives the reason a state was deliberately left out" do
       expect(described_class.reason_unplaced(Agentilda.status(:shit))).to include("the plan survives and its pull requests do not")
