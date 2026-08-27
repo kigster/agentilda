@@ -57,8 +57,8 @@ jobs:
       # nothing to CircleCI's log renderer. Plain output; the offences are
       # identical.
       - run:
-          command: BUNDLE_GEMFILE=Gemfile bundle exec standardrb
-          name: Lint code for consistent style
+          command: BUNDLE_GEMFILE=Gemfile bundle exec rufo --check .
+          name: Check formatting with rufo, the tool this repo bundles
 
   test:
     # ubuntu-latest is 4 vCPU / 16 GB; CircleCI's `medium` is 2 vCPU. `large`
