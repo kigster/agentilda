@@ -91,6 +91,7 @@ lib/agentilda/
   resync.rb            dirs (folder name vs contents) and prs (PR title prefixes)
   adoption.rb          gives an orphan pull request a retroactive plan of its own
   agent.rb, roster.rb  loading agents/*.md and reporting on them
+  viewer.rb            hands a Markdown file to `open` or to mdfried
   runner.rb            the round loop, run until a fixed point
   executor.rb          one `claude -p` invocation, and the autonomy boundary
   transcript.rb        parses --output-format stream-json into a spinner phrase
@@ -101,7 +102,11 @@ lib/agentilda/
   diagram.rb           `agentilda states`, the same machine drawn for a terminal
   index.rb, reporter.rb, tally.rb   INDEX.md, the status table, the token bill
   ui.rb                boxes, spinners, concurrency, color
-  cli.rb               every dry-cli command, ~1200 lines
+  cli.rb               the dry-cli registry; nothing but requires and register
+  cli/base.rb          shared flags, tree_for, refuse, the dry-run footer
+  cli/<command>/       one file per command (create/create.rb, run/run.rb, …),
+                       subcommands/ under the prefixed groups (agents, resync,
+                       linear); linear/linear.rb is the shared Team base
 ```
 
 ### The run loop
