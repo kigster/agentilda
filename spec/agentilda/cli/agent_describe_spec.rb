@@ -6,7 +6,7 @@ require "tmpdir"
 # `agents describe` opens definition files in a viewer rather than printing
 # them: the file is the whole truth, and a pager-sized prompt dumped to the
 # terminal was scrolling the table it followed off the screen.
-RSpec.describe Agentilda::CLI::AgentDescribe do
+RSpec.describe Agentilda::CLI::Agents::Describe do
   subject(:command) { described_class.new(agents:, viewer:) }
 
   let(:agents) { Agentilda::Agents.new(dir: @dir) }

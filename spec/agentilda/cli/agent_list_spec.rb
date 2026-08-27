@@ -4,7 +4,7 @@
 # pinning is the stream split: the roster is the deliverable, so it goes to
 # STDOUT whole and STDERR stays empty — a roster half on each stream is a
 # roster no pipe can use.
-RSpec.describe Agentilda::CLI::AgentList do
+RSpec.describe Agentilda::CLI::Agents::List do
   subject(:command) { described_class.new }
 
   it "writes the whole roster to STDOUT and nothing to STDERR" do
