@@ -45,10 +45,7 @@ module Agentilda
 
         result.either(
           ->(path) { created(path, prs, options) },
-          lambda { |message|
-            error("Could not create the plan:\n#{message}")
-            exit 65
-          }
+          ->(message) { refuse("Could not create the plan:\n#{message}", 65) }
         )
       end
 
@@ -64,15 +61,13 @@ module Agentilda
         return nil unless options[:prs]
 
         unless options[:after]
-          error("--prs documents work that already shipped;\n" \
-                "name the plan it landed after with --after, e.g. --after 018")
-          exit 64
+          refuse("--prs documents work that already shipped;\n" \
+                 "name the plan it landed after with --after, e.g. --after 018", 64)
         end
 
         GitHub.new.pull_requests(GitHub.parse_refs(options[:prs]))
       rescue Agentilda::Error => e
-        error("Could not read the pull requests:\n#{e.message}")
-        exit 65
+        refuse("Could not read the pull requests:\n#{e.message}", 65)
       end
 
       # A plan with recorded pull requests already has its facts — hand it to
