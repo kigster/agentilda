@@ -239,6 +239,7 @@ agentilda run --commit                     # one git worktree per plan, in paral
 agentilda run --commit -j 4                # …four at a time
 agentilda run --isolation shared           # one tree, serial; no git needed
 agentilda run --commit --plan 003,005.01   # only these plans, see below
+agentilda run --commit --timeout 1800      # give slow agents 30 minutes, not the default 15
 agentilda unblock 003                      # what 003 is still waiting on a human for
 agentilda unblock 003 --commit             # fold in whatever has been answered
 agentilda states                           # the whole machine, as a diagram
@@ -247,6 +248,22 @@ agentilda states                           # the whole machine, as a diagram
 ### Handing off several plans at once with `--plan`
 
 `run` with no `--plan` loops the **whole tree**. That is exactly wrong right after a batch step creates several plans at once: a bare `run` per `create` starts N overlapping whole-tree loops, each claiming worktrees for plans the others are also touching. `--plan NNN,NNN.MM,...` scopes a round to just the plans named, refusing up front if one doesn't exist rather than silently running everything, and it scopes pushing along with it. The shape that works: create every plan, verify each with `status`, then one `run --commit --plan ...` handoff at the end. Full constraints for that shape (the four headings, what a brief must never write, when to block instead of guess) live in `src/commands/plan-create.md`.
+
+### Chaining: one plan, several agents, one round
+
+When an agent finishes and the plan has genuinely advanced — its folder renamed, or its contents now justifying the next state — the runner hands it straight to the next state's agent **in the same round**: researcher to writer to planner, without paying a full round per hop. Chaining is on by default and forced off by `--agent`, since chaining past a restriction would un-restrict it; `--no-chain` turns it off explicitly. The chain stops exactly where round assignments stop: at a blocked or finished state, a human decides.
+
+### Timeouts, and defaults from a config file
+
+One agent gets `--timeout` seconds before it is abandoned (default: 900). A researcher that reads two sibling repositories can genuinely need more, and an agent killed at the cap loses everything it had not yet written.
+
+Defaults for `run` can live in `~/.local/config/agentilda.json`, keyed by command:
+
+```json
+{ "run": { "timeout": 1800, "jobs": 4 } }
+```
+
+A flag actually typed beats the file, the file beats the built-in, and an unreadable file is refused rather than silently ignored. The file can supply `timeout`, `jobs`, `rounds`, `log` and `chain` — never `--commit`: a run that writes is something a person asks for each time.
 
 ### Isolation, and why it is the default
 
