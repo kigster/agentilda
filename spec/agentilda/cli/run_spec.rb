@@ -170,10 +170,12 @@ RSpec.describe Agentilda::CLI::Run, :tree do
   describe "--agent" do
     before { building_plan }
 
-    it "narrows the round to the one agent named" do
+    it "narrows the round to the one agent named, leaving other states unassigned" do
+      plans { |t| t.plan("003.00", :new, "raw-idea", files: {"spec.md" => spec_body}) }
       out, = run(agent: "luke-backend")
 
       expect(out).to include("luke-backend")
+      expect(out).not_to include("leah-researcher")
     end
 
     it "refuses a name nobody answers to, listing who does" do
@@ -181,6 +183,62 @@ RSpec.describe Agentilda::CLI::Run, :tree do
 
       expect(unwrapped(err)).to include("No agent called obi-wan", "luke-backend")
       expect(status).to eq(65)
+    end
+  end
+
+  describe "--prompt" do
+    before { building_plan }
+
+    it "hands the extra instructions to the executor, alongside --agent" do
+      with_executor
+      run(commit: true, agent: "luke-backend", prompt: "Focus on the parser")
+
+      expect(Agentilda::Executor).to have_received(:new)
+        .with(hash_including(instructions: "Focus on the parser"))
+    end
+
+    # Without the restriction the steer would reach every agent in the round,
+    # which is never what a sentence aimed at one specialist means.
+    it "refuses --prompt without --agent" do
+      _out, err, status = run(prompt: "Focus on the parser")
+
+      expect(unwrapped(err)).to include("--prompt only works with --agent")
+      expect(status).to eq(64)
+    end
+  end
+
+  describe "--skip" do
+    before { building_plan }
+
+    it "never assigns the skipped agent, so its plans simply wait" do
+      out, _err, status = run(skip: "luke-backend")
+
+      expect(out).not_to include("luke-backend")
+      expect(status).to eq(0)
+    end
+
+    it "leaves the rest of the round to everyone else" do
+      plans { |t| t.plan("003.00", :new, "raw-idea", files: {"spec.md" => spec_body}) }
+      out, = run(skip: "luke-backend")
+
+      expect(out).to include("leah-researcher")
+      expect(out).not_to include("luke-backend")
+    end
+
+    # A typo'd skip silently skipping nobody is the same failure --plan
+    # refuses for numbers.
+    it "refuses a name nobody answers to" do
+      _out, err, status = run(skip: "obi-wan")
+
+      expect(unwrapped(err)).to include("No agent called obi-wan", "luke-backend")
+      expect(status).to eq(65)
+    end
+
+    it "refuses --agent and --skip naming the same agent" do
+      _out, err, status = run(agent: "luke-backend", skip: "luke-backend")
+
+      expect(unwrapped(err)).to include("contradict")
+      expect(status).to eq(64)
     end
   end
 

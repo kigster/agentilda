@@ -14,6 +14,9 @@ module Agentilda
         desc: "When an agent advances a plan, run the next agent in the same round " \
               "(default: on; forced off by --agent)"
       option :agent, desc: "Only run this one agent"
+      option :prompt, desc: "Extra instructions appended to the agent's prompt (only with --agent)"
+      option :skip, desc: "Never assign this agent; its plans wait, the rest of the pipeline runs. " \
+        "Comma separated for several"
       option :plan, aliases: ["--plans"],
         desc: "Only these plans, comma separated: NNN or NNN.MM, e.g. --plan 003,005.01. Default: the whole tree"
       option :root, desc: "Repository root the agents work in (default: the .plans parent)"
@@ -49,10 +52,16 @@ module Agentilda
           refuse(e.message, 66)
         end
 
+        if options[:prompt] && !options[:agent]
+          refuse("--prompt only works with --agent: it speaks to one agent, and without " \
+                 "that restriction every agent in the round would hear it.", 64)
+        end
+
         tree = tree_for(options)
         root = options[:root] || File.dirname(tree.dir)
         agents = Agentilda::Agents.new
         agents = filtered(agents, options[:agent]) if options[:agent]
+        agents = skipped(agents, options[:skip], options[:agent]) if options[:skip]
         plans = options[:plan] ? scoped(tree, options[:plan]) : nil
 
         isolation = options.fetch(:isolation, "worktree").to_sym
@@ -84,7 +93,8 @@ module Agentilda
           tree:, agents:, isolation:, jobs:, plans:, chain:,
           worktree: (Worktree.new(root:) if isolation == :worktree),
           max_rounds: (options[:rounds] || config[:rounds] || 10).to_i,
-          executor: Executor.new(root:, timeout:, dry_run: !commit?(options)), dry_run: !commit?(options),
+          executor: Executor.new(root:, timeout:, dry_run: !commit?(options),
+            instructions: options[:prompt]), dry_run: !commit?(options),
           publisher: publisher_for(root, isolation, options)
         )
 
@@ -98,11 +108,35 @@ module Agentilda
 
       # @param agents [Agentilda::Agents]
       # @param name [String]
-      # @return [Agentilda::Agents]
+      # @return [Agentilda::Agents] holding only the agent named — the
+      #   restriction has to reach assignments, not just chaining, or a flag
+      #   like `--prompt` aimed at one agent leaks to the whole round
       def filtered(agents, name)
         agents.find(name) or
           refuse("No agent called #{name}.\n\nKnown: #{agents.all.map(&:name).join(", ")}", 65)
-        agents
+        agents.only(name)
+      end
+
+      # Each name is checked against the full roster, not the possibly
+      # already-restricted one, so `--skip` misspelled is a refusal rather
+      # than a silent no-op — the same reasoning `--plan` applies to numbers.
+      #
+      # @param agents [Agentilda::Agents]
+      # @param text [String] comma-separated agent names
+      # @param restricted [String, nil] what `--agent` asked for, if anything
+      # @return [Agentilda::Agents] without the agents named
+      def skipped(agents, text, restricted)
+        roster = Agentilda::Agents.new
+        names = text.split(",").map(&:strip).reject(&:empty?)
+        names.each do |name|
+          roster.find(name) or
+            refuse("No agent called #{name}.\n\nKnown: #{roster.all.map(&:name).join(", ")}", 65)
+          if name == restricted
+            refuse("--agent #{name} and --skip #{name} contradict each other: " \
+                   "one asks for only this agent, the other for anything but.", 64)
+          end
+        end
+        agents.without(*names)
       end
 
       # `--plan` names the whole point of scoping: a skill that just minted

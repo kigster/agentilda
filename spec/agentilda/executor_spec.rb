@@ -38,6 +38,17 @@ RSpec.describe Agentilda::Executor, :tree do
     it "states the boundary in the prompt as well as enforcing it in flags" do
       expect(argv.join(" ")).to include("withheld from you, not merely discouraged", "gh pr merge")
     end
+
+    it "appends operator instructions when the run supplied them" do
+      steered = described_class.new(root:, command:, instructions: "Prefer the parser refactor")
+        .invocation(agent, subject_plan)
+
+      expect(steered[2]).to include("Operator instructions", "Prefer the parser refactor")
+    end
+
+    it "adds no operator section when none were supplied" do
+      expect(argv[2]).not_to include("Operator instructions")
+    end
   end
 
   # The autonomy boundary is closed by default and opened per agent, in the

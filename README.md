@@ -240,6 +240,8 @@ agentilda run --commit -j 4                # …four at a time
 agentilda run --isolation shared           # one tree, serial; no git needed
 agentilda run --commit --plan 003,005.01   # only these plans, see below
 agentilda run --commit --timeout 1800      # give slow agents 30 minutes, not the default 15
+agentilda run --commit --agent yoda-writer --prompt "Rework the risks section first"
+agentilda run --commit --skip hansolo-reviewer   # everyone but the reviewer; its plans wait
 agentilda unblock 003                      # what 003 is still waiting on a human for
 agentilda unblock 003 --commit             # fold in whatever has been answered
 agentilda states                           # the whole machine, as a diagram
@@ -252,6 +254,12 @@ agentilda states                           # the whole machine, as a diagram
 ### Chaining: one plan, several agents, one round
 
 When an agent finishes and the plan has genuinely advanced — its folder renamed, or its contents now justifying the next state — the runner hands it straight to the next state's agent **in the same round**: researcher to writer to planner, without paying a full round per hop. Chaining is on by default and forced off by `--agent`, since chaining past a restriction would un-restrict it; `--no-chain` turns it off explicitly. The chain stops exactly where round assignments stop: at a blocked or finished state, a human decides.
+
+### Steering one agent, or stepping around one
+
+`--agent NAME` restricts the round to that one agent: plans in every other state are left unassigned, and chaining is off so the restriction holds. `--prompt "…"` rides along with it, appending extra instructions to that agent's prompt for this run only — it refuses to work without `--agent`, because a sentence aimed at one specialist would otherwise reach every agent in the round.
+
+`--skip NAME` (comma-separated for several) is the inverse: the named agent is never assigned, its plans simply wait, and the rest of the pipeline runs as usual. A skipped agent whose work already exists on disk costs nothing — the per-round resync still advances any folder whose contents justify the next state, which hands it to the next agent. A misspelled name is refused rather than silently skipping nobody, and `--agent X --skip X` is refused as the contradiction it is.
 
 ### Timeouts, and defaults from a config file
 
