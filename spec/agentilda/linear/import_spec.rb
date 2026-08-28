@@ -79,7 +79,7 @@ RSpec.describe Agentilda::Linear::Import, :tree do
     end
 
     it "points back at the folder, so a reader can find the source of truth" do
-      expect(child.args[:description]).to include("`.plans/002.00-✅-dev-foundation`", "unit `PR-1`")
+      expect(child.args[:description]).to include("`.plans/002.00-✅--dev-foundation`", "unit `PR-1`")
     end
 
     # A plan in 🟡 Building has some units merged and some not started.
@@ -122,13 +122,13 @@ RSpec.describe Agentilda::Linear::Import, :tree do
     end
 
     it "skips an issue whose fingerprint still matches the plan" do
-      record("002.00-✅-dev-foundation", digest: digest_of("PR-1"))
+      record("002.00-✅--dev-foundation", digest: digest_of("PR-1"))
 
       expect(import.actions.find { |a| a.unit == "PR-1" }).to have_attributes(op: :skip, identifier: "TAX-41")
     end
 
     it "updates an issue whose plan has changed underneath it" do
-      record("002.00-✅-dev-foundation", digest: "deadbeef")
+      record("002.00-✅--dev-foundation", digest: "deadbeef")
       action = import.actions.find { |a| a.unit == "PR-1" }
 
       aggregate_failures do
@@ -141,13 +141,13 @@ RSpec.describe Agentilda::Linear::Import, :tree do
     # A pull request raised after the first import must still reach its issue,
     # and Linear keys an attachment on its URL, so re-sending is an update.
     it "still sends the pull requests on an update" do
-      record("002.00-✅-dev-foundation", digest: "deadbeef")
+      record("002.00-✅--dev-foundation", digest: "deadbeef")
 
       expect(import.actions.find { |a| a.unit == "PR-1" }.args[:links]).to include(hash_including(url: %r{/pull/2}))
     end
 
     it "hangs a child off the parent linear.md already names" do
-      record("002.00-✅-dev-foundation", digest: "deadbeef", unit: "PLAN", identifier: "TAX-40")
+      record("002.00-✅--dev-foundation", digest: "deadbeef", unit: "PLAN", identifier: "TAX-40")
 
       expect(import.actions.find { |a| a.unit == "PR-1" }.args).to include(parentId: "TAX-40")
     end
@@ -156,7 +156,7 @@ RSpec.describe Agentilda::Linear::Import, :tree do
       let(:options) { {force: true} }
 
       it "updates even what it would otherwise have left alone" do
-        record("002.00-✅-dev-foundation", digest: digest_of("PR-1"))
+        record("002.00-✅--dev-foundation", digest: digest_of("PR-1"))
 
         expect(import.actions.find { |a| a.unit == "PR-1" }).to have_attributes(op: :update, reason: "--force")
       end
@@ -164,7 +164,7 @@ RSpec.describe Agentilda::Linear::Import, :tree do
   end
 
   describe "pull requests attributed to a folder from outside it" do
-    let(:options) { {adopted: {"002.00-✅-dev-foundation" => [orphan]}} }
+    let(:options) { {adopted: {"002.00-✅--dev-foundation" => [orphan]}} }
     let(:orphan) do
       Agentilda::PullRequest.new(number: "91", title: "Wire the rig to CI",
         url: "https://github.com/example/repo/pull/91", state: "Merged 🟣")

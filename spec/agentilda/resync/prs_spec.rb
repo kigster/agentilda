@@ -61,7 +61,7 @@ RSpec.describe Agentilda::Resync::Prs, :tree do
     end
 
     context "when the branch is silent but the diff touches exactly one plan" do
-      let(:pulls) { [pull(13, "Some work", branch: "kig/fix-things", files: [".plans/002.00-✅-dev-foundation/plan.md"])] }
+      let(:pulls) { [pull(13, "Some work", branch: "kig/fix-things", files: [".plans/002.00-✅--dev-foundation/plan.md"])] }
 
       it "resolves from the diff" do
         expect(changes.first.new_title).to eq("[002.00] Some work")
@@ -71,7 +71,7 @@ RSpec.describe Agentilda::Resync::Prs, :tree do
     context "when the diff touches several plans" do
       let(:pulls) do
         [pull(14, "Sweeping change", branch: "kig/fix",
-          files: [".plans/001.00-⚪️-initial-spec/spec.md", ".plans/002.00-✅-dev-foundation/plan.md"])]
+          files: [".plans/001.00-⚪️--initial-spec/spec.md", ".plans/002.00-✅--dev-foundation/plan.md"])]
       end
 
       # Refusing to pick a winner was honest but useless: the work exists, no
@@ -120,7 +120,7 @@ RSpec.describe Agentilda::Resync::Prs, :tree do
     end
 
     context "when a branchless pull request edits a plan's spec" do
-      let(:pulls) { [pull(16, "Write it up", branch: "kig/docs", files: [".plans/001.00-⚪️-initial-spec/spec.md"])] }
+      let(:pulls) { [pull(16, "Write it up", branch: "kig/docs", files: [".plans/001.00-⚪️--initial-spec/spec.md"])] }
 
       it "files it under that plan rather than calling it developer work" do
         expect(changes.first.new_title).to eq("[001.00] Write it up")
@@ -169,7 +169,7 @@ RSpec.describe Agentilda::Resync::Prs, :tree do
     it "never edits a pull request it could not resolve, when it may not adopt" do
       resync = described_class.new(tree: Agentilda::Tree.new(dir: plans_root), github:, adopt: false)
       allow(github).to receive(:pulls).and_return([pull(14, "Sweeping", branch: "kig/fix",
-        files: [".plans/001.00-⚪️-initial-spec/spec.md", ".plans/002.00-✅-dev-foundation/plan.md"])])
+        files: [".plans/001.00-⚪️--initial-spec/spec.md", ".plans/002.00-✅--dev-foundation/plan.md"])])
       expect(github).not_to receive(:retitle)
 
       resync.call(commit: true)

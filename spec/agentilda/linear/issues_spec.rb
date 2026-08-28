@@ -6,7 +6,7 @@
 RSpec.describe Agentilda::Linear::Issues, :tree do
   subject(:record) { described_class.new(dir: folder) }
 
-  let(:folder) { File.join(plans_root, "002.00-✅-dev-foundation") }
+  let(:folder) { File.join(plans_root, "002.00-✅--dev-foundation") }
 
   let(:issues) do
     [Agentilda::Linear::Issue.new(unit: "PR-1", identifier: "TAX-41",

@@ -19,8 +19,8 @@ RSpec.describe Agentilda::Ordinal do
   describe ".from_dirname" do
     it "lifts the number off a folder name and ignores folders without one" do
       aggregate_failures do
-        expect(described_class.from_dirname("018.01-✅-verify-returns").to_s).to eq("018.01")
-        expect(described_class.from_dirname("002-⚪️-legacy-shape").to_s).to eq("002.00")
+        expect(described_class.from_dirname("018.01-✅--verify-returns").to_s).to eq("018.01")
+        expect(described_class.from_dirname("002-⚪️--legacy-shape").to_s).to eq("002.00")
         expect(described_class.from_dirname("notes")).to be_nil
       end
     end

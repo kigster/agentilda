@@ -15,11 +15,11 @@ module Agentilda
     #   folder whose status already holds is left alone, which is what stops
     #   ⭕️ Blocked and 🅱️ Product Blocked — deliberately identical invariants,
     #   distinguished only by the name — from collapsing into one.
-    # - **The number is not in `NNN.MM` form** — a folder written `018-⚪️-foo`
-    #   before the padding rule, or `18.1-⚪️-foo` by hand. These read fine and
+    # - **The number is not in `NNN.MM` form** — a folder written `018-⚪️--foo`
+    #   before the padding rule, or `18.1-⚪️--foo` by hand. These read fine and
     #   sort wrong, which is the whole reason the rule exists: `018.09` <
     #   `018.1` < `018.10` puts a single mixed-width folder in the middle of
-    #   the range. Both are renamed to `018.00-⚪️-foo` and `018.01-⚪️-foo`.
+    #   the range. Both are renamed to `018.00-⚪️--foo` and `018.01-⚪️--foo`.
     #
     # The two cases collapse into one rule — **rename any folder that is not
     # already named what it should be named** — which is why the emoji fix and
@@ -106,13 +106,13 @@ module Agentilda
         return subject.violation || "contents now justify #{fit.label}" unless fit.key == subject.status.key
         return "#{feature.dirname_ordinal} is not padded to #{feature.ordinal}" unless feature.padded?
 
-        "name is not in canonical NNN.MM-<emoji>-<slug> form"
+        "name is not in canonical NNN.MM-<emoji>--<slug> form"
       end
 
       # A rename that finds its target occupied has not happened, and saying
       # nothing about it would leave the folder misnamed with a report
       # claiming otherwise. Two folders can want the same canonical name —
-      # `018-⚪️-foo` and `018.00-⚪️-foo` are the same plan written twice.
+      # `018-⚪️--foo` and `018.00-⚪️--foo` are the same plan written twice.
       #
       # @param change [Agentilda::Resync::Dirs::Change]
       # @return [void]

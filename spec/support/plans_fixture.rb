@@ -35,7 +35,7 @@ module PlansFixture
     # @return [String] absolute path to the folder
     def plan(ordinal, status, slug, files: {}, prs: nil)
       resolved = Agentilda.status(status) or raise ArgumentError, "unknown status: #{status}"
-      path = File.join(root, "#{ordinal}-#{resolved.emoji}-#{slug}")
+      path = File.join(root, Agentilda.plan_dirname(ordinal, resolved, slug))
       FileUtils.mkdir_p(path)
 
       files.each { |name, body| File.write(File.join(path, name), body) }

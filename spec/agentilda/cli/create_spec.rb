@@ -49,7 +49,7 @@ RSpec.describe Agentilda::CLI::Create, :tree do
     it "prints the folder path on STDOUT, where a script can read it" do
       out, = run("tax", "rule", "dsl", draft: false, open: false)
 
-      expect(out.strip).to eq(File.join(plans_root, "000.00-⚪️-tax-rule-dsl"))
+      expect(out.strip).to eq(File.join(plans_root, "000.00-⚪️--tax-rule-dsl"))
     end
 
     it "writes the four-heading scaffold, so the folder is honest about ⚪️" do
@@ -120,7 +120,7 @@ RSpec.describe Agentilda::CLI::Create, :tree do
       with_brief(result: [false, "timed out after 240s"])
       out, err, status = run("tax", "rule", "dsl", open: false)
 
-      expect(out.strip).to end_with("000.00-⚪️-tax-rule-dsl")
+      expect(out.strip).to end_with("000.00-⚪️--tax-rule-dsl")
       expect(unwrapped(err)).to include("timed out after 240s", "Fill them in by hand")
       expect(status).to eq(0)
     end

@@ -45,22 +45,22 @@ RSpec.describe "agentilda resync", :tree do
       it "prints the rename as a machine-readable row and leaves the disk alone" do
         out, err, = run(command)
 
-        expect(out).to include("001.00-⚪️-outgrown\t001.00-🟡-outgrown")
-        expect(Dir.children(plans_root)).to include("001.00-⚪️-outgrown")
+        expect(out).to include("001.00-⚪️--outgrown\t001.00-🟡--outgrown")
+        expect(Dir.children(plans_root)).to include("001.00-⚪️--outgrown")
         expect(unwrapped(err)).to include("1 rename pending", "--commit")
       end
 
       it "renames under --commit and says how many folders moved" do
         _out, err, = run(command, commit: true)
 
-        expect(Dir.children(plans_root)).to include("001.00-🟡-outgrown")
+        expect(Dir.children(plans_root)).to include("001.00-🟡--outgrown")
         expect(unwrapped(err)).to include("Renamed 1 folder")
       end
 
       it "keeps the rows and drops the prose under --quiet" do
         out, err, = run(command, quiet: true)
 
-        expect(out).to include("001.00-⚪️-outgrown")
+        expect(out).to include("001.00-⚪️--outgrown")
         expect(err).to eq("")
       end
     end

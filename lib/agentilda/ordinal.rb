@@ -37,7 +37,7 @@ module Agentilda
 
     # Pull the number off the front of a folder name.
     #
-    # @param dirname [String] e.g. "018.01-✅-verify-against-filed-returns"
+    # @param dirname [String] e.g. "018.01-✅--verify-against-filed-returns"
     # @return [Agentilda::Ordinal, nil]
     def self.from_dirname(dirname) = parse(dirname.to_s[/\A[\d.]+/])
 

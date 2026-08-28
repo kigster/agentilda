@@ -19,7 +19,7 @@ RSpec.describe Agentilda::GitHub do
         "title" => "Send transactional mail through Resend",
         "url" => "https://github.com/example/repo/pull/92",
         "headRefName" => "kig/018.01-resend",
-        "files" => [{"path" => ".plans/018.01-🟡-deploy/plan.md"}, {"path" => "rails/Gemfile"}]
+        "files" => [{"path" => ".plans/018.01-🟡--deploy/plan.md"}, {"path" => "rails/Gemfile"}]
       }
     ])
   end
@@ -50,7 +50,7 @@ RSpec.describe Agentilda::GitHub do
         title: "Send transactional mail through Resend",
         url: "https://github.com/example/repo/pull/92",
         branch: "kig/018.01-resend",
-        files: [".plans/018.01-🟡-deploy/plan.md", "rails/Gemfile"],
+        files: [".plans/018.01-🟡--deploy/plan.md", "rails/Gemfile"],
         state: "Unknown",
         open: false
       )

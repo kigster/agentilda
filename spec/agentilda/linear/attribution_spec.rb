@@ -96,8 +96,8 @@ RSpec.describe Agentilda::Linear::Attribution, :tree do
 
       aggregate_failures do
         expect(placed).not_to be_placed
-        expect(placed.rivals).to match_array(%w[102.00-⚪️-invoice-export-pipeline
-          103.00-⚪️-pipeline-invoice-export])
+        expect(placed.rivals).to match_array(%w[102.00-⚪️--invoice-export-pipeline
+          103.00-⚪️--pipeline-invoice-export])
         expect(placed.why).to eq("2 folders matched equally well (100%)")
       end
     end

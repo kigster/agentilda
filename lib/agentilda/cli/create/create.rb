@@ -24,7 +24,7 @@ module Agentilda
 
       # noinspection RubyMismatchedArgumentType
       example [
-        "tax rule dsl                        # 003.00-⚪️-tax-rule-dsl, spec.md scaffolded and drafted",
+        "tax rule dsl                        # 003.00-⚪️--tax-rule-dsl, spec.md scaffolded and drafted",
         "tax rule dsl --no-draft --no-open   # scaffold only, nothing shelled out, nothing opened",
         "--after 002 schedule k1             # 002.01-🕰️-schedule-k1 (documented after the fact)",
         "--after 018 --prs 12,15 verify      # …and write spec.md from what those PRs did",

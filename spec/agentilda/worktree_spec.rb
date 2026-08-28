@@ -28,8 +28,8 @@ RSpec.describe Agentilda::Worktree do
       ordinal: Agentilda::Ordinal.parse("002.00"),
       status: Agentilda::STATUS_BY_KEY.fetch(:new),
       slug: "tenancy-households",
-      dirname: "002.00-⚪️-tenancy-households",
-      path: File.join(repo, Agentilda::PLANS_DIR, "002.00-⚪️-tenancy-households")
+      dirname: "002.00-⚪️--tenancy-households",
+      path: File.join(repo, Agentilda::PLANS_DIR, "002.00-⚪️--tenancy-households")
     )
   end
 

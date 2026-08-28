@@ -35,7 +35,7 @@ RSpec.describe Agentilda::Resync::Dirs, :tree do
       end
 
       it "keeps the number and the slug, changing only the emoji" do
-        expect(File.basename(changes.first.target)).to eq("001.00-🟡-initial-spec")
+        expect(File.basename(changes.first.target)).to eq("001.00-🟡--initial-spec")
       end
     end
 
@@ -45,12 +45,12 @@ RSpec.describe Agentilda::Resync::Dirs, :tree do
     context "when a folder's number was written before the NNN.MM rule" do
       let!(:tree) do
         plans do |t|
-          t.raw "018-⚪️-verify-returns", files: {"spec.md" => spec_body}
+          t.raw "018-⚪️--verify-returns", files: {"spec.md" => spec_body}
         end
       end
 
       it "pads the number, leaving the emoji and the slug alone" do
-        expect(File.basename(changes.first.target)).to eq("018.00-⚪️-verify-returns")
+        expect(File.basename(changes.first.target)).to eq("018.00-⚪️--verify-returns")
       end
 
       it "does not pretend the state changed" do
@@ -64,19 +64,19 @@ RSpec.describe Agentilda::Resync::Dirs, :tree do
       it "renames it on --commit" do
         resync.call(commit: true)
 
-        expect(names).to eq(["018.00-⚪️-verify-returns"])
+        expect(names).to eq(["018.00-⚪️--verify-returns"])
       end
     end
 
     context "when a retroactive number is written with one digit" do
       let!(:tree) do
         plans do |t|
-          t.raw "18.1-⚪️-schedule-k1", files: {"spec.md" => spec_body}
+          t.raw "18.1-⚪️--schedule-k1", files: {"spec.md" => spec_body}
         end
       end
 
       it "pads both halves" do
-        expect(File.basename(changes.first.target)).to eq("018.01-⚪️-schedule-k1")
+        expect(File.basename(changes.first.target)).to eq("018.01-⚪️--schedule-k1")
       end
     end
 
@@ -85,12 +85,12 @@ RSpec.describe Agentilda::Resync::Dirs, :tree do
     context "when a folder is both unpadded and wearing the wrong emoji" do
       let!(:tree) do
         plans do |t|
-          t.raw "007-⚪️-tenancy", files: {"spec.md" => spec_body, "plan.md" => "# Plan"}
+          t.raw "007-⚪️--tenancy", files: {"spec.md" => spec_body, "plan.md" => "# Plan"}
         end
       end
 
       it "repairs the number and the emoji in one move" do
-        expect(File.basename(changes.first.target)).to eq("007.00-🟡-tenancy")
+        expect(File.basename(changes.first.target)).to eq("007.00-🟡--tenancy")
       end
 
       it "reports the state change rather than the padding" do
@@ -104,13 +104,13 @@ RSpec.describe Agentilda::Resync::Dirs, :tree do
     context "when the padded name is already taken by another folder" do
       let!(:tree) do
         plans do |t|
-          t.raw "005-⚪️-ledger", files: {"spec.md" => spec_body}
-          t.raw "005.00-⚪️-ledger", files: {"spec.md" => spec_body}
+          t.raw "005-⚪️--ledger", files: {"spec.md" => spec_body}
+          t.raw "005.00-⚪️--ledger", files: {"spec.md" => spec_body}
         end
       end
 
       it "refuses rather than silently leaving the folder misnamed" do
-        expect { resync.call(commit: true) }.to raise_error(Agentilda::Error, /005-⚪️-ledger.*already exists/)
+        expect { resync.call(commit: true) }.to raise_error(Agentilda::Error, /005-⚪️--ledger.*already exists/)
       end
     end
 
@@ -192,19 +192,19 @@ RSpec.describe Agentilda::Resync::Dirs, :tree do
     it "changes nothing without an explicit commit" do
       resync.call
 
-      expect(names).to eq(["001.00-⚪️-initial-spec"])
+      expect(names).to eq(["001.00-⚪️--initial-spec"])
     end
 
     it "renames the folder when committed" do
       resync.call(commit: true)
 
-      expect(names).to eq(["001.00-🟡-initial-spec"])
+      expect(names).to eq(["001.00-🟡--initial-spec"])
     end
 
     it "preserves the folder's contents across the rename" do
       resync.call(commit: true)
 
-      expect(File.exist?(File.join(plans_root, "001.00-🟡-initial-spec", "plan.md"))).to be(true)
+      expect(File.exist?(File.join(plans_root, "001.00-🟡--initial-spec", "plan.md"))).to be(true)
     end
 
     it "reports what it did" do

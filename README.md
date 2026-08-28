@@ -49,8 +49,8 @@ EXAMPLES:
 If you execute the two examples above ( without overriding the enclosing directory), you'll end up with `.plans` folder with the following directories inside:
 
 ```
-.plans/001-⚪️-implement-login-and-logout-functionality
-.plans/002-⚪️-implement-agentic-workflow-cli
+.plans/001-⚪️--implement-login-and-logout-functionality
+.plans/002-⚪️--implement-agentic-workflow-cli
 ```
 
 The idea behind these colored circles is they effectively represent the state the folder is currently in, and make it easy to visually identify problematic stories, blocked stories, and so on.
@@ -110,10 +110,10 @@ This repo comes with an opinionated and formalized workflow for designing produc
 Every project keeps its plans in a `.plans/` directory. Each feature gets one folder, and **the folder's name is its state**.
 
 ```
-.plans/000.00-⚪️-initial-spec
-       001.00-✅-dev-foundation
-       001.01-✅-schedule-k1-backfill   ← shipped between 001 and 002,
-       002.00-⭐️-tenancy-households        specified afterwards
+.plans/000.00-⚪️--initial-spec
+       001.00-✅--dev-foundation
+       001.01-✅--schedule-k1-backfill   ← shipped between 001 and 002,
+       002.00-⭐️--tenancy-households        specified afterwards
 ```
 
 Three phases, each with a file that proves it happened:
@@ -126,11 +126,13 @@ Three phases, each with a file that proves it happened:
 
 A folder may not claim a phase whose file is missing. That is not a convention anyone has to remember — it is a state machine with guards, and the tool refuses transitions whose requirements do not hold.
 
+The canonical folder spelling is `NNN.MM-<emoji>--<slug>`, with **two dashes after the emoji**: an emoji renders two cells wide and visually swallows a single dash beside it. Folders named with the older single dash still decode, and `resync dirs` renames them to the canonical form on contact.
+
 ### The lifecycle, step by step
 
 A feature moves through five specialists, one state at a time, never two at once, and never further than its own documents currently justify:
 
-1. **⚪️ New.** `agentilda create tax rule dsl` mints `.plans/003.00-⚪️-tax-rule-dsl/`. For a genuinely new feature it also scaffolds `spec.md` with a title and four fixed headings (*What we are trying to achieve*, *Why it matters*, *What already exists*, *What research needs to settle*), makes a best-effort attempt at them from what the project already has on disk, and opens it. You finish the brief by hand.
+1. **⚪️ New.** `agentilda create tax rule dsl` mints `.plans/003.00-⚪️--tax-rule-dsl/`. For a genuinely new feature it also scaffolds `spec.md` with a title and four fixed headings (*What we are trying to achieve*, *Why it matters*, *What already exists*, *What research needs to settle*), makes a best-effort attempt at them from what the project already has on disk, and opens it. You finish the brief by hand.
 1. **🔎 Researched.** `leah-researcher` fans work out across parallel sub-agents and appends spec.md's `## Research` chapter: themes, findings, licensing, a closing `### Findings, Conclusion & References`. Nobody else may write that heading. It *is* the state transition, so an empty one seeds a lie.
 1. **⭐️ Planned.** `yoda-writer` turns the brief plus the research into a complete specification: Goal, Non-Goals, In/Out of scope, Open questions, Conclusion. Or it writes `blocked.md` instead, when a question is a human's to answer, not a guess. `palpatine-planner` then decomposes the finished spec into `plan.md`'s non-overlapping work units, sized for independent sub-agents.
 1. **🟡 Building → 🎨 Building UI.** `luke-backend` builds one back-end work unit at a time — schema, domain, the API an interface will call — source and tests, no commits. It hands off once no back-end unit is left.
@@ -171,7 +173,7 @@ ______________________________________________________________________
 ## Day to day
 
 ```bash
-agentilda create tax rule dsl          # 003.00-⚪️-tax-rule-dsl
+agentilda create tax rule dsl          # 003.00-⚪️--tax-rule-dsl
 agentilda create --after 002 k1 sync   # 002.01-⬜️-k1-sync (retroactive)
 agentilda list-plans                   # the table; exits 1 if a name lies
 agentilda resync dirs                  # folder emoji vs folder contents

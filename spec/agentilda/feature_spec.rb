@@ -60,3 +60,35 @@ RSpec.describe Agentilda::Subject, :tree do
     end
   end
 end
+
+# The folder name is the state, so its spelling is an interface: canonical is
+# `NNN.MM-<emoji>--<slug>` — the double dash keeps the two-cell emoji from
+# visually swallowing the separator — and the single-dash spelling every
+# folder wore before the rule still decodes, so `resync dirs` can normalise
+# it instead of misreading it.
+RSpec.describe Agentilda::Feature do
+  def parsed(dirname) = described_class.parse("/plans/#{dirname}")
+
+  it "mints the canonical double-dash name" do
+    status = Agentilda::STATUS_BY_KEY.fetch(:planned)
+
+    expect(Agentilda.plan_dirname("003.00", status, "tax-rule-dsl")).to eq("003.00-⭐️--tax-rule-dsl")
+  end
+
+  it "decodes a canonical name" do
+    feature = parsed("003.00-⭐️--tax-rule-dsl")
+
+    expect(feature.slug).to eq("tax-rule-dsl")
+    expect(feature.status.key).to eq(:planned)
+    expect(feature).to be_canonical
+  end
+
+  it "still decodes the older single-dash spelling, as non-canonical" do
+    feature = parsed("003.00-⭐️-tax-rule-dsl")
+
+    expect(feature.slug).to eq("tax-rule-dsl")
+    expect(feature.status.key).to eq(:planned)
+    expect(feature).not_to be_canonical
+    expect(feature.dirname_as(feature.status)).to eq("003.00-⭐️--tax-rule-dsl")
+  end
+end

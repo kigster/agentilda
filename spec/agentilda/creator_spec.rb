@@ -10,7 +10,7 @@ RSpec.describe Agentilda::Creator, :tree do
   describe "#create" do
     context "with an empty tree" do
       it "starts at 000.00 and opens in the spec phase" do
-        expect(created).to eq("000.00-⚪️-tax-rule-dsl")
+        expect(created).to eq("000.00-⚪️--tax-rule-dsl")
       end
     end
 
@@ -23,7 +23,7 @@ RSpec.describe Agentilda::Creator, :tree do
       end
 
       it "takes the next whole number, padded to .00" do
-        expect(created).to eq("003.00-⚪️-tax-rule-dsl")
+        expect(created).to eq("003.00-⚪️--tax-rule-dsl")
       end
 
       it "creates the directory on disk" do
@@ -33,7 +33,7 @@ RSpec.describe Agentilda::Creator, :tree do
       it "ignores retroactive siblings when choosing the next number" do
         plans { |t| t.plan "002.01", :approved, "backfill", prs: [t.merged(9, "x")] }
 
-        expect(created).to eq("003.00-⚪️-tax-rule-dsl")
+        expect(created).to eq("003.00-⚪️--tax-rule-dsl")
       end
     end
 
@@ -55,13 +55,13 @@ RSpec.describe Agentilda::Creator, :tree do
       let!(:tree) { plans { |t| t.plan "001.00", :new, "tax-rule-dsl", files: {"spec.md" => spec_body} } }
 
       it "gives the second one its own number rather than colliding" do
-        expect(created).to eq("002.00-⚪️-tax-rule-dsl")
+        expect(created).to eq("002.00-⚪️--tax-rule-dsl")
       end
 
       it "never overwrites the folder that is already there" do
         creator.create(words:)
 
-        expect(File.exist?(File.join(plans_root, "001.00-⚪️-tax-rule-dsl", "spec.md"))).to be(true)
+        expect(File.exist?(File.join(plans_root, "001.00-⚪️--tax-rule-dsl", "spec.md"))).to be(true)
       end
     end
   end
@@ -78,13 +78,13 @@ RSpec.describe Agentilda::Creator, :tree do
     let(:retro) { File.basename(creator.create(words: %w[schedule k1 backfill], after: "002").value!) }
 
     it "takes a decimal slot in the gap, so the number itself records the retroactivity" do
-      expect(retro).to eq("002.01-🕰️-schedule-k1-backfill")
+      expect(retro).to eq("002.01-🕰️--schedule-k1-backfill")
     end
 
     it "takes the next free slot when the gap is already partly used" do
       plans { |t| t.plan "002.01", :retroactive, "earlier-backfill", prs: [t.merged(8, "x")] }
 
-      expect(retro).to eq("002.02-🕰️-schedule-k1-backfill")
+      expect(retro).to eq("002.02-🕰️--schedule-k1-backfill")
     end
 
     it "accepts the anchor in either shape" do
@@ -102,7 +102,7 @@ RSpec.describe Agentilda::Creator, :tree do
 
   describe "an explicit status" do
     it "honours one when given, rather than always opening at ⚪️" do
-      expect(File.basename(creator.create(words:, status: "planned").value!)).to eq("000.00-⭐️-tax-rule-dsl")
+      expect(File.basename(creator.create(words:, status: "planned").value!)).to eq("000.00-⭐️--tax-rule-dsl")
     end
 
     it "rejects a status it does not recognise" do
@@ -134,7 +134,7 @@ RSpec.describe Agentilda::Creator, :tree do
     end
 
     it "opens at 🕰️ Retroactive, in the gap after the plan the work landed on" do
-      expect(File.basename(path)).to eq("018.01-🕰️-alerting-probes")
+      expect(File.basename(path)).to eq("018.01-🕰️--alerting-probes")
     end
 
     # The point of the whole design: the folder is not merely labelled
