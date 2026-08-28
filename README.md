@@ -259,7 +259,7 @@ When an agent finishes and the plan has genuinely advanced — its folder rename
 
 ### Steering one agent, or stepping around one
 
-`--agent NAME` restricts the round to that one agent: plans in every other state are left unassigned, and chaining is off so the restriction holds. `--prompt "…"` rides along with it, appending extra instructions to that agent's prompt for this run only — it refuses to work without `--agent`, because a sentence aimed at one specialist would otherwise reach every agent in the round.
+`--agent NAME` restricts the round to that one agent: plans in every other state are left unassigned, and chaining is off so the restriction holds. An agent that handles none of the in-scope plans' current states is refused up front — naming the state each plan is in and the agent that would take it — rather than running an empty round that exits 0 in silence. `--prompt "…"` rides along with it, appending extra instructions to that agent's prompt for this run only — it refuses to work without `--agent`, because a sentence aimed at one specialist would otherwise reach every agent in the round.
 
 `--skip NAME` (comma-separated for several) is the inverse: the named agent is never assigned, its plans simply wait, and the rest of the pipeline runs as usual. A skipped agent whose work already exists on disk costs nothing — the per-round resync still advances any folder whose contents justify the next state, which hands it to the next agent. A misspelled name is refused rather than silently skipping nobody, and `--agent X --skip X` is refused as the contradiction it is.
 

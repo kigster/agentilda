@@ -189,6 +189,16 @@ RSpec.describe Agentilda::CLI::Run, :tree do
       expect(status).to eq(65)
     end
 
+    # The bug this kills: `--agent palpatine-planner --plan NNN` on a plan in
+    # a state palpatine does not handle produced an empty round, a green box
+    # and exit 0 — a silent no-op wearing a success. The pairing that cannot
+    # happen is now refused up front, naming who would take the plan.
+    it "refuses an agent that handles no in-scope plan's state, naming who does" do
+      _out, err, status = run(agent: "leah-researcher")
+
+      expect(unwrapped(err)).to include("leah-researcher handles", "🟡 Building", "luke-backend takes it")
+      expect(status).to eq(65)
+    end
   end
 
   describe "--max-tokens" do
