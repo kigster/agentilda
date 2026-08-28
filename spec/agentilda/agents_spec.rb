@@ -25,6 +25,25 @@ RSpec.describe Agentilda::Agents do
 
   def names(result) = result.map(&:name)
 
+  # `run --agent` and `run --skip` narrow the roster the loop assigns from,
+  # so the narrowing has to live here rather than in the command.
+  describe "#only and #without" do
+    it "keeps exactly the agents named" do
+      expect(names(agents.only("luke-backend").all)).to eq(["luke-backend"])
+    end
+
+    it "drops exactly the agents named, preserving order" do
+      expect(names(agents.without("luke-backend", "lando-broker").all))
+        .to eq(%w[hansolo-reviewer leah-researcher])
+    end
+
+    it "derives a roster the original does not share state with" do
+      agents.only("luke-backend")
+
+      expect(names(agents.all).size).to eq(4)
+    end
+  end
+
   # `agents describe leah` should not make anyone type the whole hyphenated
   # name, let alone the file name with its extension.
   describe "#match" do
