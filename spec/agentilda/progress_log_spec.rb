@@ -13,11 +13,11 @@ RSpec.describe Agentilda::ProgressLog do
       line = described_class.render(
         "editing spec.md",
         plan: "003.00", status: "⭐️ Planned", agent: "yoda-writer",
-        seconds: 42, pid: 91_234, at:
+        seconds: 42, round: "01", pid: 91_234, at:
       )
 
       expect(line).to eq(
-        "[16:22:14 | 003.00 | ⭐️ Planned            | yoda-writer          |   91234 |    42s] editing spec.md"
+        "[16:22:14 | 003.00 | ⭐️ Planned       | yoda-writer          | 01 |   91234 |    42s] editing spec.md"
       )
     end
 
@@ -32,11 +32,11 @@ RSpec.describe Agentilda::ProgressLog do
       full = described_class.render(
         "editing spec.md",
         plan: "003.00", status: "⭐️ Planned", agent: "yoda-writer",
-        seconds: 42, pid: 91_234, at:
+        seconds: 42, round: "01", pid: 91_234, at:
       )
 
       aggregate_failures do
-        expect(header).to eq("[16:22:14 |        |                       |                      |   91234 |       ] round 1 - 3 plans")
+        expect(header).to eq("[16:22:14 |        |                  |                      |    |   91234 |       ] round 1 - 3 plans")
         expect(Agentilda::UI.display_width(prefix_of(header))).to eq(Agentilda::UI.display_width(prefix_of(full)))
         expect(Agentilda::UI.display_width(prefix_of(header))).to eq(described_class::LINE_WIDTH)
       end
@@ -88,13 +88,13 @@ RSpec.describe Agentilda::ProgressLog do
   end
 
   describe "the column widths" do
-    it "fits the widest state the state machine defines, emoji included" do
+    # Five cells shy of the widest state on purpose: the emoji already names
+    # the state, so the longest labels lose their tails rather than every
+    # line paying for "Scrapped by Review" in full.
+    it "tracks the widest state the machine defines, minus the deliberate trim" do
       widest = Agentilda::STATUSES.map { |status| Agentilda::UI.display_width(status.to_s) }.max
 
-      aggregate_failures do
-        expect(described_class::STATUS_WIDTH).to eq(widest)
-        expect(described_class::STATUS_WIDTH).to be >= Agentilda::UI.display_width("💩 Scrapped by Review")
-      end
+      expect(described_class::STATUS_WIDTH).to eq(widest - 5)
     end
 
     it "fits the longest specialist name on disk" do

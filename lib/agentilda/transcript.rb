@@ -44,7 +44,12 @@ module Agentilda
     #   @return [Integer] tokens generated
     # @!attribute [r] subagents
     #   @return [Integer] sub-agents spawned so far
-    Progress = Data.define(:activity, :up, :down, :subagents)
+    # @!attribute [r] pid
+    #   @return [Integer, nil] the `claude` process, once the harness has
+    #     found it — nil until then, and for callers that never look
+    Progress = Data.define(:activity, :up, :down, :subagents, :pid) do
+      def initialize(pid: nil, **rest) = super
+    end
 
     # The one kind of line the trace does not keep.
     #
@@ -112,6 +117,13 @@ module Agentilda
     # @return [Integer] sub-agents this invocation started
     attr_reader :spawned
 
+    # The `claude` process this transcript is reading, set by the {Executor}
+    # once it has found the child, so the spinner line can name a pid someone
+    # can actually `ps` while the agent runs.
+    #
+    # @return [Integer, nil]
+    attr_accessor :pid
+
     # Sub-agent totals arrive as one number with no split between what went up
     # and what came back, so they are counted as {#up}. They are held here as
     # well, unmixed, because a report that says "of which N could not be
@@ -124,7 +136,7 @@ module Agentilda
     end
 
     # @return [Agentilda::Transcript::Progress] a snapshot, safe to keep
-    def progress = Progress.new(activity: @activity, up:, down:, subagents: @spawned)
+    def progress = Progress.new(activity: @activity, up:, down:, subagents: @spawned, pid: @pid)
 
     # @return [Integer] how many tool calls have gone past, which is the one
     #   honest measure of how much work an agent that says "done" actually did

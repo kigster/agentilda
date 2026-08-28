@@ -66,16 +66,29 @@ module Agentilda
     #   @return [String] the tree this agent sees
     # @!attribute [r] checkout
     #   @return [Agentilda::Worktree::Checkout, nil] nil when sharing a tree
-    Task = Data.define(:agent, :subject, :root, :checkout) do
-      # @return [String] for the spinner line
+    # @!attribute [r] round
+    #   @return [Integer] which pass over the tree this task belongs to
+    Task = Data.define(:agent, :subject, :root, :checkout, :round) do
+      # @return [String] for the spinner line — the pid and round render
+      #   beside this through the line's own `:pid` token, once known
       def label = "#{subject.feature.ordinal}  #{UI.paint(agent.name, :yellow, :bold)}"
 
-      # The same three facts unpainted and apart, for the log file, where they
+      # The same facts unpainted and apart, for the log file, where they
       # are columns rather than a sentence.
       #
       # @return [Hash]
-      def log_fields = {plan: subject.feature.ordinal.to_s, status: subject.status.to_s, agent: agent.name}
+      def log_fields
+        {plan: subject.feature.ordinal.to_s, status: subject.status.to_s,
+         agent: agent.name, round: format("%02d", round)}
+      end
     end
+
+    # How a task's return value reads on its spinner line: any hop that was
+    # not ok makes the whole line a failure, shown with that hop's note. The
+    # executor reports failure by returning rather than raising, and a line
+    # that drew ✓ "done" over a timed-out agent — directly above a round
+    # table saying FAIL — was the contradiction this closes.
+    FAILURE = ->(result) { result.find { |a| !a.ok }&.note if result.is_a?(Array) }
 
     # Rounds with no movement before the loop concedes. One is not enough: an
     # agent can legitimately spend a round writing something another agent needs
@@ -191,11 +204,12 @@ module Agentilda
     # @return [Agentilda::Runner::Round]
     def run_round(number)
       tree.reload
-      tasks = assignments.map { |agent, subject| prepare(agent, subject) }
+      tasks = assignments.map { |agent, subject| prepare(agent, subject, number) }
       return Round.new(number:, attempts: []) if tasks.empty?
 
       results = UI.concurrently(tasks, "round #{number} — #{tasks.size} plans", jobs:,
-        label: :label.to_proc, fields: :log_fields.to_proc) do |task, progress|
+        label: :label.to_proc, fields: :log_fields.to_proc, failure: FAILURE,
+        header: {round: format("%02d", number)}) do |task, progress|
         attempt(task, &progress)
       end
 
@@ -229,12 +243,13 @@ module Agentilda
     #
     # @param agent [Agentilda::Agent]
     # @param subject [Agentilda::Subject]
+    # @param round [Integer]
     # @return [Agentilda::Runner::Task]
-    def prepare(agent, subject)
-      return Task.new(agent:, subject:, root: shared_root, checkout: nil) unless isolated?
+    def prepare(agent, subject, round)
+      return Task.new(agent:, subject:, root: shared_root, checkout: nil, round:) unless isolated?
 
       checkout = worktree.checkout_for(subject.feature)
-      Task.new(agent:, subject:, root: checkout.path, checkout:)
+      Task.new(agent:, subject:, root: checkout.path, checkout:, round:)
     end
 
     # @return [String]

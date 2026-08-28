@@ -31,6 +31,13 @@ module Agentilda
     # has to line up with the agent lines under it.
     NO_FIELDS = ->(_item) { {} }
 
+    # How a block's RETURN VALUE is judged when its caller has no opinion:
+    # nothing is ever a failure. The distinction exists because {Runner}'s
+    # executor reports failure by returning a not-ok result rather than by
+    # raising — and a line that drew ✓ "done" over a timed-out agent, while
+    # the round table under it said FAIL, was the contradiction this closes.
+    NO_FAILURE = ->(_result) {}
+
     # One item's spinner line, and the same news written to the log.
     #
     # These are two readers of one story and used to be told it separately:
@@ -49,6 +56,7 @@ module Agentilda
         @mark = mark
         @started = UI.monotonic
         @phrase = nil
+        @pid = nil
       end
 
       # @return [Float] seconds this agent has been alive
@@ -62,7 +70,25 @@ module Agentilda
       def note(message) = UI.log(message, **@fields, seconds:)
 
       # @return [void]
-      def start = note("started")
+      def start
+        @spinner&.update(pid: identity)
+        note("started")
+      end
+
+      # What sits between the agent's name and its activity: the `claude`
+      # process and the round, `[36123, round 01]`, so a line on the screen
+      # can be matched to a process in `ps` and a row in the report. The pid
+      # is unknowable until the child has been spawned and found, so it reads
+      # `…` until then; a caller with neither fact gets nothing at all.
+      #
+      # @return [String]
+      def identity
+        round = @fields[:round]
+        return "" if round.nil? && @pid.nil?
+
+        inner = [(@pid || "…").to_s, ("round #{round}" if round)].compact.join(", ")
+        UI.paint("[#{inner}]", :bright_black)
+      end
 
       # @return [void]
       def done
@@ -80,6 +106,11 @@ module Agentilda
       # @param update [Agentilda::Transcript::Progress]
       # @return [void]
       def call(update)
+        if update.respond_to?(:pid) && update.pid && update.pid != @pid
+          @pid = update.pid
+          @spinner&.update(pid: identity)
+          note("claude is pid #{@pid}")
+        end
         @spinner&.update(meter: UI.meter(update), activity: UI.said(update.activity))
         return if update.activity.nil? || update.activity == @phrase
 
@@ -257,20 +288,27 @@ module Agentilda
       # @param message [String] the header line
       # @param jobs [Integer] how many run at once
       # @param label [Proc] item -> the text on its line
+      # @param failure [Proc] the block's return value -> a reason when that
+      #   value reports a failure, nil when it reports success. The block
+      #   returning normally is not the same fact as the work having worked.
+      # @param header [Hash] log columns for the header line itself, so the
+      #   line announcing a round carries the same round number as the agent
+      #   lines under it rather than a blank cell
       # @yieldparam item [Object]
       # @return [Array] one result per item, in input order
-      def concurrently(items, message, jobs:, label: :to_s.to_proc, fields: NO_FIELDS, &block)
+      def concurrently(items, message, jobs:, label: :to_s.to_proc, fields: NO_FIELDS,
+        failure: NO_FAILURE, header: {}, &block)
         list = items.to_a
         return [] if list.empty?
 
-        log(message)
+        log(message, **header)
 
         if jobs <= 1 || list.size <= 1
           report_line(message) unless animate?
-          return list.map { |item| once(item, label, fields, &block) }
+          return list.map { |item| once(item, label, fields, failure:, &block) }
         end
 
-        return threaded(list, jobs, message, label:, fields:, &block) unless animate?
+        return threaded(list, jobs, message, label:, fields:, failure:, &block) unless animate?
 
         results = Concurrent::Hash.new
         spinners = TTY::Spinner::Multi.new(
@@ -281,11 +319,15 @@ module Agentilda
 
         list.each_with_index do |item, index|
           text = label.call(item)
-          child = spinners.register("[:spinner] :meter#{text}:activity") do |spinner|
+          child = spinners.register("[:spinner] :meter#{text}:pid:activity") do |spinner|
             line = Line.new(fields: fields.call(item), spinner:)
             line.start
-            results[index] = block.call(item, line)
-            line.done
+            result = results[index] = block.call(item, line)
+            if (reason = failure.call(result))
+              line.failed(reason)
+            else
+              line.done
+            end
           rescue => e
             results[index] = e
             line&.failed(e.message.lines.first.to_s.strip)
@@ -294,7 +336,7 @@ module Agentilda
           # says so until its agent gets far enough to have news. The meter
           # starts at zero for the same reason, and because a counter that
           # appears once the first number arrives shifts the whole line.
-          child.update(meter: meter(nil), activity: "")
+          child.update(meter: meter(nil), activity: "", pid: "")
         end
 
         spinners.auto_spin
@@ -331,7 +373,7 @@ module Agentilda
       # @param label [Proc]
       # @yieldparam item [Object]
       # @return [Object]
-      def once(item, label, fields = NO_FIELDS, &block)
+      def once(item, label, fields = NO_FIELDS, failure: NO_FAILURE, &block)
         text = label.call(item)
         line = Line.new(fields: fields.call(item), mark: paint("done", :bright_black),
           spinner: (solo_spinner(text) if animate?))
@@ -344,8 +386,13 @@ module Agentilda
           report_line("#{text}: #{reason}", bullet: "✗") unless animate?
           raise
         end
-        line.done
-        report_line("#{text} (#{line.alive})", bullet: "✓") unless animate?
+        if (reason = failure.call(result))
+          line.failed(reason)
+          report_line("#{text}: #{reason}", bullet: "✗") unless animate?
+        else
+          line.done
+          report_line("#{text} (#{line.alive})", bullet: "✓") unless animate?
+        end
         result
       end
 
@@ -355,9 +402,9 @@ module Agentilda
       # @param text [String]
       # @return [TTY::Spinner]
       def solo_spinner(text)
-        spinner = TTY::Spinner.new("[:spinner] :meter#{text}:activity", format: :dots, output: $stderr,
+        spinner = TTY::Spinner.new("[:spinner] :meter#{text}:pid:activity", format: :dots, output: $stderr,
           success_mark: paint("✓", :green), error_mark: paint("✖", :red))
-        spinner.update(meter: meter(nil), activity: "")
+        spinner.update(meter: meter(nil), activity: "", pid: "")
         spinner.auto_spin
         spinner
       end
@@ -372,7 +419,8 @@ module Agentilda
       # @param message [String]
       # @param label [Proc]
       # @return [Array]
-      def threaded(list, jobs, message, label: :to_s.to_proc, fields: NO_FIELDS, &)
+      def threaded(list, jobs, message, label: :to_s.to_proc, fields: NO_FIELDS,
+        failure: NO_FAILURE, &)
         report_line(message)
         results = Concurrent::Hash.new
         queue = Queue.new
@@ -387,7 +435,7 @@ module Agentilda
             end)
               item, index = pair
               results[index] = begin
-                once(item, label, fields, &)
+                once(item, label, fields, failure:, &)
               rescue => e
                 e
               end
