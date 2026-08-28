@@ -34,11 +34,11 @@ RSpec.describe Agentilda::DevWork do
       # evidence that tips a real feature into [dev].
       it "ignores neutral files rather than counting them as plumbing" do
         expect(described_class.developer?("Add Schedule K-1 support",
-          [".plans/004.00-🟡-k1/plan.md", "lib/k1.rb"])).to be(false)
+          [".plans/004.00-🟡--k1/plan.md", "lib/k1.rb"])).to be(false)
       end
 
       it "refuses to judge when only neutral files remain" do
-        expect(described_class.developer?("Mystery work", ["README.md", ".plans/001.00-⚪️-x/spec.md"])).to be(false)
+        expect(described_class.developer?("Mystery work", ["README.md", ".plans/001.00-⚪️--x/spec.md"])).to be(false)
       end
 
       it "refuses [dev] the moment one real source file is in the diff" do

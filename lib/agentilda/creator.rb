@@ -109,7 +109,7 @@ module Agentilda
     # @param slug [String]
     # @return [Dry::Monads::Result]
     def build(ordinal, status, slug)
-      target = File.join(dir, "#{ordinal}-#{status.emoji}-#{slug}")
+      target = File.join(dir, Agentilda.plan_dirname(ordinal, status, slug))
       return Failure("already exists: #{File.basename(target)}") if File.exist?(target)
 
       FileUtils.mkdir_p(target)

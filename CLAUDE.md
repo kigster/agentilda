@@ -53,7 +53,7 @@ Write to standard's style anyway. The gem's dev group depends on `standard`, and
 
 ### The folder name is the state
 
-`.plans/003.00-⭐️-tax-rule-dsl` is plan `003.00`, state Planned, slug `tax-rule-dsl`. There is no database and no status column. A transition renames a directory through `Agentilda.move_directory`, which prefers `git mv` so the folder's history follows it.
+`.plans/003.00-⭐️--tax-rule-dsl` is plan `003.00`, state Planned, slug `tax-rule-dsl`. There is no database and no status column. A transition renames a directory through `Agentilda.move_directory`, which prefers `git mv` so the folder's history follows it.
 
 Two consequences shape most of the code:
 

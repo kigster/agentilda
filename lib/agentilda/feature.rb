@@ -44,7 +44,21 @@ module Agentilda
     }.join(" ")
   end
 
-  # One `NNN.MM-<emoji>-<slug>` folder, decoded.
+  # The one place a plan folder's name is spelled out: `NNN.MM-<emoji>--<slug>`.
+  #
+  # The double dash after the emoji is deliberate: an emoji renders two cells
+  # wide and visually swallows a single dash beside it, so `🔎-refactor` reads
+  # as if the emoji and the slug were touching. Everything that mints or
+  # renames a folder goes through here; {Feature.parse} accepts the older
+  # single-dash spelling too, and `resync dirs` normalises it on contact.
+  #
+  # @param ordinal [Agentilda::Ordinal, String]
+  # @param status [Agentilda::Status]
+  # @param slug [String]
+  # @return [String]
+  def self.plan_dirname(ordinal, status, slug) = "#{ordinal}-#{status.emoji}--#{slug}"
+
+  # One `NNN.MM-<emoji>--<slug>` folder, decoded.
   #
   # @!attribute [r] ordinal
   #   @return [Agentilda::Ordinal]
@@ -71,8 +85,10 @@ module Agentilda
       head, tail = rest.split(/[-_]/, 2)
 
       # A leading segment with no ASCII word character is the status emoji.
+      # The slug strips any further separators: the canonical spelling puts
+      # two dashes after the emoji, and folders from before that rule put one.
       status = (Agentilda.status_for_emoji(head) if tail && !head.to_s.empty? && !head.match?(/[A-Za-z0-9]/))
-      slug = status ? tail : rest
+      slug = status ? tail.sub(/\A[-_]+/, "") : rest
 
       new(ordinal:, status: status || STATUS_BY_KEY.fetch(:new), slug:, dirname:, path:)
     end
@@ -82,14 +98,14 @@ module Agentilda
 
     # The folder name this feature would carry in a given state — the slug
     # never moves, and the number is always rendered canonically, so this is
-    # also what repairs a folder written `018-⚪️-foo` before the `NNN.MM` rule.
+    # also what repairs a folder written `018-⚪️--foo` before the `NNN.MM` rule.
     #
     # @param status [Agentilda::Status]
     # @return [String]
-    def dirname_as(status) = "#{ordinal}-#{status.emoji}-#{slug}"
+    def dirname_as(status) = Agentilda.plan_dirname(ordinal, status, slug)
 
     # The number exactly as the folder writes it, which is not always the
-    # canonical rendering: `018-⚪️-foo` yields "018" where {#ordinal} renders
+    # canonical rendering: `018-⚪️--foo` yields "018" where {#ordinal} renders
     # "018.00".
     #
     # @return [String]

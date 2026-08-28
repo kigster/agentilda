@@ -41,7 +41,7 @@ module Agentilda
     #   @return [String, nil] the folder, once created
     Adoptee = Data.define(:pull, :ordinal, :major, :path) do
       # @return [String] the folder name this pull request earns
-      def dirname = "#{ordinal}-#{STATUS_BY_KEY.fetch(:retroactive).emoji}-#{slug}"
+      def dirname = Agentilda.plan_dirname(ordinal, STATUS_BY_KEY.fetch(:retroactive), slug)
 
       # The PR title, stripped of any prefix, as the folder's tail.
       #

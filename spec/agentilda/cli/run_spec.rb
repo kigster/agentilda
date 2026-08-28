@@ -161,7 +161,7 @@ RSpec.describe Agentilda::CLI::Run, :tree do
       plans { |t| t.plan("002.00", :planned, "stays-put", files: {"spec.md" => spec_body, "plan.md" => "# Plan"}) }
       run
 
-      expect(Dir.children(plans_root).grep(/stays-put/)).to eq(["002.00-⭐️-stays-put"])
+      expect(Dir.children(plans_root).grep(/stays-put/)).to eq(["002.00-⭐️--stays-put"])
     end
 
     it "says where the progress log is going before the loop starts" do
