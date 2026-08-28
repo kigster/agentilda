@@ -481,6 +481,29 @@ module Agentilda
 
       # standard:enable Style/StderrPuts
 
+      # A framed panel centered on the screen, for the keyboard help. Unlike
+      # {.box} it positions itself absolutely, so it overlays whatever the
+      # spinners are drawing rather than scrolling in below them — the next
+      # repaint draws over it, which is all the dismissal a help screen needs.
+      #
+      # @param title [String]
+      # @param text [String]
+      # @return [void]
+      # standard:disable Style/StderrPuts -- see {.box}: `warn` is a no-op under -W0.
+      def popup(title, text)
+        lines = text.to_s.lines
+        box_width = [lines.map { |l| display_width(l.chomp) }.max.to_i + 6, TTY::Screen.width].min
+        box_height = lines.size + 4
+        $stderr.print TTY::Box.frame(
+          top: [(TTY::Screen.height - box_height) / 2, 0].max,
+          left: [(TTY::Screen.width - box_width) / 2, 0].max,
+          width: box_width, height: box_height, padding: 1,
+          title: {top_left: " #{title} "}, enable_color: color?,
+          style: color? ? {border: {fg: :cyan}} : {}
+        ) { text.to_s }
+      end
+      # standard:enable Style/StderrPuts
+
       # TTY::Box sizes itself from the number of lines you hand it, not from
       # the number those lines occupy once wrapped to the box's width. So it
       # draws any message containing a line longer than the box a row or two

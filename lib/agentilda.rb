@@ -140,6 +140,8 @@ end
   viewer
   worktree
   publisher
+  control
+  keyboard
   executor
   runner
   unblocker

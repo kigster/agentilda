@@ -159,6 +159,11 @@ module Agentilda
       dry = 0
 
       1.upto(@max_rounds) do |number|
+        # `q` ends the loop at the next seam rather than instantly: the round
+        # in flight finishes (its agents were asked to STOP and get a grace
+        # period to write out), and no new round starts.
+        break if Control.quit?
+
         round = run_round(number)
         @rounds << round
         break if round.attempts.empty?
@@ -295,7 +300,10 @@ module Agentilda
           up: spend(result, :up), down: spend(result, :down), subagents: spend(result, :subagents),
           delegated: spend(result, :delegated), seconds: spend(result, :seconds))
 
-        break unless @chain && ok && attempts.size < MAX_CHAIN_HOPS
+        # `n` deliberately does not appear here: stopping an agent early and
+        # letting the chain hand its plan to the next one is what n means.
+        # `q` stops the chain along with everything else.
+        break unless @chain && ok && attempts.size < MAX_CHAIN_HOPS && !Control.quit?
 
         # Re-locate the plan by ordinal rather than by path: several agents
         # rename their own folder when they finish, so the path this hop

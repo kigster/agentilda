@@ -61,6 +61,16 @@ RSpec.describe Agentilda::Executor, :tree do
       expect(overridden.each_cons(2).to_a).to include(["--model", "opus"])
       expect(overridden.join(" ")).not_to include("fable")
     end
+
+    it "states the token budget in the prompt when one is set" do
+      metered = described_class.new(root:, command:, max_tokens: 50_000).invocation(agent, subject_plan)
+
+      expect(metered[2]).to include("Token budget — 50000 tokens, enforced")
+    end
+
+    it "mentions no budget and no control file when neither exists" do
+      expect(argv[2]).not_to include("Token budget", "Control file")
+    end
   end
 
   # The autonomy boundary is closed by default and opened per agent, in the
@@ -247,6 +257,60 @@ RSpec.describe Agentilda::Executor, :tree do
                                                cache_read_input_tokens: 900, output_tokens: 40}})
 
       expect(streaming.call(agent, subject_plan)).to have_attributes(up: 1002, down: 40)
+    end
+
+    # The prompt states the budget so the agent can finish inside it; this is
+    # the half that makes the statement true. The raise happens inside the
+    # streaming block, which is what makes TTY::Command kill the child.
+    describe "the token budget, enforced" do
+      subject(:metered) { described_class.new(root:, command: streamer, trace_dir: @traces, max_tokens: 100) }
+
+      it "aborts the invocation once the meter crosses the budget" do
+        chunks << event(type: "stream_event",
+          event: {type: "message_delta", usage: {input_tokens: 90, output_tokens: 40}})
+
+        result = metered.call(agent, subject_plan)
+
+        expect(result.ok).to be(false)
+        expect(result.note).to include("token budget of 100 exceeded", "↑90 ↓40")
+      end
+
+      it "lets an invocation inside the budget finish untouched" do
+        chunks << event(type: "stream_event",
+          event: {type: "message_delta", usage: {input_tokens: 50, output_tokens: 40}})
+        chunks << event(type: "result", is_error: false, result: "done")
+
+        expect(metered.call(agent, subject_plan).ok).to be(true)
+      end
+    end
+
+    # The keyboard's side of the bargain lives in {Control}; this is the
+    # executor's: a control file per invocation when someone is at the keys,
+    # released after, and a hard stop once q's grace period is spent.
+    describe "the control file, when the run is interactive" do
+      subject(:interactive) { described_class.new(root:, command: streamer, trace_dir: @traces, interactive: true) }
+
+      after { Agentilda::Control.reset! }
+
+      it "registers one per invocation, names it in the prompt, and releases it after" do
+        prompts = []
+        allow(streamer).to receive(:run) { |*argv, **| prompts << argv[2] }
+        interactive.call(agent, subject_plan)
+
+        expect(prompts.first).to include("Control file", "control-000.00-yoda-writer")
+        expect(Dir.children(@traces).grep(/^control-/)).to be_empty
+      end
+
+      it "aborts whatever is still running once the grace period after q is spent" do
+        allow(Agentilda::Control).to receive(:overdue?).and_return(true)
+        chunks << event(type: "stream_event",
+          event: {type: "message_delta", usage: {input_tokens: 1, output_tokens: 1}})
+
+        result = interactive.call(agent, subject_plan)
+
+        expect(result.ok).to be(false)
+        expect(result.note).to include("still running", "after q")
+      end
     end
 
     # A run that burned two hundred thousand tokens before timing out is a

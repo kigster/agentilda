@@ -56,6 +56,18 @@ RSpec.describe Agentilda::Runner, :tree do
         end
       end
 
+      # `q` asks running agents to write out and stop; the loop's own half of
+      # the bargain is to start nothing new afterwards.
+      it "starts no round once q has quit the run" do
+        Agentilda::Control.quit!
+        rounds = runner.call
+
+        expect(rounds).to be_empty
+        expect(calls).to be_empty
+      ensure
+        Agentilda::Control.reset!
+      end
+
       it "never offers a blocked plan to anyone — that is what blocked means" do
         runner.call
 

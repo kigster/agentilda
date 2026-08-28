@@ -19,6 +19,9 @@ module Agentilda
         "Comma separated for several"
       option :model, desc: "Model for every agent this run, overriding each agent's own frontmatter " \
         "(default: what the agent declares, else the claude CLI's default)"
+      option :max_tokens, desc: "Token budget per agent invocation, input plus output, sub-agents " \
+        "included. The agent is told the number so it can finish inside it; the meter aborts it past " \
+        "the number so the telling is true. (default: unmetered)"
       option :plan, aliases: ["--plans"],
         desc: "Only these plans, comma separated: NNN or NNN.MM, e.g. --plan 003,005.01. Default: the whole tree"
       option :root, desc: "Repository root the agents work in (default: the .plans parent)"
@@ -91,17 +94,27 @@ module Agentilda
         info("Progress: #{UI.log_path}") unless quiet?(options)
         credentials_warning if commit?(options) && !quiet?(options)
 
+        Control.reset!
+        keyboard = Keyboard.listen
+        UI.line("keys: h for help — w wrap up · n write out and stop · q quit") if keyboard && !quiet?(options)
+
         runner = Runner.new(
           tree:, agents:, isolation:, jobs:, plans:, chain:,
           worktree: (Worktree.new(root:) if isolation == :worktree),
           max_rounds: (options[:rounds] || config[:rounds] || 10).to_i,
           executor: Executor.new(root:, timeout:, dry_run: !commit?(options),
-            instructions: options[:prompt], model: options[:model]), dry_run: !commit?(options),
+            instructions: options[:prompt], model: options[:model],
+            max_tokens: (options[:max_tokens] || config[:max_tokens])&.to_i,
+            interactive: !keyboard.nil? && commit?(options)), dry_run: !commit?(options),
           publisher: publisher_for(root, isolation, options)
         )
 
         started = UI.monotonic
-        rounds = runner.call
+        rounds = begin
+          runner.call
+        ensure
+          keyboard&.stop
+        end
         report(runner, rounds, options, seconds: UI.monotonic - started)
         exit(failures(rounds).empty? ? 0 : 1)
       end
@@ -212,6 +225,11 @@ module Agentilda
         puts("", tally.render) if commit?(options)
 
         return if quiet?(options)
+
+        if Control.quit?
+          warn("Stopped from the keyboard — q. Unfinished plans keep their state; " \
+               "re-run to resume where they stand.")
+        end
 
         advanced = rounds.sum(&:advanced)
         blocked = runner.blocked
