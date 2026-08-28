@@ -68,6 +68,7 @@ module Agentilda
         agents = filtered(agents, options[:agent]) if options[:agent]
         agents = skipped(agents, options[:skip], options[:agent]) if options[:skip]
         plans = options[:plan] ? scoped(tree, options[:plan]) : nil
+        assignable!(agents, tree, plans, options[:agent]) if options[:agent]
 
         isolation = options.fetch(:isolation, "worktree").to_sym
         jobs = (options[:jobs] || config[:jobs] || UI.default_jobs).to_i
@@ -173,6 +174,36 @@ module Agentilda
           end
           ordinal
         }
+      end
+
+      # `--agent` narrowing the round to nobody used to exit 0 in silence —
+      # "0 plans addressed", green box, no hint that the agent named simply
+      # does not handle any in-scope plan's state. Someone who typed both an
+      # agent and a plan meant them to meet, so a pairing that cannot happen
+      # is refused up front with the agent that would actually take each plan.
+      #
+      # @param agents [Agentilda::Agents] already narrowed to the one agent
+      # @param tree [Agentilda::Tree]
+      # @param plans [Array<Agentilda::Ordinal>, nil]
+      # @param name [String]
+      # @return [void]
+      def assignable!(agents, tree, plans, name)
+        agent = agents.find(name)
+        active = tree.subjects.select { |s|
+          (plans.nil? || plans.include?(s.feature.ordinal)) &&
+            !StateMachine::SETTLED.include?(s.status.key)
+        }
+        return if active.empty? || active.any? { |s| agent.handles?(s.status) }
+
+        roster = Agentilda::Agents.new
+        lines = active.map { |s|
+          takers = roster.for_status(s.status).map(&:name)
+          "  #{s.feature.ordinal} is #{s.status.emoji} #{s.status.label}" \
+            "#{" — #{takers.join(", ")} takes it" unless takers.empty?}"
+        }
+        handled = agent.handles.map { |k| Agentilda::STATUS_BY_KEY[k]&.then { |st| "#{st.emoji} #{st.label}" } || k }
+        refuse("#{name} handles #{handled.join(", ")}, and no plan in scope is there:\n\n" \
+               "#{lines.join("\n")}\n\nName the agent that takes these states, or drop --agent.", 65)
       end
 
       # @param rounds [Array]
