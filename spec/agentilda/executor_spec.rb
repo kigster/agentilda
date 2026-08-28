@@ -89,6 +89,46 @@ RSpec.describe Agentilda::Executor, :tree do
       .each_cons(2).find { |flag, _| flag == "--disallowedTools" }&.last.to_s.split(",")
   end
 
+  # TTY::Command never exposes the pid it spawned, so the executor reads the
+  # process table for a `claude` child of its own process, claiming each so
+  # two parallel invocations never put one pid on two spinner lines. The pid
+  # decorates the UI only; nothing signals or kills through it.
+  describe ".claim_child" do
+    let(:listing) do
+      <<~PS
+        36123  #{Process.pid} /usr/local/bin/claude -p long prompt here
+        36124  #{Process.pid} /usr/local/bin/claude -p another prompt
+        36125  99999 /usr/local/bin/claude -p somebody else's child
+        36126  #{Process.pid} vim notes.md
+      PS
+    end
+
+    after do
+      described_class.release_child(36_123)
+      described_class.release_child(36_124)
+    end
+
+    it "finds a claude child of this process, and never a stranger's or vim" do
+      expect(described_class.claim_child(listing:)).to eq(36_123)
+    end
+
+    it "never hands the same child to two callers" do
+      first = described_class.claim_child(listing:)
+      second = described_class.claim_child(listing:)
+      third = described_class.claim_child(listing:)
+
+      expect([first, second]).to eq([36_123, 36_124])
+      expect(third).to be_nil
+    end
+
+    it "release_child makes a finished pid claimable again" do
+      described_class.claim_child(listing:)
+      described_class.release_child(36_123)
+
+      expect(described_class.claim_child(listing:)).to eq(36_123)
+    end
+  end
+
   # A run whose agents all failed printed ten copies of the same escaped prompt
   # and never said why. The reason was in the parts of the error this now reads.
   describe ".failure_reason" do

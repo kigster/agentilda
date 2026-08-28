@@ -1,5 +1,7 @@
 # frozen_string_literal: true
 
+require "tmpdir"
+
 RSpec.describe Agentilda::UI do
   # The suite never runs against a terminal, so `animate?` is false by default
   # and the examples that want animation say so explicitly.
@@ -190,9 +192,9 @@ RSpec.describe Agentilda::UI do
     it "appends a line in columns, creating the directory if needed" do
       described_class.log_path = @log_path
       described_class.log("editing spec.md", plan: "003.00", status: "⭐️ Planned",
-        agent: "yoda-writer", seconds: 42)
+        agent: "yoda-writer", seconds: 42, round: "01")
 
-      expect(File.read(@log_path)).to match(/\A\[\d\d:\d\d:\d\d \| 003\.00 +\| ⭐️ Planned +\| yoda-writer +\| +\d+ \| +42s\] editing spec\.md\n\z/)
+      expect(File.read(@log_path)).to match(/\A\[\d\d:\d\d:\d\d \| 003\.00 +\| ⭐️ Planned +\| yoda-writer +\| 01 \| +\d+ \| +42s\] editing spec\.md\n\z/)
     end
 
     it "appends rather than truncating on a second call" do
@@ -206,6 +208,60 @@ RSpec.describe Agentilda::UI do
         expect(lines.size).to eq(2)
         expect(lines.last).to include("second")
       end
+    end
+  end
+
+  # A block that returns normally has not necessarily succeeded: the executor
+  # reports failure by returning a not-ok result rather than by raising, and
+  # a line that drew ✓ "done" over a timed-out agent — directly above a round
+  # table saying FAIL — contradicted itself. The `failure:` proc is how a
+  # caller teaches the line to read the result.
+  describe ".concurrently with a failure verdict" do
+    let(:failure) { ->(result) { result if result.is_a?(String) } }
+
+    it "marks a returned failure as one, with its reason" do
+      expect {
+        described_class.concurrently([:plan], "round", jobs: 1, label: ->(_) { "000.00" },
+          failure:) { |_| "timed out after 900s" }
+      }.to output(/✗.*000\.00.*timed out after 900s/m).to_stderr
+    end
+
+    it "still marks a clean result as done" do
+      expect {
+        described_class.concurrently([:plan], "round", jobs: 1, label: ->(_) { "000.00" },
+          failure:) { |_| :ok }
+      }.to output(/✓.*000\.00/m).to_stderr
+    end
+
+    it "logs the failure as a failure, not as finished" do
+      Dir.mktmpdir("ui-log") do |dir|
+        described_class.log_path = File.join(dir, "progress.log")
+        described_class.concurrently([:plan], "round", jobs: 1, label: ->(_) { "000.00" },
+          failure:) { |_| "timed out after 900s" }
+
+        expect(File.read(described_class.log_path)).to include("failed after", "timed out after 900s")
+        expect(File.read(described_class.log_path)).not_to include("finished after")
+      ensure
+        described_class.log_path = nil
+      end
+    end
+  end
+
+  # The identity bracket between an agent's name and its activity: the round
+  # from the log fields, the pid once the harness has found the child.
+  describe "a line's identity bracket" do
+    def update(pid: nil) = Agentilda::Transcript::Progress.new(activity: nil, up: 0, down: 0, subagents: 0, pid:)
+
+    it "renders round alone until the pid is known, then both, pid first" do
+      line = Agentilda::UI::Line.new(fields: {round: "01"})
+
+      expect(line.identity).to include("…, round 01")
+      line.call(update(pid: 36_123))
+      expect(line.identity).to include("36123, round 01")
+    end
+
+    it "renders nothing for a caller with neither fact" do
+      expect(Agentilda::UI::Line.new.identity).to eq("")
     end
   end
 
@@ -423,7 +479,8 @@ RSpec.describe Agentilda::UI do
     it "primes each line so no template token ever shows" do
       described_class.concurrently(%i[a b], "round", jobs: 2) { |item, _line| item }
 
-      expect(child).to have_received(:update).with(meter: a_string_including("↑0"), activity: "").at_least(:twice)
+      expect(child).to have_received(:update)
+        .with(meter: a_string_including("↑0"), activity: "", pid: "").at_least(:twice)
     end
 
     it "marks a failing item's own line failed and keeps the error as its result" do

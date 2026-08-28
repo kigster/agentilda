@@ -17,8 +17,8 @@ module Agentilda
   #
   # @example
   #   ProgressLog.render("editing spec.md", plan: "003.00", status: "⭐️ Planned",
-  #     agent: "yoda-writer", seconds: 42, pid: 91_234)
-  #   #=> "[16:22:14 | 003.00 | ⭐️ Planned            | yoda-writer          |   91234 |    42s] editing spec.md"
+  #     agent: "yoda-writer", seconds: 42, round: "01", pid: 91_234)
+  #   #=> "[16:22:14 | 003.00 | ⭐️ Planned            | yoda-writer          | 01 |   91234 |    42s] editing spec.md"
   module ProgressLog
     # Wall clock only. A log line answers "when", and the date is the file's.
     TIME_FORMAT = "%H:%M:%S"
@@ -29,11 +29,12 @@ module Agentilda
     # "003.00".
     PLAN_WIDTH = 6
 
-    # Wide enough for the widest state as {Status#to_s} renders it, emoji
-    # included. Derived rather than written down: a state added to {STATUSES}
-    # with a longer label than "Scrapped by Review" would otherwise knock every
-    # column after it out of line, and nothing would say so.
-    STATUS_WIDTH = STATUSES.map { |status| UI.display_width(status.to_s) }.max
+    # Derived from the widest state as {Status#to_s} renders it, emoji
+    # included, so a state added to {STATUSES} with a longer label cannot
+    # silently knock the columns after it out of line — then trimmed by five
+    # cells: the emoji already names the state, so the longest labels can
+    # afford to lose their tails to keep the line short.
+    STATUS_WIDTH = STATUSES.map { |status| UI.display_width(status.to_s) }.max - 5
 
     # The longest specialist name in `agents/` is `palpatine-planner` at 17,
     # and the names are hyphenated words rather than a bounded vocabulary, so
@@ -42,6 +43,10 @@ module Agentilda
 
     # Enough for a 32-bit process id, right justified.
     PID_WIDTH = 7
+
+    # "01". Rounds cap at two digits; a run that reaches a third has bigger
+    # problems than this column.
+    ROUND_WIDTH = 2
 
     # "  907s". Anything longer than four digits of seconds is an agent nobody
     # is still waiting on.
@@ -54,7 +59,8 @@ module Agentilda
     # The message starts one space after this on every line, whatever fields
     # that line happens to be missing, so a reader indenting a wrapped message
     # has a number to indent by.
-    COLUMN_WIDTHS = [TIME_WIDTH, PLAN_WIDTH, STATUS_WIDTH, AGENT_WIDTH, PID_WIDTH, SECONDS_WIDTH].freeze
+    COLUMN_WIDTHS = [TIME_WIDTH, PLAN_WIDTH, STATUS_WIDTH, AGENT_WIDTH, ROUND_WIDTH, PID_WIDTH,
+      SECONDS_WIDTH].freeze
 
     # @see COLUMN_WIDTHS
     LINE_WIDTH = COLUMN_WIDTHS.sum + (SEPARATOR.length * (COLUMN_WIDTHS.size - 1)) + 2
@@ -70,16 +76,18 @@ module Agentilda
       # @param status [String, nil] emoji and label, e.g. "⭐️ Planned"
       # @param agent [String, nil] the specialist's name, e.g. "yoda-writer"
       # @param seconds [Numeric, nil] how long this agent has been alive
+      # @param round [String, nil] which pass over the tree, e.g. "01"
       # @param pid [Integer, nil] which run wrote the line
       # @param at [Time] injectable, so a caller can render a fixed clock
       # @return [String] one line, with no trailing newline
       def render(message, plan: nil, status: nil, agent: nil, seconds: nil,
-        pid: Process.pid, at: Time.now)
+        round: nil, pid: Process.pid, at: Time.now)
         columns = [
           left(at.strftime(TIME_FORMAT), TIME_WIDTH),
           left(plan, PLAN_WIDTH),
           left(status, STATUS_WIDTH),
           left(agent, AGENT_WIDTH),
+          right(round, ROUND_WIDTH),
           right(pid, PID_WIDTH),
           right(duration(seconds), SECONDS_WIDTH)
         ]

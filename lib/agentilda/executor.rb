@@ -129,6 +129,46 @@ module Agentilda
       CREDENTIAL_VARS.reject { |name| env[name].to_s.strip.empty? }
     end
 
+    # Guards {.claim_child}'s registry: under `-j` several invocations spawn
+    # at once, and two of them finding the same fresh child would put one pid
+    # on two spinner lines.
+    CHILDREN_MUTEX = Mutex.new
+    @claimed_children = []
+
+    # The pid of a `claude` child this process spawned and nobody has claimed
+    # yet, so a spinner line can name the process it is narrating.
+    #
+    # TTY::Command never exposes the pid it spawned, so this reads the
+    # process table instead: direct children of this process whose command is
+    # `claude`. With several invocations racing, first-come order cannot say
+    # which child belongs to which caller — a claimed pid might in principle
+    # label a sibling's line — which is why the pid decorates the UI and is
+    # never used to signal or kill anything.
+    #
+    # @param parent [Integer]
+    # @param listing [String, nil] `ps` output, injectable for the suite
+    # @return [Integer, nil] nil when no unclaimed child is found
+    def self.claim_child(parent: Process.pid, listing: nil)
+      listing ||= `ps -ax -o pid=,ppid=,command= 2>/dev/null`
+      CHILDREN_MUTEX.synchronize do
+        pid = listing.lines.filter_map { |line|
+          child, ppid, command = line.strip.split(/\s+/, 3)
+          child.to_i if ppid.to_i == parent && command.to_s.match?(%r{(\A|/)claude(\s|\z)})
+        }.find { |candidate| !@claimed_children.include?(candidate) }
+        @claimed_children << pid if pid
+        pid
+      end
+    end
+
+    # Forget a finished invocation's pid, so the registry does not grow for
+    # the life of a long run and a recycled pid stays claimable.
+    #
+    # @param pid [Integer, nil]
+    # @return [void]
+    def self.release_child(pid)
+      CHILDREN_MUTEX.synchronize { @claimed_children.delete(pid) } if pid
+    end
+
     # What `claude` said, out of the four labelled sections
     # {TTY::Command::ExitError} builds its message from.
     #
@@ -241,7 +281,14 @@ module Agentilda
       control = (Control.register(@trace_dir, "#{subject.feature.ordinal}-#{agent.name}") if @interactive)
 
       begin
+        hunted = false
         @command.run(*invocation(agent, subject, root:, control:), timeout: @timeout) do |out, _err|
+          # Once, on the first chunk: the child exists by the time it has
+          # produced output, and a `ps` per chunk would be a `ps` per token.
+          unless hunted
+            hunted = true
+            transcript.pid = self.class.claim_child
+          end
           transcript.push(out)
           abort_if_over(transcript)
         end
@@ -258,6 +305,7 @@ module Agentilda
         return failure(transcript, started, "claude #{reason_for(e, transcript)} — trace: #{trace}")
       ensure
         Control.release(control) if control
+        self.class.release_child(transcript.pid)
       end
 
       if transcript.failed?
