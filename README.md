@@ -243,6 +243,7 @@ agentilda run --commit --timeout 1800      # give slow agents 30 minutes, not th
 agentilda run --commit --agent yoda-writer --prompt "Rework the risks section first"
 agentilda run --commit --skip hansolo-reviewer   # everyone but the reviewer; its plans wait
 agentilda run --commit --model opus        # this model for every agent, whatever each declares
+agentilda run --commit --max-tokens 200000 # per-invocation budget, stated to the agent and enforced
 agentilda unblock 003                      # what 003 is still waiting on a human for
 agentilda unblock 003 --commit             # fold in whatever has been answered
 agentilda states                           # the whole machine, as a diagram
@@ -262,6 +263,22 @@ When an agent finishes and the plan has genuinely advanced — its folder rename
 
 `--skip NAME` (comma-separated for several) is the inverse: the named agent is never assigned, its plans simply wait, and the rest of the pipeline runs as usual. A skipped agent whose work already exists on disk costs nothing — the per-round resync still advances any folder whose contents justify the next state, which hands it to the next agent. A misspelled name is refused rather than silently skipping nobody, and `--agent X --skip X` is refused as the contradiction it is.
 
+### The keyboard, while a run is in flight
+
+When STDIN is a terminal, the loop listens for single keys. `h` or `?` pops up the bindings; the others reach the running agents:
+
+| Key   | What it does                                                                                    |
+| ----- | ----------------------------------------------------------------------------------------------- |
+| `w`   | ask every running agent to wrap up the essential remainder as fast as possible                   |
+| `n`   | ask agents to write out what they have and stop; the loop continues, so chaining hands the plan to the next agent |
+| `q`   | write out, stop everything, and quit — agents get a 60-second grace to save, then are terminated |
+
+`claude -p` takes no input once started, so the keys work through a **control file** per invocation: the agent's prompt names the file and tells it to poll between steps; a keypress writes `WRAP_UP` or `STOP` into every file currently registered. Like the rest of the prompt that is a request — an agent mid-tool-call reacts at its next step — which is why `q` also arms a deadline the harness enforces: anything still running when the grace runs out is aborted, and `--timeout` remains the backstop behind that. Control files only exist when somebody is actually at the keys; a piped or scripted run gets neither the listener nor the polling instructions.
+
+### Token budgets
+
+`--max-tokens N` caps what one invocation may spend — input plus output, sub-agents included. The number is stated in the agent's prompt so it can plan the work to fit and write results to disk before the meter runs out; the harness aborts the invocation once the live token count crosses N, reported like a timeout. A prompt is a request, a check is a guarantee — the statement in the prompt is only honest because the meter makes it true.
+
 ### Timeouts, and defaults from a config file
 
 One agent gets `--timeout` seconds before it is abandoned (default: 900). A researcher that reads two sibling repositories can genuinely need more, and an agent killed at the cap loses everything it had not yet written.
@@ -272,7 +289,7 @@ Defaults for `run` can live in `~/.local/config/agentilda.json`, keyed by comman
 { "run": { "timeout": 1800, "jobs": 4 } }
 ```
 
-A flag actually typed beats the file, the file beats the built-in, and an unreadable file is refused rather than silently ignored. The file can supply `timeout`, `jobs`, `rounds`, `log` and `chain` — never `--commit`: a run that writes is something a person asks for each time.
+A flag actually typed beats the file, the file beats the built-in, and an unreadable file is refused rather than silently ignored. The file can supply `timeout`, `jobs`, `rounds`, `log`, `chain` and `max_tokens` — never `--commit`: a run that writes is something a person asks for each time.
 
 ### Isolation, and why it is the default
 

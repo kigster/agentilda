@@ -11,6 +11,10 @@
 RSpec.describe Agentilda::CLI::Run, :tree do
   subject(:command) { described_class.new }
 
+  # A suite run from a terminal must never have the listener put that
+  # terminal into raw mode and eat the developer's keys byte by byte.
+  before { allow(Agentilda::Keyboard).to receive(:listen).and_return(nil) }
+
   def run(**options)
     out = CapturedStream.new
     err = CapturedStream.new
@@ -183,6 +187,33 @@ RSpec.describe Agentilda::CLI::Run, :tree do
 
       expect(unwrapped(err)).to include("No agent called obi-wan", "luke-backend")
       expect(status).to eq(65)
+    end
+
+  end
+
+  describe "--max-tokens" do
+    before { building_plan }
+
+    it "hands the budget to the executor" do
+      with_executor
+      run(commit: true, max_tokens: "50000")
+
+      expect(Agentilda::Executor).to have_received(:new).with(hash_including(max_tokens: 50_000))
+    end
+
+    it "reads a default budget from the config file" do
+      allow(Agentilda::Config).to receive(:for).with(:run).and_return(max_tokens: 80_000)
+      with_executor
+      run(commit: true)
+
+      expect(Agentilda::Executor).to have_received(:new).with(hash_including(max_tokens: 80_000))
+    end
+
+    it "meters nothing when neither names a budget" do
+      with_executor
+      run(commit: true)
+
+      expect(Agentilda::Executor).to have_received(:new).with(hash_including(max_tokens: nil))
     end
   end
 

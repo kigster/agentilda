@@ -12,6 +12,13 @@ module Agentilda
   #            appeared. A prompt is a request; a check is a guarantee, and only
   #            one of them survives a model deciding it knows better.
   class Executor
+    # Raised from inside the streaming block to stop an invocation
+    # mid-flight — the token budget crossed, or the grace period after `q`
+    # run out. TTY::Command's reader thread re-raises it out of `run`, and
+    # its `ensure` terminates the child on the way, so raising here is how
+    # the child is killed rather than merely abandoned.
+    class Aborted < StandardError; end
+
     # What one invocation did, and what it spent doing it.
     #
     # {#to_ary} is deliberate: every caller of {Executor#call} destructures
@@ -190,8 +197,16 @@ module Agentilda
     # @param model [String, nil] what `run --model` typed. The flag actually
     #   typed beats what an agent's frontmatter declares, the same precedence
     #   every other flag here follows; nil leaves each agent its own choice.
+    # @param max_tokens [Integer, nil] budget per invocation, input plus
+    #   output, sub-agents included. The prompt states it so the agent can
+    #   plan to finish inside it, and the meter enforces it so the statement
+    #   is true. nil is unmetered.
+    # @param interactive [Boolean] whether someone is at the keyboard. Only
+    #   then does each invocation get a control file, because a prompt that
+    #   says "poll this file" when nothing will ever write to it is asking
+    #   for wasted reads all run long.
     def initialize(root:, command: TTY::Command.new(printer: :null), timeout: 900, dry_run: false,
-      trace_dir: TRACE_DIR, instructions: nil, model: nil)
+      trace_dir: TRACE_DIR, instructions: nil, model: nil, max_tokens: nil, interactive: false)
       @root = File.expand_path(root)
       @command = command
       @timeout = timeout
@@ -199,6 +214,8 @@ module Agentilda
       @trace_dir = trace_dir
       @instructions = instructions.to_s.strip
       @model = model
+      @max_tokens = max_tokens
+      @interactive = interactive
     end
 
     # @return [String]
@@ -221,12 +238,17 @@ module Agentilda
       before = head(root)
       trace = trace_path(agent, subject)
       transcript = Transcript.new(trace:, &on_progress)
+      control = (Control.register(@trace_dir, "#{subject.feature.ordinal}-#{agent.name}") if @interactive)
 
       begin
-        @command.run(*invocation(agent, subject, root:), timeout: @timeout) do |out, _err|
+        @command.run(*invocation(agent, subject, root:, control:), timeout: @timeout) do |out, _err|
           transcript.push(out)
+          abort_if_over(transcript)
         end
         transcript.finish
+      rescue Aborted => e
+        transcript.finish
+        return failure(transcript, started, "aborted: #{e.message} — trace: #{trace}")
       rescue TTY::Command::TimeoutExceeded
         transcript.finish
         return failure(transcript, started,
@@ -234,6 +256,8 @@ module Agentilda
       rescue TTY::Command::ExitError => e
         transcript.finish
         return failure(transcript, started, "claude #{reason_for(e, transcript)} — trace: #{trace}")
+      ensure
+        Control.release(control) if control
       end
 
       if transcript.failed?
@@ -275,12 +299,12 @@ module Agentilda
     # @param agent [Agentilda::Agent]
     # @param subject [Agentilda::Subject]
     # @return [Array<String>]
-    def invocation(agent, subject, root: @root)
+    def invocation(agent, subject, root: @root, control: nil)
       # `--include-partial-messages` is what the token meter runs on. Without
       # it the stream reports a settled input count and a placeholder output
       # count — 2 for a four-thousand-token answer — and a spinner counting
       # what came back would read zero all run. See {Transcript#meter}.
-      argv = ["claude", "-p", prompt_for(agent, subject, root), "--add-dir", root,
+      argv = ["claude", "-p", prompt_for(agent, subject, root, control:), "--add-dir", root,
         "--output-format", "stream-json", "--verbose", "--include-partial-messages"]
       denied = denied_for(agent)
       argv += ["--disallowedTools", denied.join(",")] unless denied.empty?
@@ -329,7 +353,7 @@ module Agentilda
     # @param agent [Agentilda::Agent]
     # @param subject [Agentilda::Subject]
     # @return [String]
-    def prompt_for(agent, subject, root = @root)
+    def prompt_for(agent, subject, root = @root, control: nil)
       <<~PROMPT
         #{agent.prompt}
 
@@ -343,7 +367,7 @@ module Agentilda
         Repository root: #{root}
 
         #{"The folder's name is not currently justified: #{subject.violation}" if subject.violation}
-        #{operator_instructions}
+        #{operator_instructions}#{budget_section}#{control_section(control)}
         ## Boundary — enforced, not requested
 
         You may read anything, and write source, tests and the plan's own
@@ -361,6 +385,53 @@ module Agentilda
         Claim what you are about to write with ~/.claude/agent-lock.sh first,
         and release it when you are done.
       PROMPT
+    end
+
+    # The budget crossed, or the grace period after `q` spent — checked as
+    # each chunk of output arrives, which is as often as an agent can be
+    # observed at all. An agent producing nothing is the timeout's problem.
+    #
+    # @param transcript [Agentilda::Transcript]
+    # @return [void]
+    # @raise [Agentilda::Executor::Aborted]
+    def abort_if_over(transcript)
+      spent = transcript.up + transcript.down
+      if @max_tokens&.positive? && spent > @max_tokens
+        raise Aborted, "token budget of #{@max_tokens} exceeded (↑#{transcript.up} ↓#{transcript.down})"
+      end
+      raise Aborted, "still running #{Control::GRACE}s after q" if Control.overdue?
+    end
+
+    # The section `run --max-tokens` adds. Stating the number is what lets
+    # the agent finish before it, rather than discovering the cap by dying
+    # on it with half a file written.
+    #
+    # @return [String]
+    def budget_section
+      return "" unless @max_tokens&.positive?
+
+      "\n## Token budget — #{@max_tokens} tokens, enforced\n\n" \
+        "This invocation is aborted once its total spend (input plus output, " \
+        "sub-agents included) crosses #{@max_tokens} tokens. Budget the work: " \
+        "plan what fits, write results to disk as you go, and finish — or " \
+        "write a handoff note into the plan folder — before the meter runs " \
+        "out. Anything unwritten at the cap is lost.\n"
+    end
+
+    # The section a control file adds, present only when someone is at the
+    # keyboard to write into it.
+    #
+    # @param control [String, nil]
+    # @return [String]
+    def control_section(control)
+      return "" if control.nil?
+
+      "\n## Control file — poll it between steps\n\n" \
+        "    #{control}\n\n" \
+        "Read this file before each significant step. Empty means carry on. " \
+        "A line saying WRAP_UP means finish the essential remainder as fast " \
+        "as possible. STOP means write what you have to disk, note where you " \
+        "stopped in the plan folder's markdown, and end your turn now.\n"
     end
 
     # The section `run --prompt` adds, labelled as coming from the person who
