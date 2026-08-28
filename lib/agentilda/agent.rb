@@ -43,8 +43,12 @@ module Agentilda
     FRONTMATTER = /\A---\s*\n(.*?)\n---\s*\n(.*)\z/m
 
     # @param dir [String]
-    def initialize(dir: DEFAULT_DIR)
+    # @param roster [Array<Agentilda::Agent>, nil] a pre-selected list, used
+    #   by {#only} and {#without} to derive a narrower roster; nil (the
+    #   default) loads every definition in `dir`
+    def initialize(dir: DEFAULT_DIR, roster: nil)
       @dir = File.expand_path(dir)
+      @all = roster
     end
 
     # @return [String]
@@ -58,6 +62,28 @@ module Agentilda
     # @param name [String]
     # @return [Agentilda::Agent, nil]
     def find(name) = all.find { |a| a.name == name.to_s }
+
+    # A roster holding only the agents named — what `run --agent` hands the
+    # loop, so a restriction typed at the command line restricts assignments
+    # and not merely chaining.
+    #
+    # @param names [Array<String>]
+    # @return [Agentilda::Agents]
+    def only(*names)
+      wanted = names.flatten.map(&:to_s)
+      self.class.new(dir:, roster: all.select { |a| wanted.include?(a.name) })
+    end
+
+    # A roster without the agents named — what `run --skip` hands the loop.
+    # A plan sitting in a skipped agent's state is simply never assigned, the
+    # same way a state no agent handles is stepped around.
+    #
+    # @param names [Array<String>]
+    # @return [Agentilda::Agents]
+    def without(*names)
+      unwanted = names.flatten.map(&:to_s)
+      self.class.new(dir:, roster: all.reject { |a| unwanted.include?(a.name) })
+    end
 
     # Every agent the query could mean. An exact name wins outright; failing
     # that the query matches as a prefix, and failing that anywhere in the
