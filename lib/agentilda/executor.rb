@@ -184,13 +184,17 @@ module Agentilda
     # @param timeout [Integer] seconds before one agent is abandoned
     # @param dry_run [Boolean] plan the invocation, do not run it
     # @param trace_dir [String] where each invocation's raw stream is kept
+    # @param instructions [String, nil] what `run --prompt` typed, appended
+    #   to the agent's own prompt. The command only accepts it alongside
+    #   `--agent`, so exactly one agent ever hears it.
     def initialize(root:, command: TTY::Command.new(printer: :null), timeout: 900, dry_run: false,
-      trace_dir: TRACE_DIR)
+      trace_dir: TRACE_DIR, instructions: nil)
       @root = File.expand_path(root)
       @command = command
       @timeout = timeout
       @dry_run = dry_run
       @trace_dir = trace_dir
+      @instructions = instructions.to_s.strip
     end
 
     # @return [String]
@@ -334,7 +338,7 @@ module Agentilda
         Repository root: #{root}
 
         #{"The folder's name is not currently justified: #{subject.violation}" if subject.violation}
-
+        #{operator_instructions}
         ## Boundary — enforced, not requested
 
         You may read anything, and write source, tests and the plan's own
@@ -352,6 +356,17 @@ module Agentilda
         Claim what you are about to write with ~/.claude/agent-lock.sh first,
         and release it when you are done.
       PROMPT
+    end
+
+    # The section `run --prompt` adds, labelled as coming from the person who
+    # started the run so the agent can tell a one-off steer from its own
+    # standing definition.
+    #
+    # @return [String]
+    def operator_instructions
+      return "" if @instructions.empty?
+
+      "\n## Operator instructions — this invocation only\n\n#{@instructions}\n"
     end
 
     # Spelled out in the prompt as well as withheld at the tool layer, because
