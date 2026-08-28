@@ -187,14 +187,18 @@ module Agentilda
     # @param instructions [String, nil] what `run --prompt` typed, appended
     #   to the agent's own prompt. The command only accepts it alongside
     #   `--agent`, so exactly one agent ever hears it.
+    # @param model [String, nil] what `run --model` typed. The flag actually
+    #   typed beats what an agent's frontmatter declares, the same precedence
+    #   every other flag here follows; nil leaves each agent its own choice.
     def initialize(root:, command: TTY::Command.new(printer: :null), timeout: 900, dry_run: false,
-      trace_dir: TRACE_DIR, instructions: nil)
+      trace_dir: TRACE_DIR, instructions: nil, model: nil)
       @root = File.expand_path(root)
       @command = command
       @timeout = timeout
       @dry_run = dry_run
       @trace_dir = trace_dir
       @instructions = instructions.to_s.strip
+      @model = model
     end
 
     # @return [String]
@@ -281,7 +285,8 @@ module Agentilda
       denied = denied_for(agent)
       argv += ["--disallowedTools", denied.join(",")] unless denied.empty?
       argv += ["--allowedTools", agent.allowed_tools.join(",")] unless agent.allowed_tools.empty?
-      argv += ["--model", agent.model] if agent.model
+      model = @model || agent.model
+      argv += ["--model", model] if model
       argv
     end
 

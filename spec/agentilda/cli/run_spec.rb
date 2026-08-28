@@ -207,6 +207,17 @@ RSpec.describe Agentilda::CLI::Run, :tree do
     end
   end
 
+  describe "--model" do
+    before { building_plan }
+
+    it "hands the override to the executor" do
+      with_executor
+      run(commit: true, model: "opus")
+
+      expect(Agentilda::Executor).to have_received(:new).with(hash_including(model: "opus"))
+    end
+  end
+
   describe "--skip" do
     before { building_plan }
 

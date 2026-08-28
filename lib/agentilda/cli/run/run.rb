@@ -17,6 +17,8 @@ module Agentilda
       option :prompt, desc: "Extra instructions appended to the agent's prompt (only with --agent)"
       option :skip, desc: "Never assign this agent; its plans wait, the rest of the pipeline runs. " \
         "Comma separated for several"
+      option :model, desc: "Model for every agent this run, overriding each agent's own frontmatter " \
+        "(default: what the agent declares, else the claude CLI's default)"
       option :plan, aliases: ["--plans"],
         desc: "Only these plans, comma separated: NNN or NNN.MM, e.g. --plan 003,005.01. Default: the whole tree"
       option :root, desc: "Repository root the agents work in (default: the .plans parent)"
@@ -94,7 +96,7 @@ module Agentilda
           worktree: (Worktree.new(root:) if isolation == :worktree),
           max_rounds: (options[:rounds] || config[:rounds] || 10).to_i,
           executor: Executor.new(root:, timeout:, dry_run: !commit?(options),
-            instructions: options[:prompt]), dry_run: !commit?(options),
+            instructions: options[:prompt], model: options[:model]), dry_run: !commit?(options),
           publisher: publisher_for(root, isolation, options)
         )
 
