@@ -49,6 +49,18 @@ RSpec.describe Agentilda::Executor, :tree do
     it "adds no operator section when none were supplied" do
       expect(argv[2]).not_to include("Operator instructions")
     end
+
+    it "runs the model the agent's frontmatter declares" do
+      expect(argv.each_cons(2).to_a).to include(["--model", "fable"])
+    end
+
+    # The same precedence every flag here follows: typed beats declared.
+    it "lets --model override the agent's own declaration" do
+      overridden = described_class.new(root:, command:, model: "opus").invocation(agent, subject_plan)
+
+      expect(overridden.each_cons(2).to_a).to include(["--model", "opus"])
+      expect(overridden.join(" ")).not_to include("fable")
+    end
   end
 
   # The autonomy boundary is closed by default and opened per agent, in the

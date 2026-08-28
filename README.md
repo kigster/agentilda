@@ -221,7 +221,7 @@ ______________________________________________________________________
 
 ## The multi-agent harness
 
-Specialists are defined in `agents/*.md`. The frontmatter routes them (`handles:`/`advances_to:` are exactly what `agentilda run` reads to decide who takes a plan); the body is the prompt.
+Specialists are defined in `agents/*.md`. The frontmatter routes them (`handles:`/`advances_to:` are exactly what `agentilda run` reads to decide who takes a plan); the body is the prompt. An agent's `model:` picks what it runs on; `run --model NAME` overrides that for every agent in the run, typed flag beating declared frontmatter.
 
 | Agent               | Handles | Advances to | Does                                                                      |
 | :------------------ | :------ | :---------- | :------------------------------------------------------------------------ |
@@ -242,6 +242,7 @@ agentilda run --commit --plan 003,005.01   # only these plans, see below
 agentilda run --commit --timeout 1800      # give slow agents 30 minutes, not the default 15
 agentilda run --commit --agent yoda-writer --prompt "Rework the risks section first"
 agentilda run --commit --skip hansolo-reviewer   # everyone but the reviewer; its plans wait
+agentilda run --commit --model opus        # this model for every agent, whatever each declares
 agentilda unblock 003                      # what 003 is still waiting on a human for
 agentilda unblock 003 --commit             # fold in whatever has been answered
 agentilda states                           # the whole machine, as a diagram
