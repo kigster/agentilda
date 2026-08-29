@@ -174,7 +174,7 @@ ______________________________________________________________________
 
 ```bash
 agentilda create tax rule dsl          # 003.00-⚪️--tax-rule-dsl
-agentilda create --after 002 k1 sync   # 002.01-⬜️-k1-sync (retroactive)
+agentilda create --after 002 k1 sync   # 002.01-⬜️--k1-sync (retroactive)
 agentilda list-plans                   # the table; exits 1 if a name lies
 agentilda resync dirs                  # folder emoji vs folder contents
 agentilda resync prs                   # [NNN.MM] prefixes on PR titles
