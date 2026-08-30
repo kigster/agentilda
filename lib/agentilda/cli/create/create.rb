@@ -6,8 +6,8 @@ module Agentilda
     class Create < Base
       desc "Create the next numbered plan folder"
 
-      argument :words, type: :array, required: true,
-        desc: "The topic, two to five words; becomes the folder slug"
+      argument :words, type: :array, required: false, default: [],
+        desc: "The topic, two to five words; becomes the folder slug. Omit when --from names it"
 
       option :after, aliases: ["-a"],
         desc: "Create a retroactive plan in the gap after this plan, e.g. 002"
@@ -21,6 +21,8 @@ module Agentilda
         desc: "For a new feature (no --prs), attempt spec.md's four headings from project context via `claude`. --no-draft leaves them bare"
       option :open, type: :boolean, default: true,
         desc: "Open the new spec.md in the system editor when done (macOS `open`). --no-open leaves it for you to open"
+      option :from, aliases: ["-f"],
+        desc: "Seed from a markdown file: its frontmatter `title:` names the folder, its body opens spec.md and leads the draft"
 
       # noinspection RubyMismatchedArgumentType
       example [
@@ -29,7 +31,8 @@ module Agentilda
         "--after 002 schedule k1             # 002.01-🕰️-schedule-k1 (documented after the fact)",
         "--after 018 --prs 12,15 verify      # …and write spec.md from what those PRs did",
         "--after 018 --pr https://…/pull/12 verify",
-        "--status ready billing sync         # opens at ⭐️ instead of ⚪️"
+        "--status ready billing sync         # opens at ⭐️ instead of ⚪️",
+        "--from notes/tax-dsl.md             # title and opening prose from the file's frontmatter and body"
       ]
 
       # @param words [Array<String>]
@@ -39,17 +42,57 @@ module Agentilda
         dir = options.fetch(:dir, Agentilda::PLANS_DIR)
         FileUtils.mkdir_p(dir)
 
+        words, seed = resolve_seed(words, options)
         prs = fetch_prs(options)
         result = Creator.new(dir:).create(words:, after: options[:after],
           status: options[:status], prs:)
 
         result.either(
-          ->(path) { created(path, prs, options) },
+          ->(path) { created(path, prs, options, seed:) },
           ->(message) { refuse("Could not create the plan:\n#{message}", 65) }
         )
       end
 
       private
+
+      # `--from FILE` trades the words argument for a markdown file: the
+      # frontmatter's `title:` names the folder, and the body travels on to
+      # {Brief} as the author's own opening statement. Words and a file are
+      # two answers to one question — the folder's name — so holding both is
+      # refused rather than silently ranked.
+      #
+      # @param words [Array<String>]
+      # @param options [Hash]
+      # @return [Array(Array<String>, String, nil)] the slug words, and the
+      #   seed body when a file supplied them
+      def resolve_seed(words, options)
+        file = options[:from]
+        return [words, nil] unless file
+
+        refuse("--from names the topic by its frontmatter title;\n" \
+               "drop the words, or drop --from", 64) unless words.empty?
+        refuse("--prs reconstructs spec.md from the pull requests, so a seed file\n" \
+               "would be ignored; use one or the other", 64) if options[:prs]
+        refuse("Could not read the seed file:\n#{file} does not exist", 66) unless File.file?(file)
+
+        title, body = parse_seed(File.read(file, encoding: "UTF-8"))
+        refuse("The seed file needs a frontmatter title, e.g.\n" \
+               "---\ntitle: Tax Rule DSL\n---", 65) if title.to_s.strip.empty?
+
+        [title.split, body]
+      end
+
+      # @param content [String]
+      # @return [Array(String, nil, String)] title and body
+      def parse_seed(content)
+        match = Agentilda::Agents::FRONTMATTER.match(content)
+        return [nil, content] unless match
+
+        meta = YAML.safe_load(match[1]) || {}
+        [meta["title"].to_s, match[2].strip]
+      rescue Psych::Exception
+        [nil, content]
+      end
 
       # A retroactive plan documents work that landed *somewhere* in the
       # sequence, and only its author knows where. Guessing would put the
@@ -78,12 +121,12 @@ module Agentilda
       # @param prs [Array<Hash>, nil]
       # @param options [Hash]
       # @return [void]
-      def created(path, prs, options)
+      def created(path, prs, options, seed: nil)
         from_prs = prs && !prs.empty?
         path = if from_prs
                  synthesize(path, options) if options.fetch(:spec, true)
                else
-                 brief(path, options)
+                 brief(path, options, seed:)
         end || path
         puts path
         return if quiet?(options)
@@ -123,16 +166,19 @@ module Agentilda
       # @param path [String]
       # @param options [Hash]
       # @return [String] +path+, unchanged
-      def brief(path, options)
+      def brief(path, options, seed: nil)
         feature = Feature.parse(path)
         return path if feature.status.key == :retroactive
 
         root = options[:root] || File.dirname(path, 2)
-        brief = Brief.new(path:, title: feature.title, root:)
+        brief = Brief.new(path:, title: feature.title, root:, seed:)
         brief.write_scaffold!
 
         if options.fetch(:draft, true)
-          ok, note = UI.spinning("Drafting spec.md from project context") { brief.attempt! }
+          # Painted the way Runner::Task#label paints a roster agent, so the
+          # half-agent reads as one of them on the terminal.
+          label = "#{UI.paint(Brief::AGENT_NAME, :yellow, :bold)}  drafting spec.md from project context"
+          ok, note = UI.spinning(label) { brief.attempt! }
           warn_about_draft(note) unless ok
         end
 

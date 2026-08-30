@@ -17,6 +17,12 @@ module Agentilda
   # missing that heading forces both of them to first reconstruct a boundary
   # this class already had for free — it just created the folder.
   class Brief
+    # The half-agent's name. It has no `agents/*.md` of its own on purpose —
+    # a roster entry would put it in `Runner`'s routing, and this pass runs
+    # only inside `create`. The name exists so the UI can show it the same
+    # way it shows `leah-researcher` and `yoda-writer` on their spinner lines.
+    AGENT_NAME = "anakin-briefster"
+
     HEADINGS = [
       "What we are trying to achieve",
       "Why it matters",
@@ -35,7 +41,12 @@ module Agentilda
     # Long enough for a handful of Read/Grep/Glob calls over a local
     # checkout; short enough that a hung `claude` does not stall `create`
     # past the point where the scaffold is already there to open by hand.
-    TIMEOUT = 240
+    TIMEOUT = 60
+
+    # The fastest model, and the draft is disposable: the prompt prefers an
+    # honest blank over a clever inference, so there is no reasoning premium
+    # worth paying a larger model for inside a 60-second budget.
+    BRIEF_MODEL = "haiku"
 
     # Read-only, and no `Bash` — this pass surveys what the repository
     # already says about itself, it does not go looking further. That is
@@ -50,24 +61,36 @@ module Agentilda
     # @param command [TTY::Command]
     # @param timeout [Integer] seconds before the drafting attempt is abandoned
     # @param dry_run [Boolean] plan the invocation, do not run it
-    def initialize(path:, title:, root:, command: TTY::Command.new(printer: :null), timeout: TIMEOUT, dry_run: false)
+    # @param seed [String, nil] what the author already wrote about the
+    #   feature (`create --from`); opens spec.md and outranks the repo survey
+    def initialize(path:, title:, root:, command: TTY::Command.new(printer: :null), timeout: TIMEOUT,
+      dry_run: false, seed: nil)
       @path = path
       @title = title
       @root = File.expand_path(root)
       @command = command
       @timeout = timeout
       @dry_run = dry_run
+      @seed = seed.to_s.strip.then { |s| s.empty? ? nil : s }
     end
 
     # @return [String]
     attr_reader :path, :title, :root
 
+    # @return [String, nil]
+    attr_reader :seed
+
     # @return [String] absolute path to the spec, whether or not it exists yet
     def spec_path = File.join(path, "spec.md")
 
-    # @return [String] the title and four empty headings, nothing else
+    # The title and four empty headings — and, when `create --from` supplied
+    # one, the author's own prose between them, so the file already says
+    # something even if the drafting attempt never returns.
+    #
+    # @return [String]
     def scaffold
-      "# #{title}\n\n" + HEADINGS.map { |h| "## #{h}\n\n" }.join("\n")
+      opening = seed ? "#{seed}\n\n" : ""
+      "# #{title}\n\n#{opening}" + HEADINGS.map { |h| "## #{h}\n\n" }.join("\n")
     end
 
     # @return [String] where it was written
@@ -101,7 +124,9 @@ module Agentilda
     #
     # @return [Array<String>]
     def invocation
-      ["claude", "-p", prompt, "--add-dir", root,
+      ["claude",
+        "-p", prompt, "--add-dir", root,
+        "--model", BRIEF_MODEL,
         "--allowedTools", ALLOWED_TOOLS.join(","),
         "--disallowedTools", DENIED_TOOLS.join(",")]
     end
@@ -111,7 +136,7 @@ module Agentilda
     # @return [String]
     def prompt
       <<~PROMPT
-        A new plan folder was just created for a feature that does not exist
+        #{author_statement}A new plan folder was just created for a feature that does not exist
         yet: "#{title}".
 
         #{spec_path} holds a title and four empty headings:
@@ -136,18 +161,46 @@ module Agentilda
 
         #{context}
         #{backlog}
-        Edit #{spec_path} in place. Keep the title and the four `##`
+        Edit #{spec_path} in place. Keep the title#{", the author's opening prose" if seed} and the four `##`
         headings exactly as they are, in order; add prose under them; write
         nothing outside them; touch no other file.
       PROMPT
     end
 
+    # The author's own words lead the prompt, ahead of even the feature's
+    # announcement, because they outrank everything this pass could survey:
+    # where the seed and the repository disagree, the seed is the intent and
+    # the repository is merely the past.
+    #
+    # @return [String] empty without a seed
+    def author_statement
+      return "" unless seed
+
+      <<~STATEMENT
+        The author has already written the following about this feature. It
+        is the primary source: where it answers one of the headings, draw
+        from it first, and use the repository survey below only to supplement
+        it — never to contradict it.
+
+        #{seed}
+
+      STATEMENT
+    end
+
+    # AGENTS.md is commonly a symlink to CLAUDE.md; realpath-deduping keeps
+    # the shared content from being inlined twice into every drafting prompt.
+    #
     # @return [String]
     def context
+      seen = []
       found = CONTEXT_FILES.filter_map { |name|
         file = File.join(root, name)
         next unless File.file?(file)
 
+        real = File.realpath(file)
+        next if seen.include?(real)
+
+        seen << real
         "### #{name}\n\n#{File.read(file, encoding: "UTF-8")}"
       }
       return "" if found.empty?
@@ -164,7 +217,11 @@ module Agentilda
       file = File.join(root, BACKLOG_FILE)
       return "" unless File.file?(file)
 
-      "## #{BACKLOG_FILE}\n\n#{File.read(file, encoding: "UTF-8")}\n"
+      "## #{BACKLOG_FILE}\n\n" \
+        "If this backlog mentions \"#{title}\", treat that entry as " \
+        "authoritative for `## Why it matters` — it is the project's own " \
+        "statement of intent.\n\n" \
+        "#{File.read(file, encoding: "UTF-8")}\n"
     end
   end
 end
