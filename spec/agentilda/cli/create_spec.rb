@@ -114,6 +114,19 @@ RSpec.describe Agentilda::CLI::Create, :tree do
       expect(brief).to have_received(:attempt!)
     end
 
+    # The half-agent wears its name on the spinner line the way roster agents
+    # do on theirs, so a `create` reads like any other agent at work. The line
+    # itself only draws on a TTY, so the seam is the phrase handed to the UI.
+    it "names anakin-briefster on the progress line" do
+      with_brief(result: [true, "drafted"])
+      allow(Agentilda::UI).to receive(:spinning).and_call_original
+
+      run("tax", "rule", "dsl", open: false)
+
+      expect(Agentilda::UI).to have_received(:spinning)
+        .with(a_string_including(Agentilda::Brief::AGENT_NAME))
+    end
+
     # The scaffold survives a failed draft, so the failure must not read as a
     # failed `create` — the folder is fine, only the convenience fell through.
     it "reports a draft that did not finish without failing the create" do
@@ -123,6 +136,68 @@ RSpec.describe Agentilda::CLI::Create, :tree do
       expect(out.strip).to end_with("000.00-⚪️--tax-rule-dsl")
       expect(unwrapped(err)).to include("timed out after 240s", "Fill them in by hand")
       expect(status).to eq(0)
+    end
+  end
+
+  describe "--from a seed file" do
+    def seed_file(content)
+      File.join(Dir.mktmpdir("seed"), "notes.md").tap { |f| File.write(f, content) }
+    end
+
+    let(:seeded) do
+      seed_file(<<~MD)
+        ---
+        title: Tax Rule DSL
+        ---
+        Rules should read like the statute they encode.
+      MD
+    end
+
+    it "names the folder from the frontmatter title, no words needed" do
+      out, = run(from: seeded, draft: false, open: false)
+
+      expect(File.basename(out.strip)).to eq("000.00-⚪️--tax-rule-dsl")
+    end
+
+    it "opens spec.md with the author's own prose, ahead of the headings" do
+      out, = run(from: seeded, draft: false, open: false)
+      spec = File.read(File.join(out.strip, "spec.md"))
+
+      expect(spec.index("statute they encode")).to be < spec.index("## What we are trying to achieve")
+    end
+
+    it "hands the seed on to the drafting prompt as the primary source" do
+      captured = nil
+      allow(Agentilda::Brief).to receive(:new).and_wrap_original { |m, **kw|
+        captured = kw[:seed]
+        m.call(**kw)
+      }
+      run(from: seeded, draft: false, open: false)
+
+      expect(captured).to include("statute they encode")
+    end
+
+    it "refuses words and --from together — two answers to one name" do
+      _out, err, status = run("tax", "rule", "dsl", from: seeded, draft: false, open: false)
+
+      expect(unwrapped(err)).to include("drop the words, or drop --from")
+      expect(status).to eq(64)
+    end
+
+    it "refuses a file that is not there, before minting anything" do
+      _out, err, status = run(from: "/no/such/notes.md", draft: false, open: false)
+
+      expect(unwrapped(err)).to include("does not exist")
+      expect(status).to eq(66)
+      expect(Dir.children(plans_root)).to be_empty
+    end
+
+    it "refuses a seed with no frontmatter title — the folder needs a name" do
+      bare = seed_file("Just prose, no frontmatter.")
+      _out, err, status = run(from: bare, draft: false, open: false)
+
+      expect(unwrapped(err)).to include("frontmatter title")
+      expect(status).to eq(65)
     end
   end
 

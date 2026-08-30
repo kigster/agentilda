@@ -59,6 +59,10 @@ RSpec.describe Agentilda::Brief, :tree do
       expect(argv.each_cons(2).to_a).to include(["--allowedTools", described_class::ALLOWED_TOOLS.join(",")])
     end
 
+    it "pins the fastest model — the draft is disposable, speed is the point" do
+      expect(argv.each_cons(2).to_a).to include(["--model", described_class::BRIEF_MODEL])
+    end
+
     it "denies the web and the shell — this is a local survey, not research" do
       expect(argv.each_cons(2).to_a).to include(["--disallowedTools", described_class::DENIED_TOOLS.join(",")])
       expect(described_class::DENIED_TOOLS).to include("WebFetch", "WebSearch", "Bash")
@@ -89,6 +93,17 @@ RSpec.describe Agentilda::Brief, :tree do
       end
     end
 
+    context "when AGENTS.md is a symlink to CLAUDE.md" do
+      before do
+        File.write(File.join(root, "CLAUDE.md"), "We build widgets.")
+        File.symlink(File.join(root, "CLAUDE.md"), File.join(root, "AGENTS.md"))
+      end
+
+      it "inlines the shared content once, not twice" do
+        expect(argv[2].scan("We build widgets.").count).to eq(1)
+      end
+    end
+
     context "when the project has no context files" do
       it "still produces a usable prompt, just without a project-context section" do
         expect(argv[2]).not_to include("## Project context")
@@ -104,11 +119,50 @@ RSpec.describe Agentilda::Brief, :tree do
       it "inlines it into the prompt" do
         expect(argv[2]).to include("requested by ops")
       end
+
+      it "tells the model the backlog's word on the feature is authoritative" do
+        expect(argv[2]).to include("authoritative for `## Why it matters`")
+      end
     end
 
     context "when there is no backlog" do
       it "does not claim there is one" do
         expect(argv[2]).not_to include(described_class::BACKLOG_FILE)
+      end
+    end
+
+    context "when `create --from` supplied the author's own prose" do
+      let(:brief) do
+        described_class.new(path:, title: "Widget Export Flow", root:,
+          seed: "Exports must round-trip through the ledger.")
+      end
+
+      it "leads the prompt with it, ahead of everything surveyed" do
+        prompt = argv[2]
+
+        expect(prompt.index("round-trip through the ledger"))
+          .to be < prompt.index("A new plan folder was just created")
+      end
+
+      it "ranks it above the repository survey" do
+        expect(argv[2]).to include("primary source", "never to contradict it")
+      end
+
+      it "tells the model the opening prose is as untouchable as the headings" do
+        expect(argv[2]).to include("the author's opening prose")
+      end
+
+      it "opens the scaffold with it, so the file says something even if the draft never lands" do
+        scaffold = brief.scaffold
+
+        expect(scaffold.index("round-trip through the ledger"))
+          .to be < scaffold.index("## What we are trying to achieve")
+      end
+    end
+
+    context "without a seed" do
+      it "carries no author section — an empty banner would read as missing prose" do
+        expect(argv[2]).not_to include("primary source")
       end
     end
   end

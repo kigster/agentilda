@@ -133,11 +133,13 @@ module Agentilda
 
         #{headings}
 
-        It then makes a best-effort attempt at each from what the project already
-        has on disk — its own docs, `#{Agentilda::Brief::BACKLOG_FILE}` when the project keeps one,
-        anything already downloaded or already built that bears on the topic — and
-        opens the result for a human to finish. `--no-draft` skips the attempt and
-        leaves the headings bare; `--no-open` leaves the file for you to open.
+        `#{Agentilda::Brief::AGENT_NAME}` — a half-agent: it runs only inside `create` and
+        holds no roster entry — then makes a best-effort attempt at each from what
+        the project already has on disk — its own docs, `#{Agentilda::Brief::BACKLOG_FILE}` when
+        the project keeps one, anything already downloaded or already built that
+        bears on the topic — and opens the result for a human to finish.
+        `--no-draft` skips the attempt and leaves the headings bare; `--no-open`
+        leaves the file for you to open.
 
         **Nothing else belongs in that first pass.** It writes no `## Goals`, no
         `## Non-Goals`, no conclusions — deciding those before `leah-researcher` and
