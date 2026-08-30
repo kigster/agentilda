@@ -174,6 +174,7 @@ ______________________________________________________________________
 
 ```bash
 agentilda create tax rule dsl          # 003.00-⚪️--tax-rule-dsl
+agentilda create --from notes/dsl.md   # named by the file's frontmatter title; its body opens spec.md
 agentilda create --after 002 k1 sync   # 002.01-⬜️--k1-sync (retroactive)
 agentilda list-plans                   # the table; exits 1 if a name lies
 agentilda resync dirs                  # folder emoji vs folder contents
@@ -283,7 +284,7 @@ When STDIN is a terminal, the loop listens for single keys. `h` or `?` pops up t
 
 ### Timeouts, and defaults from a config file
 
-One agent gets `--timeout` seconds before it is abandoned (default: 900). A researcher that reads two sibling repositories can genuinely need more, and an agent killed at the cap loses everything it had not yet written.
+One agent gets `--timeout` seconds before it is abandoned (default: 900). A researcher that reads two sibling repositories can genuinely need more, and an agent killed at the cap loses everything it had not yet written. An agent can also declare its own clock with `timeout:` in its frontmatter, which beats the run-wide value for that agent alone. Whichever clock applies is drawn on the agent's progress line as a countdown, grey until the last minute and red from there, so "working" and "about to be abandoned" stop looking identical.
 
 Defaults for `run` can live in `~/.local/config/agentilda.json`, keyed by command:
 

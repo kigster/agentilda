@@ -209,7 +209,7 @@ module Agentilda
 
       results = UI.concurrently(tasks, "round #{number} — #{tasks.size} plans", jobs:,
         label: :label.to_proc, fields: :log_fields.to_proc, failure: FAILURE,
-        header: {round: format("%02d", number)}) do |task, progress|
+        header: {round: format("%02d", number)}, timeout: timeout_for) do |task, progress|
         attempt(task, &progress)
       end
 
@@ -234,6 +234,18 @@ module Agentilda
         hops + [finish(task, last)]
       end
       Round.new(number:, attempts:)
+    end
+
+    # Each line's countdown starts from that agent's own clock. The executor
+    # is a seam the suite fills with doubles that answer only `call`, so a
+    # stand-in without the method simply draws no timer rather than failing
+    # the round.
+    #
+    # @return [Proc] task -> seconds, or nil when the executor keeps no clock
+    def timeout_for
+      return UI::NO_TIMEOUT unless @executor.respond_to?(:timeout_for)
+
+      ->(task) { @executor.timeout_for(task.agent) }
     end
 
     # Give the task somewhere to work. Under isolation that is a fresh git

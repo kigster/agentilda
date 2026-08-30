@@ -167,6 +167,68 @@ RSpec.describe Agentilda::UI do
     end
   end
 
+  describe ".countdown" do
+    it "reads minutes and seconds, the run default as 15:00" do
+      expect(described_class.countdown(900)).to include("15:00")
+    end
+
+    it "occupies the same width with one minute digit as with two" do
+      narrow = described_class.display_width(described_class.countdown(59))
+      wide = described_class.display_width(described_class.countdown(900))
+
+      expect(narrow).to eq(wide)
+    end
+
+    it "draws nothing for a line that has no deadline" do
+      expect(described_class.countdown(nil)).to eq("")
+    end
+
+    it "turns red inside the warning window" do
+      allow(described_class).to receive(:color?).and_return(true)
+      calm = described_class.countdown(described_class::TIMER_WARNING + 1)
+      urgent = described_class.countdown(described_class::TIMER_WARNING)
+
+      aggregate_failures do
+        expect(calm).not_to include("\e[31m")
+        expect(urgent).to include("\e[31m")
+      end
+    end
+  end
+
+  describe "Line's countdown" do
+    let(:spinner) { instance_spy(TTY::Spinner) }
+
+    # The executor's kill and the ticker's wake-up race by up to a second;
+    # a clock must floor at zero rather than accuse the line of overdraft.
+    it "counts down from the timeout and never below zero" do
+      line = described_class::Line.new(spinner:, timeout: 300)
+
+      aggregate_failures do
+        expect(line.remaining).to eq(300)
+        allow(described_class).to receive(:monotonic).and_return(described_class.monotonic + 400)
+        expect(line.remaining).to eq(0)
+      end
+    end
+
+    it "keeps no clock when no timeout was given" do
+      expect(described_class::Line.new(spinner:).remaining).to be_nil
+    end
+
+    it "puts the timer on the spinner as soon as the line starts" do
+      described_class::Line.new(spinner:, timeout: 300).start
+
+      expect(spinner).to have_received(:update).with(timer: a_string_including("5:00"))
+    end
+
+    it "stops ticking once the line is done" do
+      line = described_class::Line.new(spinner:, timeout: 300)
+      line.start
+      line.done
+
+      expect(line.instance_variable_get(:@ticker)).to be_nil
+    end
+  end
+
   describe ".abbreviate" do
     it "keeps small numbers exact and large ones short" do
       counts = [512, 4900, 121_000, 1_590_000, 12_000_000].map { |n| described_class.abbreviate(n) }
@@ -480,7 +542,7 @@ RSpec.describe Agentilda::UI do
       described_class.concurrently(%i[a b], "round", jobs: 2) { |item, _line| item }
 
       expect(child).to have_received(:update)
-        .with(meter: a_string_including("↑0"), activity: "", pid: "").at_least(:twice)
+        .with(timer: "", meter: a_string_including("↑0"), activity: "", pid: "").at_least(:twice)
     end
 
     it "marks a failing item's own line failed and keeps the error as its result" do

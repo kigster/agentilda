@@ -31,6 +31,16 @@ module Agentilda
     # has to line up with the agent lines under it.
     NO_FIELDS = ->(_item) { {} }
 
+    # What an item's countdown starts from when its caller has no opinion:
+    # nothing, so no timer is drawn. A line without a deadline showing 0:00
+    # forever would read as an agent perpetually out of time.
+    NO_TIMEOUT = ->(_item) {}
+
+    # The countdown turns red with this many seconds left — late enough to
+    # stay calm through a normal run, early enough to look up before the
+    # executor pulls the plug.
+    TIMER_WARNING = 60
+
     # How a block's RETURN VALUE is judged when its caller has no opinion:
     # nothing is ever a failure. The distinction exists because {Runner}'s
     # executor reports failure by returning a not-ok result rather than by
@@ -50,13 +60,17 @@ module Agentilda
       # @param fields [Hash] plan, status and agent, for the log's columns
       # @param spinner [TTY::Spinner, nil] nil where nothing is being drawn
       # @param mark [String] what the spinner says once the work succeeds
-      def initialize(fields: {}, spinner: nil, mark: "")
+      # @param timeout [Integer, nil] seconds until the executor abandons
+      #   this agent; drawn as a countdown on the line, nil draws nothing
+      def initialize(fields: {}, spinner: nil, mark: "", timeout: nil)
         @fields = fields
         @spinner = spinner
         @mark = mark
+        @timeout = timeout
         @started = UI.monotonic
         @phrase = nil
         @pid = nil
+        @ticker = nil
       end
 
       # @return [Float] seconds this agent has been alive
@@ -72,7 +86,46 @@ module Agentilda
       # @return [void]
       def start
         @spinner&.update(pid: identity)
+        tick
         note("started")
+      end
+
+      # What remains on this agent's clock, or nil when it has none. Floored
+      # at zero: the executor's kill and this thread's wake-up race by up to
+      # a second, and a line reading `-0:01` accuses the wrong party.
+      #
+      # @return [Integer, nil]
+      def remaining
+        return nil unless @timeout
+
+        [@timeout - seconds, 0].max.round
+      end
+
+      # The countdown, redrawn once a second on its own thread. Progress
+      # updates cannot drive it — they arrive only while the agent is
+      # talking, and a stalled agent is exactly when the clock matters most.
+      #
+      # @return [void]
+      def tick
+        return unless @spinner && @timeout
+
+        @spinner.update(timer: UI.countdown(remaining))
+        @ticker ||= Thread.new do
+          loop do
+            sleep(1)
+            left = remaining
+            @spinner.update(timer: UI.countdown(left))
+            break unless left.positive?
+          end
+        rescue
+          # A dying spinner must not take the round down with it.
+        end
+      end
+
+      # @return [void]
+      def stop_ticker
+        @ticker&.kill
+        @ticker = nil
       end
 
       # What sits between the agent's name and its activity: the `claude`
@@ -92,6 +145,7 @@ module Agentilda
 
       # @return [void]
       def done
+        stop_ticker
         @spinner&.success(@mark)
         note("finished after #{alive}")
       end
@@ -99,6 +153,7 @@ module Agentilda
       # @param reason [String]
       # @return [void]
       def failed(reason)
+        stop_ticker
         @spinner&.error(UI.paint(reason, :red))
         note("failed after #{alive}: #{reason}")
       end
@@ -190,6 +245,24 @@ module Agentilda
       def meter(update)
         paint(fit("↑#{abbreviate(update&.up)}", METER_WIDTH), :bright_blue) +
           paint(fit("↓#{abbreviate(update&.down)}", METER_WIDTH), :bright_magenta)
+      end
+
+      # Cells the countdown takes, `MM:SS ` included — the run default of
+      # 900s reads `15:00`, and padding to a fixed width keeps the columns
+      # to its right from stepping sideways once `9:59` loses a digit.
+      TIMER_WIDTH = 6
+
+      # The countdown that sits between the spinner and the meter: what is
+      # left of the agent's timeout, quiet grey until the last
+      # {TIMER_WARNING} seconds, red from there down.
+      #
+      # @param left [Integer, nil] seconds remaining; nil draws nothing
+      # @return [String]
+      def countdown(left)
+        return "" if left.nil?
+
+        text = fit(format("%d:%02d", left / 60, left % 60), TIMER_WIDTH)
+        paint(text, left <= TIMER_WARNING ? :red : :bright_black)
       end
 
       # Token counts run to seven figures, and seven figures on a spinner line
@@ -297,7 +370,7 @@ module Agentilda
       # @yieldparam item [Object]
       # @return [Array] one result per item, in input order
       def concurrently(items, message, jobs:, label: :to_s.to_proc, fields: NO_FIELDS,
-        failure: NO_FAILURE, header: {}, &block)
+        failure: NO_FAILURE, header: {}, timeout: NO_TIMEOUT, &block)
         list = items.to_a
         return [] if list.empty?
 
@@ -305,7 +378,7 @@ module Agentilda
 
         if jobs <= 1 || list.size <= 1
           report_line(message) unless animate?
-          return list.map { |item| once(item, label, fields, failure:, &block) }
+          return list.map { |item| once(item, label, fields, failure:, timeout:, &block) }
         end
 
         return threaded(list, jobs, message, label:, fields:, failure:, &block) unless animate?
@@ -319,8 +392,8 @@ module Agentilda
 
         list.each_with_index do |item, index|
           text = label.call(item)
-          child = spinners.register("[:spinner] :meter#{text}:pid:activity") do |spinner|
-            line = Line.new(fields: fields.call(item), spinner:)
+          child = spinners.register("[:spinner] :timer:meter#{text}:pid:activity") do |spinner|
+            line = Line.new(fields: fields.call(item), spinner:, timeout: timeout.call(item))
             line.start
             result = results[index] = block.call(item, line)
             if (reason = failure.call(result))
@@ -336,7 +409,7 @@ module Agentilda
           # says so until its agent gets far enough to have news. The meter
           # starts at zero for the same reason, and because a counter that
           # appears once the first number arrives shifts the whole line.
-          child.update(meter: meter(nil), activity: "", pid: "")
+          child.update(timer: "", meter: meter(nil), activity: "", pid: "")
         end
 
         spinners.auto_spin
@@ -373,10 +446,10 @@ module Agentilda
       # @param label [Proc]
       # @yieldparam item [Object]
       # @return [Object]
-      def once(item, label, fields = NO_FIELDS, failure: NO_FAILURE, &block)
+      def once(item, label, fields = NO_FIELDS, failure: NO_FAILURE, timeout: NO_TIMEOUT, &block)
         text = label.call(item)
         line = Line.new(fields: fields.call(item), mark: paint("done", :bright_black),
-          spinner: (solo_spinner(text) if animate?))
+          timeout: timeout.call(item), spinner: (solo_spinner(text) if animate?))
         line.start
         begin
           result = block.call(item, line)
@@ -402,9 +475,9 @@ module Agentilda
       # @param text [String]
       # @return [TTY::Spinner]
       def solo_spinner(text)
-        spinner = TTY::Spinner.new("[:spinner] :meter#{text}:pid:activity", format: :dots, output: $stderr,
+        spinner = TTY::Spinner.new("[:spinner] :timer:meter#{text}:pid:activity", format: :dots, output: $stderr,
           success_mark: paint("✓", :green), error_mark: paint("✖", :red))
-        spinner.update(meter: meter(nil), activity: "", pid: "")
+        spinner.update(timer: "", meter: meter(nil), activity: "", pid: "")
         spinner.auto_spin
         spinner
       end

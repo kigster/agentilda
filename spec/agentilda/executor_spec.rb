@@ -80,7 +80,7 @@ RSpec.describe Agentilda::Executor, :tree do
   def agent_with(network: false, may: [])
     Agentilda::Agent.new(
       name: "x", description: "", handles: [:new], advances_to: :planned, model: nil,
-      allowed_tools: [], may:, network:, prompt: "do it", path: "x.md"
+      allowed_tools: [], may:, network:, timeout: nil, prompt: "do it", path: "x.md"
     )
   end
 
@@ -93,6 +93,18 @@ RSpec.describe Agentilda::Executor, :tree do
   # process table for a `claude` child of its own process, claiming each so
   # two parallel invocations never put one pid on two spinner lines. The pid
   # decorates the UI only; nothing signals or kills through it.
+  describe "#timeout_for" do
+    it "prefers the agent's own clock over the run-wide default" do
+      slow = agent.with(timeout: 1800)
+
+      expect(executor.timeout_for(slow)).to eq(1800)
+    end
+
+    it "falls back to the run-wide default for an agent that declares none" do
+      expect(executor.timeout_for(agent)).to eq(900)
+    end
+  end
+
   describe ".claim_child" do
     let(:listing) do
       <<~PS
