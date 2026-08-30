@@ -1,7 +1,7 @@
 PATH
   remote: .
   specs:
-    agentilda (1.0.1)
+    agentilda (1.0.2)
       aasm
       concurrent-ruby
       dry-cli
@@ -190,7 +190,7 @@ CHECKSUMS
   RubyInline (3.14.4) sha256=75aec9bb7626a56a6c443922d1d299e1f062795f1d7b7195b0b863ca3776d9ab
   ZenTest (4.12.2) sha256=814e7478a28f631df8f802aee40bd1faa2a53df1fb50e086eb8655f9ee5d60b9
   aasm (6.0.0) sha256=c96ce60ea9574eb194e33f29d801be430b8cade2f31c8a5d137a9870ee39d404
-  agentilda (1.0.1)
+  agentilda (1.0.2)
   ast (2.4.3) sha256=954615157c1d6a382bc27d690d973195e79db7f55e9765ac7c481c60bdb4d383
   bigdecimal (4.1.2) sha256=53d217666027eab4280346fba98e7d5b66baaae1b9c3c1c0ffe89d48188a3fbd
   bundler (4.0.19) sha256=b48056e4c77fb3853cc47775b5447ede44aaa4f53c32f168014ab4fe86587d47
