@@ -272,11 +272,11 @@ When an agent finishes and the plan has genuinely advanced — its folder rename
 
 When STDIN is a terminal, the loop listens for single keys. `h` or `?` pops up the bindings; the others reach the running agents:
 
-| Key   | What it does                                                                                    |
-| ----- | ----------------------------------------------------------------------------------------------- |
-| `w`   | ask every running agent to wrap up the essential remainder as fast as possible                   |
-| `n`   | ask agents to write out what they have and stop; the loop continues, so chaining hands the plan to the next agent |
-| `q`   | write out, stop everything, and quit — agents get a 60-second grace to save, then are terminated |
+| Key | What it does                                                                                                      |
+| --- | ----------------------------------------------------------------------------------------------------------------- |
+| `w` | ask every running agent to wrap up the essential remainder as fast as possible                                    |
+| `n` | ask agents to write out what they have and stop; the loop continues, so chaining hands the plan to the next agent |
+| `q` | write out, stop everything, and quit — agents get a 60-second grace to save, then are terminated                  |
 
 `claude -p` takes no input once started, so the keys work through a **control file** per invocation: the agent's prompt names the file and tells it to poll between steps; a keypress writes `WRAP_UP` or `STOP` into every file currently registered. Like the rest of the prompt that is a request — an agent mid-tool-call reacts at its next step — which is why `q` also arms a deadline the harness enforces: anything still running when the grace runs out is aborted, and `--timeout` remains the backstop behind that. Control files only exist when somebody is actually at the keys; a piped or scripted run gets neither the listener nor the polling instructions.
 

@@ -2,13 +2,11 @@
 
 ## What we are trying to achieve
 
-1. Best-effort reading, from the layout on disk and the branch name (`kig/refactor-and-directory-naming`): regroup the roughly forty flat files under `lib/agentilda/` into module subdirectories, the way `lib/agentilda/linear/` and `lib/agentilda/cli/` are already grouped, and rename directories so that file paths, module namespaces and the mirrored `spec/agentilda/` tree all agree. If a command uses another Ruby file (eg cli/create/create.rb uses lib/creator.rb, then move creator under cli/create.rb and rename create.rb into command.rb). So the cli/create folder will have `command.rb` that uses `creator.rb`. The only except to this is when a file such as `creator.rb` is used by mulitple commands. In which case created a module called lib/agentilda/shared and place such files there. 
+1. Best-effort reading, from the layout on disk and the branch name (`kig/refactor-and-directory-naming`): regroup the roughly forty flat files under `lib/agentilda/` into module subdirectories, the way `lib/agentilda/linear/` and `lib/agentilda/cli/` are already grouped, and rename directories so that file paths, module namespaces and the mirrored `spec/agentilda/` tree all agree. If a command uses another Ruby file (eg cli/create/create.rb uses lib/creator.rb, then move creator under cli/create.rb and rename create.rb into command.rb). So the cli/create folder will have `command.rb` that uses `creator.rb`. The only except to this is when a file such as `creator.rb` is used by mulitple commands. In which case created a module called lib/agentilda/shared and place such files there.
 
-2. The directory rename is very simple. The emoji which are unicode take up two bytes but the dash that follows get swallen up by the emoji (see the screenshot below). Therefore after the emoji please insert two dashes "--" to create space between the emjoi and the slug of the directory.
+1. The directory rename is very simple. The emoji which are unicode take up two bytes but the dash that follows get swallen up by the emoji (see the screenshot below). Therefore after the emoji please insert two dashes "--" to create space between the emjoi and the slug of the directory.
 
-3. ![CleanShot 2026-08-28 at 12.32.38](/Users/kig/Library/Application Support/CleanShot/media/media_EICoGDbFn7/CleanShot 2026-08-28 at 12.32.38.png)
-
-   
+1. !\[CleanShot 2026-08-28 at 12.32.38\](/Users/kig/Library/Application Support/CleanShot/media/media_EICoGDbFn7/CleanShot 2026-08-28 at 12.32.38.png)
 
 ## Why it matters
 
@@ -34,6 +32,7 @@ The agentilda gem currently consists of 32 Ruby files directly under `lib/agenti
 Supporting this, the test structure mirrors the source exactly: `spec/agentilda/` has one spec file per source file.
 
 **Dependency Graph**: Analysis reveals a clean, acyclic dependency structure with 7 tiers:
+
 - **Tier 0** (infrastructure): ui, config, markdown, github, viewer, linear
 - **Tier 1** (domain models): ordinal, status, state_machine, feature, pull_request
 - **Tier 2** (queries): tree, github (read-only), markdown
@@ -50,29 +49,32 @@ No circular dependencies exist, and hub files (runner, executor, resync) follow 
 Research across 5 major Ruby gems (Devise, Sidekiq, Sequel, Pundit, Dry-rb) reveals consistent patterns:
 
 **Optimal Structure for 30-100 File Gems**:
+
 - **2 levels of nesting maximum** for most cases (e.g., `Devise::Strategies::Base`)
 - **Domain-driven grouping** rather than architectural layers (strategies, models, adapters)
 - **One primary constant per file**, with file paths matching module names exactly
 - **Central require point** (entry point file) that loads components in dependency order
 - **Conditional Rails integration** for framework-aware gems
 
-**Require Patterns**:
-Three approaches were observed with trade-offs:
+**Require Patterns**: Three approaches were observed with trade-offs:
 
 1. **Explicit require** (traditional, used by Sidekiq, Pundit):
+
    ```ruby
    # Full control over load order
    require 'pundit/error'
    require 'pundit/policy_finder'
    ```
 
-2. **Autoload** (lazy loading, deprecated):
+1. **Autoload** (lazy loading, deprecated):
+
    ```ruby
    # Devise pattern, now superseded
    autoload :Controllers, 'devise/controllers'
    ```
 
-3. **Zeitwerk** (modern, used by Dry-rb, Rails 6+):
+1. **Zeitwerk** (modern, used by Dry-rb, Rails 6+):
+
    ```ruby
    # Automatic based on naming conventions
    loader = Zeitwerk::Loader.for_gem
@@ -80,6 +82,7 @@ Three approaches were observed with trade-offs:
    ```
 
 For agentilda, **explicit require is recommended** because:
+
 - Current codebase already uses this pattern
 - Load order matters (domain before operations before execution)
 - SimpleCov integration depends on predictable loading
@@ -133,29 +136,33 @@ lib/agentilda/
 ```
 
 **Why This Structure Works**:
+
 1. **Natural dependency flow**: Domain → Queries → Commands → Execution
-2. **Scales comfortably**: The 8 groups accommodate 30-150 files with 2-3 nesting levels
-3. **Clear semantics**: Module name tells you what's inside without reading code
-4. **Matches industry patterns**: Identical structure to Devise, Sidekiq success stories
-5. **Zero user impact**: All `Agentilda::*` constants remain unchanged (only internal paths change)
+1. **Scales comfortably**: The 8 groups accommodate 30-150 files with 2-3 nesting levels
+1. **Clear semantics**: Module name tells you what's inside without reading code
+1. **Matches industry patterns**: Identical structure to Devise, Sidekiq success stories
+1. **Zero user impact**: All `Agentilda::*` constants remain unchanged (only internal paths change)
 
 ### Directory Naming: Unicode Emoji Spacing
 
 The second part of "rename directories" addresses the visual alignment issue with emojis in plan folder names. The problem stems from Unicode character width complexities:
 
 **The Issue**:
+
 - Emojis are multi-byte UTF-8 characters with varying display widths
 - The 🅱️ (Product Block) emoji has **display width 1** instead of expected width 2
 - Most terminals render emoji as width 2, but some (notably certain Linux configurations) render as width 1
 - This breaks terminal table column alignment and causes the slug to appear to "swallow" the dash
 
 **Example**:
+
 ```
 Without fix:  000.00-🅱️-example-name  ← dash visually disappears
 With fix:     000.00-🅱️-- example-name  ← clear visual separation
 ```
 
 **Technical Details**:
+
 - UTF-8 uses variation selectors (FE0E for text, FE0F for emoji) to control presentation
 - Zero-Width Joiners (ZWJ) combine multiple codepoints into single emoji
 - `Unicode::DisplayWidth` gem (already in `Gemfile`) provides portable width calculation
@@ -164,6 +171,7 @@ With fix:     000.00-🅱️-- example-name  ← clear visual separation
 **Recommendation**: In plan folder names like `.plans/000.00-🅱️-plan-slug`, insert an extra dash after any emoji: `.plans/000.00-🅱️--plan-slug`. This is handled by the directory renaming logic in `Agentilda.move_directory`.
 
 **One-line Fix for Immediate Issue**: Replace 🅱️ with ⛔ (No Entry, width 2) in `lib/agentilda/status.rb` line 225. The ⛔ emoji:
+
 - Has correct display width 2 on all platforms
 - Maintains semantic meaning (blocking)
 - Requires no code changes beyond the emoji character itself
@@ -173,18 +181,21 @@ With fix:     000.00-🅱️-- example-name  ← clear visual separation
 **Phase-Based Approach** (2-3 weeks):
 
 **Phase 1: Setup** (2-3 days)
+
 - Create target directory structure
 - Update `lib/agentilda.rb` require statements
 - Create module entry points if needed
 - Establish test baseline (SimpleCov should show >95%)
 
 **Phase 2: Move Core Domain Layer** (3-4 days)
+
 - Move ordinal, status, state_machine, feature, pull_request into `models/`
 - Update all require paths
 - Run full test suite after each batch (5 files max per batch)
 - Commit atomically per batch
 
 **Phase 3: Move Remaining Layers** (5-7 days)
+
 - queries/ → 2 days
 - commands/ → 2 days
 - execution/ → 1 day
@@ -194,42 +205,47 @@ With fix:     000.00-🅱️-- example-name  ← clear visual separation
 - Run tests after each layer
 
 **Phase 4: Cleanup & Documentation** (2-3 days)
+
 - Delete old flat files
 - Update CLAUDE.md Layout section
 - Verify derived docs still generate correctly
 - Update README if any paths are documented
 
 **Risk Mitigation**:
+
 1. **Test coverage is safety net**: SimpleCov catches regressions
-2. **No circular dependencies**: Verified by AST analysis before moving
-3. **Git preserves history**: `git mv` maintains blame and history
-4. **Incremental commits**: Enables `git bisect` if issues arise later
-5. **Module names unchanged**: No external API changes for users
+1. **No circular dependencies**: Verified by AST analysis before moving
+1. **Git preserves history**: `git mv` maintains blame and history
+1. **Incremental commits**: Enables `git bisect` if issues arise later
+1. **Module names unchanged**: No external API changes for users
 
 ### Critical Success Factors
 
 1. **Run tests after every file batch** (not just at end)
-2. **Use `require_relative` consistently** in moved files
-3. **Create module entry points** (e.g., `models.rb`) if multiple files share a module
-4. **Update require order** in `lib/agentilda.rb` to match dependency tiers
-5. **Don't merge circular dependencies** - verify AST before moving files
-6. **Update documentation in parallel**, not after
+1. **Use `require_relative` consistently** in moved files
+1. **Create module entry points** (e.g., `models.rb`) if multiple files share a module
+1. **Update require order** in `lib/agentilda.rb` to match dependency tiers
+1. **Don't merge circular dependencies** - verify AST before moving files
+1. **Update documentation in parallel**, not after
 
 ### Testing & Verification
 
 **Before Starting**:
+
 ```bash
 bundle exec rspec                    # Establish baseline
 echo "Coverage should be > 95%"
 ```
 
 **After Each Phase**:
+
 ```bash
 bundle exec rspec                    # Full suite
 bundle exec rspec spec/agentilda/    # Just agentilda specs
 ```
 
 **After Completion**:
+
 ```bash
 bundle exec rspec
 agentilda docs                       # Derived docs should regenerate identically
@@ -240,24 +256,25 @@ git log --oneline                    # Should see one commit per batch
 ### Open Questions Addressed
 
 1. **Will users be affected?** No. The `Agentilda::*` constant names don't change; only the internal file paths.
-2. **What about the require patterns?** Update from `require 'agentilda/creator'` to `require 'agentilda/commands/creator'` internally; the gem's public API (`require 'agentilda'`) remains unchanged.
-3. **Do we need Zeitwerk?** No. Explicit require works well and agentilda doesn't need lazy loading.
-4. **What about documentation?** CLAUDE.md's Layout section becomes the authority, regenerated by `agentilda docs`.
-5. **Circular dependencies?** Dependency analysis found none; safe to proceed.
+1. **What about the require patterns?** Update from `require 'agentilda/creator'` to `require 'agentilda/commands/creator'` internally; the gem's public API (`require 'agentilda'`) remains unchanged.
+1. **Do we need Zeitwerk?** No. Explicit require works well and agentilda doesn't need lazy loading.
+1. **What about documentation?** CLAUDE.md's Layout section becomes the authority, regenerated by `agentilda docs`.
+1. **Circular dependencies?** Dependency analysis found none; safe to proceed.
 
 ### Findings, Conclusions & References
 
 **Key Findings**:
-1. Agentilda's existing code follows clean architectural principles (no circular dependencies)
-2. The 2-level nesting structure proposed aligns with industry best practices (Devise, Sidekiq, Sequel)
-3. 32 flat files are at the threshold where directory organization becomes valuable
-4. SimpleCov configuration will catch any regressions automatically
-5. The directory naming issue has a simple solution (extra dash after emojis)
 
-**Conclusion**:
-This refactoring is **low-risk and high-value**. The codebase is well-structured for reorganization, tests are comprehensive, and the target structure is proven in production systems. The main work is mechanical (moving files, updating requires) rather than architectural. Success depends on incremental testing and atomic commits, not complex logic changes.
+1. Agentilda's existing code follows clean architectural principles (no circular dependencies)
+1. The 2-level nesting structure proposed aligns with industry best practices (Devise, Sidekiq, Sequel)
+1. 32 flat files are at the threshold where directory organization becomes valuable
+1. SimpleCov configuration will catch any regressions automatically
+1. The directory naming issue has a simple solution (extra dash after emojis)
+
+**Conclusion**: This refactoring is **low-risk and high-value**. The codebase is well-structured for reorganization, tests are comprehensive, and the target structure is proven in production systems. The main work is mechanical (moving files, updating requires) rather than architectural. Success depends on incremental testing and atomic commits, not complex logic changes.
 
 **References**:
+
 - Devise gem organization: [https://github.com/heartcombo/devise](https://github.com/heartcombo/devise)
 - Sidekiq architecture: [https://github.com/sidekiq/sidekiq](https://github.com/sidekiq/sidekiq)
 - Sequel database toolkit: [https://github.com/jeremyevans/sequel](https://github.com/jeremyevans/sequel)
@@ -354,5 +371,3 @@ Phases 2-3 depend on Phase 0's decision; Phase 1 does not and may run first or i
 - **Tooling already present**: `unicode-display_width` is a runtime dependency (agentilda.gemspec:56) if width-aware rendering needs adjusting; `PlansFixture` and the `:tree` tag for real-filesystem specs; `Agentilda.move_directory` for any plan-folder renames — do not write a second one.
 - **Knowledge**: `CLAUDE.md` in this repository is the map — its Layout table, the "Nothing is written down twice" table, and the baseline failure inventory (648 examples, 121 failures in five named files) are the facts this spec's success criteria are measured against.
 - **Comparison artifacts**: pre-refactoring captures of the rspec failure list, `agentilda docs`, and `agentilda states` output, produced in Phase 0 and kept until Phase 4 signs off against them.
-
-

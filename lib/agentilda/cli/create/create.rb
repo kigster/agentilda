@@ -69,15 +69,21 @@ module Agentilda
         file = options[:from]
         return [words, nil] unless file
 
-        refuse("--from names the topic by its frontmatter title;\n" \
-               "drop the words, or drop --from", 64) unless words.empty?
-        refuse("--prs reconstructs spec.md from the pull requests, so a seed file\n" \
-               "would be ignored; use one or the other", 64) if options[:prs]
+        unless words.empty?
+          refuse("--from names the topic by its frontmatter title;\n" \
+                 "drop the words, or drop --from", 64)
+        end
+        if options[:prs]
+          refuse("--prs reconstructs spec.md from the pull requests, so a seed file\n" \
+                 "would be ignored; use one or the other", 64)
+        end
         refuse("Could not read the seed file:\n#{file} does not exist", 66) unless File.file?(file)
 
         title, body = parse_seed(File.read(file, encoding: "UTF-8"))
-        refuse("The seed file needs a frontmatter title, e.g.\n" \
-               "---\ntitle: Tax Rule DSL\n---", 65) if title.to_s.strip.empty?
+        if title.to_s.strip.empty?
+          refuse("The seed file needs a frontmatter title, e.g.\n" \
+                 "---\ntitle: Tax Rule DSL\n---", 65)
+        end
 
         [title.split, body]
       end

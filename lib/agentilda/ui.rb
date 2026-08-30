@@ -262,7 +262,7 @@ module Agentilda
         return "" if left.nil?
 
         text = fit(format("%d:%02d", left / 60, left % 60), TIMER_WIDTH)
-        paint(text, left <= TIMER_WARNING ? :red : :bright_black)
+        paint(text, (left <= TIMER_WARNING) ? :red : :bright_black)
       end
 
       # Token counts run to seven figures, and seven figures on a spinner line
