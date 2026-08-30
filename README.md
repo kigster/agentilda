@@ -2,6 +2,8 @@
 
 This gem implements an agentic workflow using five specialized agents defined in the `./agents` directory.
 
+The best resource that describes it in detail is the result of running `tilda docs -o <file>` command, or the file [docs/WORKFLOW.md](docs/WORKFLOW.md).
+
 The gem offers a CLI command `tilda` (as well as `agentilda`) that performs a slew of commands aimed at producing, updating, keeping in sync any project's root directory `.plans`, that will initially contain just the `spec.md` and pull requests documents in the `.plans`, and drives a team of specialist agents over them. The agents implement the following workflow:
 
 ```
