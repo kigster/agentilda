@@ -90,4 +90,40 @@ RSpec.describe Agentilda::Agents do
       expect(agents.match("chewbacca")).to be_empty
     end
   end
+
+  describe "an agent's own timeout" do
+    it "reads a positive timeout from the frontmatter" do
+      File.write(File.join(@dir, "slowpoke.md"), <<~MD)
+        ---
+        name: slowpoke
+        description: Takes its time.
+        handles: [building]
+        timeout: 1800
+        ---
+        Prompt.
+      MD
+
+      expect(agents.find("slowpoke").timeout).to eq(1800)
+    end
+
+    it "leaves the timeout nil when the definition says nothing, deferring to the run" do
+      expect(agents.find("luke-backend").timeout).to be_nil
+    end
+
+    # A zero or negative timeout would abandon the agent before it starts;
+    # nothing an author writes should be able to mean that.
+    it "treats a non-positive timeout as unset" do
+      File.write(File.join(@dir, "hasty.md"), <<~MD)
+        ---
+        name: hasty
+        description: Misconfigured.
+        handles: [building]
+        timeout: 0
+        ---
+        Prompt.
+      MD
+
+      expect(agents.find("hasty").timeout).to be_nil
+    end
+  end
 end

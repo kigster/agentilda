@@ -261,6 +261,16 @@ module Agentilda
     # @return [String]
     attr_reader :root
 
+    # The seconds this agent gets before it is abandoned: its own
+    # `timeout:` frontmatter when it declares one, the run-wide default
+    # otherwise. Public so the UI can count the same clock down that this
+    # class will enforce — two clocks is how a timer hits zero and the
+    # agent keeps running.
+    #
+    # @param agent [Agentilda::Agent]
+    # @return [Integer]
+    def timeout_for(agent) = agent.timeout || @timeout
+
     # @param agent [Agentilda::Agent]
     # @param subject [Agentilda::Subject]
     # @return [Agentilda::Executor::Result] whether it worked, a one-line
@@ -280,9 +290,10 @@ module Agentilda
       transcript = Transcript.new(trace:, &on_progress)
       control = (Control.register(@trace_dir, "#{subject.feature.ordinal}-#{agent.name}") if @interactive)
 
+      timeout = timeout_for(agent)
       begin
         hunted = false
-        @command.run(*invocation(agent, subject, root:, control:), timeout: @timeout) do |out, _err|
+        @command.run(*invocation(agent, subject, root:, control:), timeout:) do |out, _err|
           # Once, on the first chunk: the child exists by the time it has
           # produced output, and a `ps` per chunk would be a `ps` per token.
           unless hunted
@@ -299,7 +310,7 @@ module Agentilda
       rescue TTY::Command::TimeoutExceeded
         transcript.finish
         return failure(transcript, started,
-          "timed out after #{@timeout}s, last seen #{transcript.activity || "starting up"} — trace: #{trace}")
+          "timed out after #{timeout}s, last seen #{transcript.activity || "starting up"} — trace: #{trace}")
       rescue TTY::Command::ExitError => e
         transcript.finish
         return failure(transcript, started, "claude #{reason_for(e, transcript)} — trace: #{trace}")

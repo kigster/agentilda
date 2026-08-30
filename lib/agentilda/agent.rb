@@ -24,8 +24,11 @@ module Agentilda
   # @!attribute [r] may
   #   @return [Array<String>] commands lifted from {Executor::FORBIDDEN_COMMANDS}
   #     for this agent alone. Nothing in {Executor::UNGRANTABLE} can be lifted.
+  # @!attribute [r] timeout
+  #   @return [Integer, nil] seconds before this agent is abandoned; nil
+  #     defers to the executor's run-wide default
   Agent = Data.define(:name, :description, :handles, :advances_to, :model,
-    :allowed_tools, :may, :network, :prompt, :path) do
+    :allowed_tools, :may, :network, :timeout, :prompt, :path) do
     # @return [Boolean] whether this agent changes anything on disk
     def read_only? = advances_to.nil?
 
@@ -130,6 +133,7 @@ module Agentilda
         allowed_tools: Array(meta["allowed_tools"]).map(&:to_s),
         may: Array(meta["may"]).map { |c| c.to_s.strip.squeeze(" ") },
         network: meta["network"] == true,
+        timeout: meta["timeout"].to_i.then { |s| s.positive? ? s : nil },
         prompt: match[2].strip,
         path: path
       )
