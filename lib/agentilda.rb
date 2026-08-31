@@ -119,6 +119,7 @@ end
   progress_log
   state_machine
   dev_work
+  frontmatter
   markdown
   pull_request
   description
