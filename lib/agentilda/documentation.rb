@@ -40,7 +40,7 @@ module Agentilda
         > **This file is auto generated.**
         >
         > To regenerate it, run `agentilda docs` (which by the default
-        > writes to ${HOME}/.agents/context/agentilda-workflow.md`). To override
+        > writes to ${HOME}/.agents/context/workflow.md`). To override
         > the destination, use the -o | --output <file> option.
         >
         > After changing the state machine. Editing it by hand puts it back into the

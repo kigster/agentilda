@@ -4,7 +4,7 @@ module Agentilda
   module CLI
     # `agentilda index` — the plans as one browsable page.
     class Index < Base
-      desc "Write .plans/INDEX.md: every plan, its goal, its pull requests and its documents"
+      desc "Create or update .plans/INDEX.md — a global index of every plan."
 
       option :output, aliases: ["-o"],
         desc: "Write somewhere other than <plans>/INDEX.md; - for STDOUT"

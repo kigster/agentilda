@@ -6,23 +6,43 @@ module Agentilda
     class Create < Base
       desc "Create the next numbered plan folder"
 
-      argument :words, type: :array, required: false, default: [],
-        desc: "The topic, two to five words; becomes the folder slug. Omit when --from names it"
+      argument :words,
+        type: :array,
+        required: false,
+        default: [],
+        desc:
+          "The topic, two to five words; becomes the folder slug. Omit when --from names it"
 
-      option :after, aliases: ["-a"],
-        desc: "Create a retroactive plan in the gap after this plan, e.g. 002"
-      option :status, aliases: ["-s"],
+      option :from,
+        aliases: ["-f"],
+        desc:
+          "Seed from a markdown file: its frontmatter `title:` names the folder, and its body fills the spec."
+      option :after,
+        aliases: ["-a"],
+        desc:
+          "Create a retroactive plan in the gap after this plan, e.g. 002"
+      option :status,
+        aliases: ["-s"],
         desc: "Open in a state other than the default"
-      option :prs, aliases: ["--pr"],
-        desc: "Document work that already shipped: pull request numbers or URLs, comma separated. Requires --after"
-      option :spec, type: :boolean, default: true,
-        desc: "With --prs, write spec.md from what the pull requests did. --no-spec records them and stops, which is fast and offline"
-      option :draft, type: :boolean, default: true,
-        desc: "For a new feature (no --prs), attempt spec.md's four headings from project context via `claude`. --no-draft leaves them bare"
-      option :open, type: :boolean, default: true,
-        desc: "Open the new spec.md in the system editor when done (macOS `open`). --no-open leaves it for you to open"
-      option :from, aliases: ["-f"],
-        desc: "Seed from a markdown file: its frontmatter `title:` names the folder, its body opens spec.md and leads the draft"
+      option :prs,
+        aliases: ["--pr"],
+        desc:
+          "Document work that already shipped: pull request numbers or URLs, comma separated. Requires --after"
+      option :spec,
+        type: :boolean,
+        default: true,
+        desc:
+          "With --prs, write spec.md from what the pull requests did. --no-spec records them and stops, which is fast and offline"
+      option :draft,
+        type: :boolean,
+        default: true,
+        desc:
+          "For a new feature (no --prs), attempt spec.md's four headings from project context via `claude`. --no-draft leaves them bare"
+      option :open,
+        type: :boolean,
+        default: true,
+        desc:
+          "Open the new spec.md in the system editor when done (macOS `open`). --no-open leaves it for you to open"
 
       # noinspection RubyMismatchedArgumentType
       example [
@@ -30,7 +50,7 @@ module Agentilda
         "tax rule dsl --no-draft --no-open   # scaffold only, nothing shelled out, nothing opened",
         "--after 002 schedule k1             # 002.01-🕰️-schedule-k1 (documented after the fact)",
         "--after 018 --prs 12,15 verify      # …and write spec.md from what those PRs did",
-        "--after 018 --pr https://…/pull/12 verify",
+        "--after 018 --pr https://…/pull/12 verify # verify the pull request by number or URL",
         "--status ready billing sync         # opens at ⭐️ instead of ⚪️",
         "--from notes/tax-dsl.md             # title and opening prose from the file's frontmatter and body"
       ]
@@ -44,8 +64,13 @@ module Agentilda
 
         words, seed = resolve_seed(words, options)
         prs = fetch_prs(options)
-        result = Creator.new(dir:).create(words:, after: options[:after],
-          status: options[:status], prs:)
+        result =
+          Creator.new(dir:).create(
+            words:,
+            after: options[:after],
+            status: options[:status],
+            prs:
+          )
 
         result.either(
           ->(path) { created(path, prs, options, seed:) },
@@ -67,22 +92,33 @@ module Agentilda
       #   seed body when a file supplied them
       def resolve_seed(words, options)
         file = options[:from]
-        return [words, nil] unless file
+        return words, nil unless file
 
         unless words.empty?
-          refuse("--from names the topic by its frontmatter title;\n" \
-                 "drop the words, or drop --from", 64)
+          refuse(
+            "--from names the topic by its frontmatter title;\n" \
+              "drop the words, or drop --from",
+            64
+          )
         end
         if options[:prs]
-          refuse("--prs reconstructs spec.md from the pull requests, so a seed file\n" \
-                 "would be ignored; use one or the other", 64)
+          refuse(
+            "--prs reconstructs spec.md from the pull requests, so a seed file\n" \
+              "would be ignored; use one or the other",
+            64
+          )
         end
-        refuse("Could not read the seed file:\n#{file} does not exist", 66) unless File.file?(file)
+        unless File.file?(file)
+          refuse("Could not read the seed file:\n#{file} does not exist", 66)
+        end
 
         title, body = parse_seed(File.read(file, encoding: "UTF-8"))
         if title.to_s.strip.empty?
-          refuse("The seed file needs a frontmatter title, e.g.\n" \
-                 "---\ntitle: Tax Rule DSL\n---", 65)
+          refuse(
+            "The seed file needs a frontmatter title, e.g.\n" \
+              "---\ntitle: Tax Rule DSL\n---",
+            65
+          )
         end
 
         [title.split, body]
@@ -98,7 +134,10 @@ module Agentilda
         meta, body = Frontmatter.split(content)
         [meta["title"].to_s, body.strip]
       rescue Psych::Exception => e
-        refuse("The seed file's frontmatter is not valid YAML:\n#{e.message}", 65)
+        refuse(
+          "The seed file's frontmatter is not valid YAML:\n#{e.message}",
+          65
+        )
       end
 
       # A retroactive plan documents work that landed *somewhere* in the
@@ -111,8 +150,11 @@ module Agentilda
         return nil unless options[:prs]
 
         unless options[:after]
-          refuse("--prs documents work that already shipped;\n" \
-                 "name the plan it landed after with --after, e.g. --after 018", 64)
+          refuse(
+            "--prs documents work that already shipped;\n" \
+              "name the plan it landed after with --after, e.g. --after 018",
+            64
+          )
         end
 
         GitHub.new.pull_requests(GitHub.parse_refs(options[:prs]))
@@ -130,18 +172,21 @@ module Agentilda
       # @return [void]
       def created(path, prs, options, seed: nil)
         from_prs = prs && !prs.empty?
-        path = if from_prs
-                 synthesize(path, options) if options.fetch(:spec, true)
-               else
-                 brief(path, options, seed:)
-        end || path
+        path =
+          if from_prs
+            synthesize(path, options) if options.fetch(:spec, true)
+          else
+            brief(path, options, seed:)
+          end || path
         puts path
         return if quiet?(options)
 
         feature = Feature.parse(path)
-        success("Created #{File.basename(path)}\n\n" \
-                "#{feature.status.emoji} #{feature.status.label} — #{feature.status.note}\n" \
-                "#{next_step(path, feature, from_prs:)}")
+        success(
+          "Created #{File.basename(path)}\n\n" \
+            "#{feature.status.emoji} #{feature.status.label} — #{feature.status.note}\n" \
+            "#{next_step(path, feature, from_prs:)}"
+        )
       end
 
       # Hand the folder to the writer that already knows how to write a
@@ -152,12 +197,14 @@ module Agentilda
       # @param options [Hash]
       # @return [String] the folder's path, which the resync may have renamed
       def synthesize(path, options)
-        agent = Agentilda::Agents.new.find(Agentilda::RETROACTIVE_WRITER) or return path
+        agent = Agentilda::Agents.new.find(Agentilda::RETROACTIVE_WRITER) or
+          return path
         root = options[:root] || File.dirname(path, 2)
 
-        ok, note = UI.spinning("Writing spec.md from #{File.basename(path)}") {
-          Executor.new(root:).call(agent, Subject.new(Feature.parse(path)))
-        }
+        ok, note =
+          UI.spinning("Writing spec.md from #{yellow(File.basename(path))}") do
+            Executor.new(root:).call(agent, Subject.new(Feature.parse(path)))
+          end
         warn_about(note) unless ok
 
         settle(path)
@@ -170,8 +217,9 @@ module Agentilda
       # a human to finish. The folder's state never moves: ⚪️ New only ever
       # claimed that a specification exists, not that it is complete.
       #
-      # @param path [String]
-      # @param options [Hash]
+      # @param path [String] the path to the folder
+      # @param seed [String, nil] the seed body from the `--from` file
+      # @param options [Hash] the options hash
       # @return [String] +path+, unchanged
       def brief(path, options, seed: nil)
         feature = Feature.parse(path)
@@ -184,7 +232,8 @@ module Agentilda
         if options.fetch(:draft, true)
           # Painted the way Runner::Task#label paints a roster agent, so the
           # half-agent reads as one of them on the terminal.
-          label = "#{UI.paint(Brief::AGENT_NAME, :yellow, :bold)}  drafting spec.md from project context"
+          label =
+            "#{UI.paint(Brief::AGENT_NAME, :yellow, :bold)} drafting spec.md from #{yellow(source)}"
           ok, note = UI.spinning(label) { brief.attempt! }
           warn_about_draft(note) unless ok
         end
@@ -212,23 +261,30 @@ module Agentilda
       # @return [String] where the folder ended up
       def settle(path)
         tree = Tree.new(dir: File.dirname(path))
-        change = Agentilda::Resync::Dirs.new(tree:).call(commit: true)
-          .find { |c| c.source == path }
+        change =
+          Agentilda::Resync::Dirs
+            .new(tree:)
+            .call(commit: true)
+            .find { |c| c.source == path }
         change ? change.target : path
       end
 
       # @param note [String]
       # @return [void]
       def warn_about(note)
-        error("The folder was created, but spec.md was not written:\n#{note}\n\n" \
-              "The pull requests are recorded. Run `agentilda run --commit` to retry.")
+        error(
+          "The folder was created, but spec.md was not written:\n#{note}\n\n" \
+            "The pull requests are recorded. Run `agentilda run --commit` to retry."
+        )
       end
 
       # @param note [String]
       # @return [void]
       def warn_about_draft(note)
-        error("spec.md was scaffolded, but the drafting attempt did not finish:\n#{note}\n\n" \
-              "The four headings are there, empty. Fill them in by hand, or hand off to leah-researcher.")
+        error(
+          "spec.md was scaffolded, but the drafting attempt did not finish:\n#{note}\n\n" \
+            "The four headings are there, empty. Fill them in by hand, or hand off to leah-researcher."
+        )
       end
 
       # @param path [String]
@@ -236,8 +292,15 @@ module Agentilda
       # @return [String]
       def next_step(path, feature, from_prs:)
         spec = File.join(File.basename(path), "spec.md")
-        return "Next: write #{spec}" unless feature.status.key == :new && File.file?(File.join(path, "spec.md"))
-        return "Next: read #{spec} — it was written from the pull requests, so check it against what actually shipped" if from_prs
+        unless feature.status.key == :new &&
+            File.file?(File.join(path, "spec.md"))
+          return "Next: write #{spec}"
+        end
+        if from_prs
+          return (
+            "Next: read #{spec} — it was written from the pull requests, so check it against what actually shipped"
+          )
+        end
 
         "Next: fill in the four headings in #{spec}, then hand off to leah-researcher"
       end

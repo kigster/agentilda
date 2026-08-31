@@ -5,11 +5,22 @@ require "pastel"
 
 module Dry
   class CLI
+    # Utility module for wrapping text to a given width
+    module WordWrap
+      def wrap_description(text, width: 55, prefix: "  ")
+        text.split("\n", -1).map { |para|
+          para.scan(/\S.{0,#{width - 1}}(?=\s|\z)|\S{#{width},}/).join("\n#{prefix}")
+        }.join("\n")
+      end
+    end
+
     # Command banner
     #
     # @since 0.1.0
     # @api private
     module Banner
+      extend WordWrap
+
       @color_enabled = true
 
       module ColorMethods
@@ -81,7 +92,7 @@ module Dry
       end
 
       def self.color_command(string)
-        color_enabled? ? yellow.bold(string) : string
+        color_enabled? ? green.bold(string) : string
       end
 
       def self.color_arguments(string)
@@ -110,7 +121,7 @@ module Dry
       # @since 0.1.0
       # @api private
       def self.command_name(name)
-        bright_blue("Command:\n  #{yellow(name)}")
+        color_header("Command:\n") + "  #{yellow(name)}"
       end
 
       # @since 0.1.0
@@ -130,8 +141,9 @@ module Dry
 
         "\n#{color_header("Examples")}:\n" + command.examples.map do |example|
           args, desc = example.split("#")
-          "  #{color_command(name)} #{color_arguments(args)} # #{desc}"
-        end.join("\n")
+          comment_line = (desc.nil? || desc.empty?) ? "" : "  #{bright_black("##{desc}")}\n"
+          comment_line + "  #{color_command(name)} #{color_arguments(args)}"
+        end.join("\n\n")
       end
 
       # @since 0.1.0
@@ -175,11 +187,13 @@ module Dry
         " #{result.join(" ")}" unless result.empty?
       end
 
+      DESCRIPTION_START = 25
+
       # @since 0.1.0
       # @api private
       def self.extended_command_arguments(command)
         command.arguments.map do |argument|
-          "  #{argument.name.to_s.upcase.ljust(32)}  # #{"REQUIRED " if argument.required?}#{argument.desc}"
+          "    #{argument.name.to_s.upcase.ljust(DESCRIPTION_START)}  # #{"REQUIRED " if argument.required?}#{wrap_description(argument.desc, prefix: " " * 31 + "# ")}"
         end.join("\n")
       end
 
@@ -199,19 +213,19 @@ module Dry
             "#{name}=VALUE"
           end
           name = "#{name}, #{option.alias_names.join(", ")}" if option.aliases.any?
-          name = "  --#{name.ljust(30)}"
-          name = "#{name}  # #{option.desc}"
+          name = "  --#{name.ljust(DESCRIPTION_START)}"
+          name = "#{name}  # #{wrap_description(option.desc, prefix: " " * 31 + "# ")}"
           name = "#{name}, default: #{option.default.inspect}" unless option.default.nil?
           name
         end
 
-        result << "  --#{"help, -h".ljust(30)}  # Print this help"
+        result << "  --#{"help, -h".ljust(DESCRIPTION_START)}  # Print this help"
         result.join("\n")
       end
 
       def self.build_subcommands_list(subcommands)
         subcommands.map do |subcommand_name, subcommand|
-          "  #{yellow(subcommand_name.ljust(18))}  # #{subcommand.command.description}"
+          "  #{yellow(subcommand_name.ljust(12))}  # #{red(wrap_description(subcommand.command.description))}`"
         end.join("\n")
       end
     end

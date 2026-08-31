@@ -63,8 +63,15 @@ module Agentilda
     # @param dry_run [Boolean] plan the invocation, do not run it
     # @param seed [String, nil] what the author already wrote about the
     #   feature (`create --from`); opens spec.md and outranks the repo survey
-    def initialize(path:, title:, root:, command: TTY::Command.new(printer: :null), timeout: TIMEOUT,
-      dry_run: false, seed: nil)
+    def initialize(
+      path:,
+      title:,
+      root:,
+      command: TTY::Command.new(printer: :null),
+      timeout: TIMEOUT,
+      dry_run: false,
+      seed: nil
+    )
       @path = path
       @title = title
       @root = File.expand_path(root)
