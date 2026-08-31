@@ -1,5 +1,8 @@
 #!/usr/bin/env bash
 #
+# WARNING: deprecated in favor of "tilda create <words>" or 
+# "tilda create --from <file.md>"
+#
 # create-plan-folder — create the next numbered plan folder
 #
 #   create-plan-folder [-D <dir>] <status> <topic words...>
@@ -13,6 +16,15 @@ set -eo pipefail
 
 usage() {
   echo -e "
+${bldylw}DEPRECATED:${bldred}
+  This file is deprecated for use in creating directories. Partly because
+  it does not auto-generate the spec.md inside, while 'agentilda' executable
+  does.
+
+  Please use: ${txgrn}agentilda create [ word word ... ] | [ --from file.md ]
+
+—————————————————————————————————————————————————————————————————————————————
+
 ${bldcyn}USAGE: 
   ${txtylw}create-plan-folder [-D <dir>] <status> <topic words...>${clr}
 
