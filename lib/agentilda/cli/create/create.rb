@@ -88,16 +88,17 @@ module Agentilda
         [title.split, body]
       end
 
+      # Frontmatter that will not parse used to be reported as a missing
+      # title, which sends the author looking for a `title:` line that is
+      # sitting right there. Say which of the two actually went wrong.
+      #
       # @param content [String]
-      # @return [Array(String, nil, String)] title and body
+      # @return [Array(String, String)] title and body
       def parse_seed(content)
-        match = Agentilda::Agents::FRONTMATTER.match(content)
-        return [nil, content] unless match
-
-        meta = YAML.safe_load(match[1]) || {}
-        [meta["title"].to_s, match[2].strip]
-      rescue Psych::Exception
-        [nil, content]
+        meta, body = Frontmatter.split(content)
+        [meta["title"].to_s, body.strip]
+      rescue Psych::Exception => e
+        refuse("The seed file's frontmatter is not valid YAML:\n#{e.message}", 65)
       end
 
       # A retroactive plan documents work that landed *somewhere* in the

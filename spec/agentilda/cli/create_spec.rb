@@ -199,6 +199,32 @@ RSpec.describe Agentilda::CLI::Create, :tree do
       expect(unwrapped(err)).to include("frontmatter title")
       expect(status).to eq(65)
     end
+
+    # A seed file written by hand carries a `date:`, and `YAML.safe_load` used
+    # to refuse to build one — so a file with a perfectly good title was turned
+    # away for not having a title.
+    it "names the folder from a title that shares its frontmatter with a date" do
+      dated = seed_file(<<~MD)
+        ---
+        title: Tax Rule DSL
+        date: 2026-08-31
+        author: Alan Turing
+        ---
+        Rules should read like the statute they encode.
+      MD
+      out, _err, status = run(from: dated, draft: false, open: false)
+
+      expect(File.basename(out.strip)).to eq("000.00-⚪️--tax-rule-dsl")
+      expect(status).to eq(0)
+    end
+
+    it "says the frontmatter is not YAML, rather than blaming the title" do
+      broken = seed_file("---\ntitle: [unclosed\n---\nbody\n")
+      _out, err, status = run(from: broken, draft: false, open: false)
+
+      expect(unwrapped(err)).to include("not valid YAML")
+      expect(status).to eq(65)
+    end
   end
 
   describe "a topic that produces nothing" do

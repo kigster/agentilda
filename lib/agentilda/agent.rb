@@ -1,7 +1,5 @@
 # frozen_string_literal: true
 
-require "yaml"
-
 module Agentilda
   # One specialist, loaded from `~/.agents/agents/<name>.md`.
   #
@@ -41,9 +39,6 @@ module Agentilda
   class Agents
     # Where definitions live, unless told otherwise.
     DEFAULT_DIR = File.expand_path("../../agents", __dir__)
-
-    # Frontmatter, then body.
-    FRONTMATTER = /\A---\s*\n(.*?)\n---\s*\n(.*)\z/m
 
     # @param dir [String]
     # @param roster [Array<Agentilda::Agent>, nil] a pre-selected list, used
@@ -120,8 +115,7 @@ module Agentilda
     # @param path [String]
     # @return [Agentilda::Agent, nil]
     def parse(path)
-      match = FRONTMATTER.match(File.read(path, encoding: "UTF-8")) or return nil
-      meta = YAML.safe_load(match[1]) || {}
+      meta, body = Frontmatter.split(File.read(path, encoding: "UTF-8"))
       return nil if meta["name"].to_s.empty?
 
       Agent.new(
@@ -134,7 +128,7 @@ module Agentilda
         may: Array(meta["may"]).map { |c| c.to_s.strip.squeeze(" ") },
         network: meta["network"] == true,
         timeout: meta["timeout"].to_i.then { |s| s.positive? ? s : nil },
-        prompt: match[2].strip,
+        prompt: body.strip,
         path: path
       )
     end
