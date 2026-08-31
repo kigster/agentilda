@@ -202,7 +202,7 @@ module Agentilda
         root = options[:root] || File.dirname(path, 2)
 
         ok, note =
-          UI.spinning("Writing spec.md from #{yellow(File.basename(path))}") do
+          UI.spinning("Writing spec.md from #{UI.paint(File.basename(path).to_s, :yellow)}") do
             Executor.new(root:).call(agent, Subject.new(Feature.parse(path)))
           end
         warn_about(note) unless ok
@@ -233,7 +233,7 @@ module Agentilda
           # Painted the way Runner::Task#label paints a roster agent, so the
           # half-agent reads as one of them on the terminal.
           label =
-            "#{UI.paint(Brief::AGENT_NAME, :yellow, :bold)} drafting spec.md from #{yellow(source)}"
+            "#{UI.paint(Brief::AGENT_NAME, :yellow, :bold)} drafting spec.md from #{seed}"
           ok, note = UI.spinning(label) { brief.attempt! }
           warn_about_draft(note) unless ok
         end

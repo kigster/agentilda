@@ -12,6 +12,66 @@ module Dry
           para.scan(/\S.{0,#{width - 1}}(?=\s|\z)|\S{#{width},}/).join("\n#{prefix}")
         }.join("\n")
       end
+
+      alias_method :wrap, :wrap_description
+    end
+
+    # The command list `agentilda -h` prints.
+    #
+    # Upstream renders a description on one line however long it is, so a
+    # long `desc` runs off the terminal and a two-line one drops its second
+    # line to column zero. Descriptions are wrapped here instead, hung under
+    # the `#` the way {Banner} already hangs an option's.
+    module Usage
+      extend WordWrap
+
+      # Narrowest description column worth wrapping to. Below this the
+      # hanging indent leaves no room for words.
+      MIN_DESCRIPTION_WIDTH = 24
+
+      # @param result [Dry::CLI::CommandRegistry::LookupResult]
+      # @return [String]
+      def self.call(result)
+        max_length, commands = commands_and_arguments(result)
+        column = max_length + max_length / 2
+
+        by_depth(commands).filter_map { |banner, node|
+          next if node.hidden
+
+          usage = description(node.command, column) if node.leaf?
+          "#{justify(banner, max_length, usage)}#{usage}"
+        }.unshift("Commands:").join("\n")
+      end
+
+      # A command that owns subcommands is the heading for a whole area of the
+      # tool, so it belongs above the flat commands rather than filed
+      # alphabetically among them. Alphabetical order is kept inside each group.
+      #
+      # `children?` is the direct question, `children.any?`. `leaf?` asks
+      # something else — whether the node carries a runnable command — and the
+      # two are independent: a command that also takes subcommands is both, and
+      # sorting on `leaf?` would file it with the flat commands.
+      #
+      # @param commands [Hash{String => Dry::CLI::CommandRegistry::Node}]
+      # @return [Array<Array(String, Dry::CLI::CommandRegistry::Node)>]
+      def self.by_depth(commands)
+        commands.sort_by { |banner, node| [node.children? ? 0 : 1, banner] }
+      end
+
+      # @param command [Dry::CLI::Command]
+      # @param column [Integer] the width the banner is padded to; the `#`
+      #   sits one past it, so continuation lines do too
+      # @return [String, nil]
+      def self.description(command, column = 0)
+        return unless CLI.command?(command)
+        return if command.description.nil?
+
+        prefix = "#{" " * (column + 1)}# "
+        width = [86 - prefix.length, MIN_DESCRIPTION_WIDTH].max
+        text = command.description.gsub(/\s+/, " ").strip
+
+        " # #{wrap_description(text, width: width, prefix: prefix)}"
+      end
     end
 
     # Command banner
