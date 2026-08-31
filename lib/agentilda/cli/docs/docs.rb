@@ -7,9 +7,9 @@ module Agentilda
       desc "Generate the conventions document from the state machine itself"
 
       option :output, aliases: ["-o"], desc: "Write here instead of STDOUT",
-        default: "#{ENV["HOME"]}/docs/WORKFLOW.md"
+        default: "#{ENV["HOME"]}/.agents/context/workflow.md"
 
-      example ["", "-o tentative-new-plan.md"]
+      example ["", "-o ~/.agents/context/workflow.md"]
 
       # @param options [Hash]
       # @return [void]

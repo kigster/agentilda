@@ -157,7 +157,7 @@ Use the slash commands inside a Claude Code session, since they carry the constr
 **The full conventions are generated, never hand-written:**
 
 ```bash
-agentilda docs -o context/agentilda-workflow.md
+agentilda docs -o context/workflow.md
 ```
 
 The status vocabulary and transition table live in `lib/agentilda/status.rb` and `state_machine.rb`, the numbering rules in `ordinal.rb`, and the document is derived from all three. This system previously had three hand-maintained copies of that table and they disagreed — the folder-creation script could mint statuses the reader did not recognise, and could not mint six that it required.
