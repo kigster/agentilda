@@ -74,7 +74,7 @@ RSpec.describe Dry::CLI::Banner do
     subject(:text) { banner(BannerFixture::Deploy, "agentilda deploy") }
 
     it "names the command" do
-      expect(text).to include("Command:").and include("agentilda deploy")
+      expect(text).to include("COMMAND:").and include("agentilda deploy")
     end
 
     it "shows required arguments bare and optional ones bracketed" do
@@ -118,10 +118,13 @@ RSpec.describe Dry::CLI::Banner do
       expect(text).to include("--help, -h")
     end
 
-    it "prefixes every example with the program name" do
+    # The note used to trail the command on the same line, which pushed the
+    # shell line off to the right and made it awkward to copy. It now sits
+    # above, so what you select is exactly what you paste.
+    it "puts each example's note above the line it describes, program name and all" do
       aggregate_failures do
-        expect(text).to include("agentilda deploy prod  #  ship to production")
-        expect(text).to include("agentilda deploy staging v2  #  rehearse first")
+        expect(text).to include("# ship to production\n  agentilda deploy prod")
+        expect(text).to include("# rehearse first\n  agentilda deploy staging v2")
       end
     end
   end
