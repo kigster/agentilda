@@ -426,7 +426,7 @@ module Agentilda
         Repository root: #{root}
 
         #{"The folder's name is not currently justified: #{subject.violation}" if subject.violation}
-        #{operator_instructions}#{budget_section}#{control_section(control)}
+        #{operator_instructions}#{budget_section}#{time_budget_section(agent)}#{control_section(control)}
         ## Boundary — enforced, not requested
 
         You may read anything, and write source, tests and the plan's own
@@ -475,6 +475,46 @@ module Agentilda
         "plan what fits, write results to disk as you go, and finish — or " \
         "write a handoff note into the plan folder — before the meter runs " \
         "out. Anything unwritten at the cap is lost.\n"
+    end
+
+    # The clock this invocation actually runs against, stated in the prompt so
+    # an agent can pace itself instead of discovering the ceiling by dying on
+    # it with half a file written. The number is whatever {#timeout_for} will
+    # enforce, so the prompt and the timer can never disagree — an agent whose
+    # prose names its own figure goes stale the first time someone passes
+    # `--timeout`, and stale is worse than silent.
+    #
+    # @param agent [Agentilda::Agent]
+    # @return [String]
+    def time_budget_section(agent)
+      seconds = timeout_for(agent)
+      return "" unless seconds&.positive?
+
+      minutes = (seconds / 60.0).round
+      "\n## Time budget — #{seconds} seconds, enforced\n\n" \
+        "You have about #{minutes} minute#{"s" unless minutes == 1} of wall clock, and " \
+        "nothing warns you as you approach it. At #{seconds} seconds this invocation is " \
+        "abandoned and the round is reported as failed, leaving the plan unadvanced and " \
+        "the folder in whatever state your last write left it. A timeout is not a neutral " \
+        "event.\n\n" \
+        "So work in an order that survives being cut off. Write each result to disk as you " \
+        "reach it rather than composing everything and saving at the end, and prefer a " \
+        "smaller finished piece to a larger half-finished one. Anything unwritten at the " \
+        "cap is lost.#{concurrency_advice(agent)}\n"
+    end
+
+    # Only worth saying to an agent that can actually do it. Telling an agent
+    # without `Task` to parallelise is telling it to feel bad about a tool it
+    # was not given.
+    #
+    # @param agent [Agentilda::Agent]
+    # @return [String]
+    def concurrency_advice(agent)
+      return "" unless agent.allowed_tools.include?("Task")
+
+      " Where the work divides into parts that do not read each other's output, run them " \
+        "as one wave of concurrent sub-agents rather than in series: the wave costs one " \
+        "part's wall clock, and the series costs the sum of all of them."
     end
 
     # The section a control file adds, present only when someone is at the

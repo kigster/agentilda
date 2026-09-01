@@ -505,6 +505,35 @@ RSpec.describe Agentilda::Executor, :tree do
     end
   end
 
+  # An agent that does not know its clock cannot pace itself against it, and
+  # prose naming a figure goes stale the moment anyone passes `--timeout`. So
+  # the number in the prompt is read off the same method that enforces it.
+  describe "the time budget, stated in the prompt" do
+    def prompt_for(who) = executor.invocation(who, subject_plan).join(" ")
+
+    it "names the seconds the run will actually enforce" do
+      expect(prompt_for(agent)).to include("900 seconds, enforced")
+    end
+
+    it "states the agent's own clock when it declares one, not the default" do
+      slow = agent.with(timeout: 1800)
+
+      expect(prompt_for(slow)).to include("1800 seconds, enforced").and include("about 30 minutes")
+    end
+
+    it "tells an agent that can fan out to spend its budget concurrently" do
+      expect(agent.allowed_tools).to include("Task")
+      expect(prompt_for(agent)).to include("one wave of concurrent sub-agents")
+    end
+
+    it "says nothing about concurrency to an agent without Task" do
+      planner = agents.find("palpatine-planner")
+
+      expect(planner.allowed_tools).not_to include("Task")
+      expect(prompt_for(planner)).not_to include("concurrent sub-agents")
+    end
+  end
+
   # The prompt tells the agent when its folder's name is a lie, because the
   # agent that can fix that is the one being invoked on it.
   describe "the prompt, for a folder whose name is not justified" do
