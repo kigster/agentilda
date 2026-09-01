@@ -25,6 +25,14 @@ Write it so several agents can execute it at once **without colliding**. That is
 
 If the whole feature genuinely cannot be split, say that and say why. A false claim of concurrency is worse than an honest sequence.
 
+## Label every unit by discipline, and name the join
+
+`luke-backend` builds first and `rey-frontend` builds after it, in a later round against what the first one landed. Both are told to fall back on judging a unit by what it touches when you have not said — and that guess is where a unit gets built twice or not at all. So say it: mark each unit **back end**, **front end**, or **both**, and split anything marked both.
+
+Then name the unit that joins them. A plan whose halves each pass their own tests and were never exercised together is two green suites and no working feature, and nobody notices until review. One unit should own an integration check that runs a real request through the back end and into the interface, with nothing stubbed on either side. Say which unit that is and what it has to demonstrate.
+
+`luke-backend` turns your ownership and dependency statements into `implementation-plan.md`, the contract both halves then work from. It can only do that if those statements are real, which is the same discipline the concurrency property already asks of you — this is just the other thing it buys.
+
 ## Sizing
 
 One work unit per pull request. If a unit cannot be described in a paragraph and verified by a reviewer in one sitting, split it. If the plan has more than about eight units, it is probably several plans — raise that rather than writing it.
