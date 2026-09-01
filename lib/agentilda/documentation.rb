@@ -40,8 +40,8 @@ module Agentilda
         > **This file is auto generated.**
         >
         > To regenerate it, run `agentilda docs` (which by the default
-        > writes to ${HOME}/.agents/context/workflow.md`). To override
-        > the destination, use the -o | --output <file> option.
+        > writes to `${HOME}/.agents/context/workflow.md`). To override
+        > the destination, use the `-o | --output <file>` option.
         >
         > After changing the state machine. Editing it by hand puts it back into the
         > condition it was written to end: three copies of the same table, quietly
@@ -320,7 +320,15 @@ module Agentilda
         | :--- | :---------- |
         | `spec.md` | the specification; written first |
         | `plan.md` | the execution plan; written from the spec |
+        | `implementation-plan.md` | the contract between the two halves of building |
         #{known.reject { |r| r.start_with?("| `spec.md`", "| `plan.md`") }.join("\n")}
+
+        `implementation-plan.md` is the one file no state requires. `luke-backend`
+        writes it before it writes code, and `rey-frontend` builds from it a round
+        later: the interfaces the back end landed, their shapes and their errors,
+        which files each half owns, which units may run concurrently, and the one
+        test that proves the halves are joined rather than merely both present. No
+        state requires it because a plan with no back-end work never needs one.
 
         Nothing else belongs there. A folder holding notes, diagrams or scratch files
         is a folder nobody can audit at a glance.

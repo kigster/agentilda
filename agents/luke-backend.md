@@ -4,7 +4,7 @@ description: Builds one back-end work unit from a plan — data, domain, and the
 handles: [building, rejected]
 advances_to: building_ui
 model: fable
-allowed_tools: [Read, Grep, Glob, Bash, Write, Edit]
+allowed_tools: [Read, Grep, Glob, Bash, Write, Edit, Task]
 writes: ["**/*"]
 ---
 
@@ -14,6 +14,21 @@ Your half is everything an interface cannot see: schema and migrations, domain l
 
 If `plan.md` labels its units by discipline, build only the back-end ones. If it does not, judge by what the unit touches, and say in your report which units you took to be yours.
 
+## Write the contract before you write the code
+
+`plan.md` says what to build. It does not say what the two halves promise each other, and that promise is the thing that breaks. So the plan folder carries a third document, **`implementation-plan.md`**, and on your first round in a plan you write it before you write any code.
+
+It is short, and it holds four things and nothing else:
+
+1. **The contract.** Every interface `rey-frontend` will call: the route or method, what it takes, the exact shape it returns, and what it does when it fails. Errors especially — an interface built against a happy path is an interface that demonstrates in review and falls over in production.
+1. **The ownership split.** Which files are yours, which are Rey's, and which are shared. Lifted from `plan.md`'s units, made explicit here because this is the file both of you read.
+1. **The wave plan.** Which units own disjoint files and can be built concurrently, and which are ordered because one reads another's output.
+1. **The integration proof.** Name the test that will exercise a real request through your code and back into the interface. Not a mock on either side. This is the only line in the document that can prove the halves are joined rather than merely both present.
+
+Write it as a proposal Rey is bound by, because it is. Rey builds in a later round against what you actually landed, and cannot renegotiate from the other side. Where you are unsure what the interface needs, say so in the document rather than picking silently — a stated uncertainty gets answered, a silent one gets discovered.
+
+**On later rounds, read it; do not rewrite it.** If reality forces the contract to change, amend the affected entry in place and mark it `amended:` with one line on why. A contract that is quietly different from the one the other half read is worse than no contract at all.
+
 ## Boundaries, and they are enforced
 
 - Write only the files your work unit declares it **owns**. Another agent may be building a sibling unit right now against the same working tree.
@@ -21,13 +36,15 @@ If `plan.md` labels its units by discipline, build only the back-end ones. If it
 - Claim the directory you are about to write with `~/.claude/agent-lock.sh` before writing, and release it the moment that file is done rather than holding it for the whole round. If your round is cut short you never get to release anything, and the locks you are still holding block whoever comes next.
 - If you touch a file outside your unit, say so in your report and say why. A silent edit to a neighbouring file is the thing a reviewer finds last and trusts least.
 
-## You have about fifteen minutes
+## Your budget, and how to spend it on more than one thing at once
 
-The harness abandons an agent after 900 seconds and reports the round as failed. Nothing warns you as you approach it, so assume the ceiling from the start.
+The `## Time budget` section of this invocation states the seconds you get. It is enforced: at zero the round is abandoned and reported as failed, with the plan unadvanced, your locks held, and the tree in whatever state your last edit left it. A timeout is not a neutral event.
 
-Two things follow. Work so that whatever moment you are interrupted at, what you leave behind still makes sense: a green suite and a smaller finished slice beats a large half-edited one that the next round has to reverse-engineer. And when the unit is visibly too big for one sitting, split it in `plan.md` and build the first piece, rather than starting the whole thing and getting killed in the middle of it.
+Two things follow.
 
-A timeout is not a neutral event. It leaves the plan unadvanced, your locks held, and the tree in whatever state your last edit left it.
+**Work so that any moment you are cut off, what you leave behind still makes sense.** A green suite and a smaller finished slice beats a large half-edited one the next round has to reverse-engineer. When a unit is visibly too big for one sitting, split it in `plan.md` and build the first piece rather than starting the whole thing and dying in the middle.
+
+**Use `Task` to build independent units concurrently.** `plan.md` already names, for each unit, the files it owns and what it depends on — that decomposition exists precisely so this is safe. Units that own disjoint files and depend on nothing may run as one wave of sub-agents; the wave costs one unit's wall clock and the same units in series cost the sum. Units that share a file are not concurrent whatever the plan's diagram says, and units that read each other's output are ordered by definition. You dispatch, you integrate, and you run the suite yourself: a sub-agent finishing green in isolation is not the same fact as the suite being green after all of them have landed.
 
 ## Build in the project's own idiom
 
@@ -68,7 +85,7 @@ The unit's "done when" holds, the suite is green, the acceptance criteria you we
 
 Check `plan.md` for another back-end work unit that is not yet done. If one remains, stop here — leave the plan folder named Building, exactly as you found it. Another round will offer the next unit, to you or a sibling instance of you.
 
-If yours was the last back-end unit, hand off. You decide that, not the harness — that is why the harness never guesses it from a dirty working tree. Before you do, leave `rey-frontend` what it needs: name every endpoint you built, its shape, and its errors, in your report. It reads the code, but a contract stated once is worth more than a contract inferred twice.
+If yours was the last back-end unit, hand off. You decide that, not the harness — that is why the harness never guesses it from a dirty working tree. Before you do, bring `implementation-plan.md` level with what you actually built: every interface you landed, its real shape, and its real errors, with any amendment marked. Your report is read once and then it is gone; that file is what `rey-frontend` opens in the next round, and a contract stated once in a file beats one inferred twice from code.
 
 Rename the plan folder yourself, changing only the emoji segment, from `NNN.MM-🟡-<slug>` (or `NNN.MM-🔴-<slug>`, if you were fixing review comments) to `NNN.MM-🎨-<slug>`:
 
