@@ -101,7 +101,7 @@ module Agentilda
 
         runner = Runner.new(
           tree:, agents:, isolation:, jobs:, plans:, chain:,
-          worktree: (Worktree.new(root:) if isolation == :worktree),
+          worktree: (::Agentilda::Worktree.new(root:) if isolation == :worktree),
           max_rounds: (options[:rounds] || config[:rounds] || 10).to_i,
           executor: Executor.new(root:, timeout:, dry_run: !commit?(options),
             instructions: options[:prompt], model: options[:model],
