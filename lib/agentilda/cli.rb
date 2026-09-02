@@ -21,6 +21,7 @@ require_relative "cli/version/version"
 require_relative "cli/states/states"
 require_relative "cli/agents/subcommands/list"
 require_relative "cli/agents/subcommands/describe"
+require_relative "cli/worktree/worktree"
 
 module Agentilda
   # The command line. Every command is a thin shell over one library class:
@@ -44,6 +45,7 @@ module Agentilda
     register "list-plans", ListPlans, aliases: %w[status st]
     register "run", Run
     register "unblock", Unblock
+    register "worktree", Worktree
     register "docs", Docs
     register "states", States, aliases: %w[diagram]
     register "index", Index, aliases: %w[idx]

@@ -41,7 +41,7 @@ require_relative "../lib/agentilda"
 
 # Names dry-cli can resolve, so a leading word that is not one of these is a
 # typo and must fail rather than quietly run something else.
-KNOWN = %w[create new c list-plans status st resync docs version --version -v -h --help].freeze
+KNOWN = %w[create new c list-plans status st resync docs worktree version --version -v -h --help].freeze
 
 # Bare `agentilda` prints its help. It used to print the plan table, which
 # meant the one command that reads a tree was also the one you got by accident.
