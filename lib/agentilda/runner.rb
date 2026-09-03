@@ -280,17 +280,28 @@ module Agentilda
         up: 0, down: 0, subagents: 0, delegated: 0, seconds: 0.0)
     end
 
-    # Exactly one agent per plan per round — the first that handles its state.
-    # Offering a plan to two agents in one round invites them to write the same
-    # file from two directions.
+    # Every agent that handles a plan's state, dispatched together.
+    #
+    # A state with two agents is a deliberate pairing, not an accident of the
+    # roster: `luke-backend` and `rey-frontend` both handle `building` and
+    # build the two halves of one feature at once, in one checkout, toward one
+    # pull request. {#task_for} keys the worktree on the plan rather than the
+    # agent, so a pair shares a tree by construction.
+    #
+    # What keeps them off each other's files is the split `palpatine-planner`
+    # writes: `plan-backend.md` and `plan-frontend.md` name, per unit, the
+    # files that unit owns. Two agents editing one checkout produce no git
+    # conflict, so the ownership statement is the only thing standing between
+    # a pair and a silently clobbered file. A plan whose halves are not split
+    # is a plan that should run one agent, and that is a planning defect to
+    # fix in the plan rather than here.
     #
     # @return [Array<Array(Agentilda::Agent, Agentilda::Subject)>]
     def assignments
-      in_scope.filter_map do |subject|
-        next if StateMachine::SETTLED.include?(subject.status.key)
+      in_scope.flat_map do |subject|
+        next [] if StateMachine::SETTLED.include?(subject.status.key)
 
-        agent = @agents.for_status(subject.status).first
-        agent && [agent, subject]
+        @agents.for_status(subject.status).map { |agent| [agent, subject] }
       end
     end
 

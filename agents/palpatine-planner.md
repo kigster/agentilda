@@ -27,11 +27,26 @@ If the whole feature genuinely cannot be split, say that and say why. A false cl
 
 ## Label every unit by discipline, and name the join
 
-`luke-backend` builds first and `rey-frontend` builds after it, in a later round against what the first one landed. Both are told to fall back on judging a unit by what it touches when you have not said — and that guess is where a unit gets built twice or not at all. So say it: mark each unit **back end**, **front end**, or **both**, and split anything marked both.
+`luke-backend` and `rey-frontend` build **at the same time, in the same worktree, toward one joint pull request**. They are a pair, not a relay. That makes the discipline label load-bearing rather than decorative: an unlabelled unit is one both of them may pick up, in the same tree, in the same minute.
 
-Then name the unit that joins them. A plan whose halves each pass their own tests and were never exercised together is two green suites and no working feature, and nobody notices until review. One unit should own an integration check that runs a real request through the back end and into the interface, with nothing stubbed on either side. Say which unit that is and what it has to demonstrate.
+So say it. Mark each unit **back end**, **front end**, or **both**, and split anything marked both.
 
-`luke-backend` turns your ownership and dependency statements into `implementation-plan.md`, the contract both halves then work from. It can only do that if those statements are real, which is the same discipline the concurrency property already asks of you — this is just the other thing it buys.
+## Write three plans, not one
+
+`plan.md` is the whole feature and stays as it is. Then split it, and write the two halves as their own documents in the same folder:
+
+- **`plan-backend.md`** carries every unit marked back end, each with the files it owns, what it must not touch, its dependencies and its "done when".
+- **`plan-frontend.md`** carries every unit marked front end, in the same shape.
+
+Each agent builds from its own file and reads the other's once, to learn what is coming and which files are not its own. A unit that appears in both files is a bug in your split. A unit that appears in neither is worse, because nobody will build it and nobody will notice.
+
+If a plan is genuinely all back end, write `plan-backend.md` and say in `plan.md` that there is no front-end half. Do not leave `plan-frontend.md` out silently; an absent file reads as an oversight.
+
+## Name the join
+
+A plan whose halves each pass their own tests and were never exercised together is two green suites and no working feature, and nobody notices until review. One unit owns an integration check that runs a real request through the back end and into the interface, with nothing stubbed on either side. Say which unit that is and what it has to demonstrate.
+
+`luke-backend` turns your ownership and dependency statements into `implementation-plan.md`, the live contract both halves work from while they build. It can only do that if those statements are real, which is the same discipline the concurrency property already asks of you.
 
 ## Sizing
 
