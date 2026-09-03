@@ -81,7 +81,7 @@ module Agentilda
           config.fetch(:chain, true)
         end
 
-        if isolation == :worktree && !Worktree.new(root:).repository?
+        if isolation == :worktree && !::Agentilda::Worktree.new(root:).repository?
           refuse("#{root} is not a git repository, so plans cannot be isolated.\n\n" \
                  "Run with --isolation shared to work in one tree, serially.", 66)
         end
@@ -101,7 +101,7 @@ module Agentilda
 
         runner = Runner.new(
           tree:, agents:, isolation:, jobs:, plans:, chain:,
-          worktree: (Worktree.new(root:) if isolation == :worktree),
+          worktree: (::Agentilda::Worktree.new(root:) if isolation == :worktree),
           max_rounds: (options[:rounds] || config[:rounds] || 10).to_i,
           executor: Executor.new(root:, timeout:, dry_run: !commit?(options),
             instructions: options[:prompt], model: options[:model],
