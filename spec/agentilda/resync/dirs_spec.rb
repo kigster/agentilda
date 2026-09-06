@@ -23,6 +23,24 @@ RSpec.describe Agentilda::Resync::Dirs, :tree do
       end
     end
 
+    # The dispatcher reconciles names before every dispatch, while agents
+    # are running. A folder an agent is inside must keep its name until
+    # that agent is done, whatever its contents say by then.
+    context "when told to leave a plan alone" do
+      let!(:tree) do
+        plans do |t|
+          t.plan "001.00", :new, "initial-spec", files: {"spec.md" => spec_body, "plan.md" => "# Plan"}
+          t.plan "002.00", :new, "second", files: {"spec.md" => spec_body, "plan.md" => "# Plan"}
+        end
+      end
+
+      it "skips it however wrong its name is" do
+        changes = described_class.new(tree: Agentilda::Tree.new(dir: plans_root), except: ["001.00"]).plan
+
+        expect(changes.map(&:dirname)).to eq(["002.00-⚪️--second"])
+      end
+    end
+
     context "when a folder has outgrown its emoji" do
       let!(:tree) do
         plans do |t|
@@ -31,11 +49,11 @@ RSpec.describe Agentilda::Resync::Dirs, :tree do
       end
 
       it "proposes the state the contents justify" do
-        expect(changes.map { |c| [c.from, c.to] }).to eq([[:new, :building]])
+        expect(changes.map { |c| [c.from, c.to] }).to eq([[:new, :planned]])
       end
 
       it "keeps the number and the slug, changing only the emoji" do
-        expect(File.basename(changes.first.target)).to eq("001.00-🟡--initial-spec")
+        expect(File.basename(changes.first.target)).to eq("001.00-⭐️--initial-spec")
       end
     end
 
@@ -90,7 +108,7 @@ RSpec.describe Agentilda::Resync::Dirs, :tree do
       end
 
       it "repairs the number and the emoji in one move" do
-        expect(File.basename(changes.first.target)).to eq("007.00-🟡--tenancy")
+        expect(File.basename(changes.first.target)).to eq("007.00-⭐️--tenancy")
       end
 
       it "reports the state change rather than the padding" do
@@ -161,7 +179,7 @@ RSpec.describe Agentilda::Resync::Dirs, :tree do
       end
 
       it "lets the folder out of Blocked" do
-        expect(changes.map { |c| [c.from, c.to] }).to eq([[:blocked, :building]])
+        expect(changes.map { |c| [c.from, c.to] }).to eq([[:blocked, :planned]])
       end
 
       it "says the file stopped justifying the name, not that the file vanished" do
@@ -198,17 +216,17 @@ RSpec.describe Agentilda::Resync::Dirs, :tree do
     it "renames the folder when committed" do
       resync.call(commit: true)
 
-      expect(names).to eq(["001.00-🟡--initial-spec"])
+      expect(names).to eq(["001.00-⭐️--initial-spec"])
     end
 
     it "preserves the folder's contents across the rename" do
       resync.call(commit: true)
 
-      expect(File.exist?(File.join(plans_root, "001.00-🟡--initial-spec", "plan.md"))).to be(true)
+      expect(File.exist?(File.join(plans_root, "001.00-⭐️--initial-spec", "plan.md"))).to be(true)
     end
 
     it "reports what it did" do
-      expect(resync.call(commit: true).map(&:to)).to eq([:building])
+      expect(resync.call(commit: true).map(&:to)).to eq([:planned])
     end
 
     it "is idempotent — a second run finds nothing left to do" do

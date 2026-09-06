@@ -69,27 +69,18 @@ Three defects meet in that transcript, and they are separable:
 
 The design settles the shape. What it does not settle, and what an implementer would otherwise have to guess:
 
-1. **Does `DECSTBM` behave across the terminals actually in use here?** Specifically iTerm2, Terminal.app, tmux and a plain pipe. Whether the region survives `SIGWINCH`, and whether `TTY::Spinner::Multi`'s cursor handling fights it.
-   ***Answer: DO NOT WORRY ABOUT MULTI-TERMINAL. Do worry about getting killed and knowing where to restar from.***
-1. ******Can an agent be relied on to write its own closing ledger entry?** If a meaningful fraction of invocations forget, the design's central assumption fails and the harness has to write the entry from the agent's exit status instead. This is answerable by instrumenting one real run.
-   ***Answer: generally the agent should be trusted to write to the ledger.*** 
-1. **What is the right poll interval?** Ten seconds is asserted, not measured. Cost of the poll against handoff latency, over a tree with a realistic number of plans. 
-   ***ANSWER: Poll every second and update agent's status line (see the dashboard below)***
-1. **Does `Brief::TIMEOUT = 60` want the same advisory treatment?** The drafting shell-out that created this very folder timed out and discarded its work, which is the same defect in a different file.
-   ***ANSWER: The prompt to briefer must be that he has 50 seconds to explore the codebase and write a brief. Use Haiku model.***
-1. **What happens to 🟡 Building?** With `luke-backend` and `rey-frontend` handling ⭐️ Planned, nothing writes 🟡 unless luke renames on start. Confirm that is wanted rather than retiring the state.
-   ANSWER: Yes let's have Luke be in charge of that name transition. 
-   Hans Solo may reject the PR which renames the folder again,
-1. **Which existing plan folders break?** An audit across `qualified-at`'s `.plans` and this repo's, run before the state insert lands, the same way DSL vocabulary changes are audited before tightening.
-   ANSWER: irrelevant.
+1. **Does `DECSTBM` behave across the terminals actually in use here?** Specifically iTerm2, Terminal.app, tmux and a plain pipe. Whether the region survives `SIGWINCH`, and whether `TTY::Spinner::Multi`'s cursor handling fights it. ***Answer: DO NOT WORRY ABOUT MULTI-TERMINAL. Do worry about getting killed and knowing where to restar from.***
+1. \*\*\*\***Can an agent be relied on to write its own closing ledger entry?** If a meaningful fraction of invocations forget, the design's central assumption fails and the harness has to write the entry from the agent's exit status instead. This is answerable by instrumenting one real run. ***Answer: generally the agent should be trusted to write to the ledger.***
+1. **What is the right poll interval?** Ten seconds is asserted, not measured. Cost of the poll against handoff latency, over a tree with a realistic number of plans. ***ANSWER: Poll every second and update agent's status line (see the dashboard below)***
+1. **Does `Brief::TIMEOUT = 60` want the same advisory treatment?** The drafting shell-out that created this very folder timed out and discarded its work, which is the same defect in a different file. ***ANSWER: The prompt to briefer must be that he has 50 seconds to explore the codebase and write a brief. Use Haiku model.***
+1. **What happens to 🟡 Building?** With `luke-backend` and `rey-frontend` handling ⭐️ Planned, nothing writes 🟡 unless luke renames on start. Confirm that is wanted rather than retiring the state. ANSWER: Yes let's have Luke be in charge of that name transition. Hans Solo may reject the PR which renames the folder again,
+1. **Which existing plan folders break?** An audit across `qualified-at`'s `.plans` and this repo's, run before the state insert lands, the same way DSL vocabulary changes are audited before tightening. ANSWER: irrelevant.
 
-
-
-## Agent Display 
+## Agent Display
 
 We must utilize the TTY::Cursor and TTY::Screen to show the agents working on the screen with top and bottom status bar showing different things. Both status bars are black, green and red letters on white background. Use magenta for tokens up, and use cyan for tokens down. Make that section have a grey background.
 
-Belkow that after at least a single white space line, we see the header of the agents work table. 
+Belkow that after at least a single white space line, we see the header of the agents work table.
 
 The header has fixed number of characters allocated and all data within it is sprintf("%n.ns") to properly fit into the slot. You can always use ljust and rjust.
 
@@ -110,23 +101,23 @@ After the header is the thin line made of "─" * Screen..width - 2 (all content
 [ working in <repo> path | agents total running : 7 | tokens: ↑ 40K  ↓ 3/2K 
 ```
 
-The actual agent rows are informative, constnatly changing (every second, but they do not have to be in sync). They show the latest updated timestamp, the plan ID being worked on, the file the current agent is working on (we may want to add this to frontmatter), and the agent name with the name stripped. 
+The actual agent rows are informative, constnatly changing (every second, but they do not have to be in sync). They show the latest updated timestamp, the plan ID being worked on, the file the current agent is working on (we may want to add this to frontmatter), and the agent name with the name stripped.
 
-Syntax [R:1/3] indicates rounds (1 of 3). To be honest I am not thrilled that the agents must redo all the work over many rounds for us to be satisfied withit. I would default all rounds to 1 and allow them to specify more than 1 but max 5. 
+Syntax [R:1/3] indicates rounds (1 of 3). To be honest I am not thrilled that the agents must redo all the work over many rounds for us to be satisfied withit. I would default all rounds to 1 and allow them to specify more than 1 but max 5.
 
 next column shows which model each agentis using
 
-And the final column shows in bold white on yellow background (background must reach 1 character before the ened of the screen). 
+And the final column shows in bold white on yellow background (background must reach 1 character before the ened of the screen).
 
 Other colored elements in the table are:
 
 Files:
 
-* spec.md -> green
-* Plan.md -> yellow
-* Plan-backend -> bold yellow
-* Plan-frontend -> cyan
-* Implementation started, we say both luke and jey are working on the pull-requests.md file (magenta)
-* Once the joined draft PR from Luke and Jey is pushed, reviewer starts to check it. Instead of the file name it should say the number of the PR: #43 and be clickable to the real PR. It should be in light blue color while the "reviewer" is reviewing it. If it returns to luke and rey rejected the PR # stays in the file column, but it turns red in color. The agents double in size (we should see both Luke and Rey in two lines working on the same red PR).  Once they fixed it, the PR# changes to light blue and reviewer again is the agent working on in.  The reviewer has the right to reject the PR maximum twice per PR. Once they've done it twice, they review the same PR and if they find it acceptable the approve it by commenting " 👍🏼 to deploy". At that point the work on this ticket finishes.
-* When do so, the hansolo leaves the 
-* The exception to the rule is if Luke and Rey decided to create several PRs to implement this feature, so this file must be consulted to see if we are execting more work before cloising this ticket as done. 
+- spec.md -> green
+- Plan.md -> yellow
+- Plan-backend -> bold yellow
+- Plan-frontend -> cyan
+- Implementation started, we say both luke and jey are working on the pull-requests.md file (magenta)
+- Once the joined draft PR from Luke and Jey is pushed, reviewer starts to check it. Instead of the file name it should say the number of the PR: #43 and be clickable to the real PR. It should be in light blue color while the "reviewer" is reviewing it. If it returns to luke and rey rejected the PR # stays in the file column, but it turns red in color. The agents double in size (we should see both Luke and Rey in two lines working on the same red PR). Once they fixed it, the PR# changes to light blue and reviewer again is the agent working on in. The reviewer has the right to reject the PR maximum twice per PR. Once they've done it twice, they review the same PR and if they find it acceptable the approve it by commenting " 👍🏼 to deploy". At that point the work on this ticket finishes.
+- When do so, the hansolo leaves the
+- The exception to the rule is if Luke and Rey decided to create several PRs to implement this feature, so this file must be consulted to see if we are execting more work before cloising this ticket as done.

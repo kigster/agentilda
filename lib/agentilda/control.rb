@@ -16,6 +16,9 @@ module Agentilda
     WRAP_UP = "WRAP_UP"
     STOP = "STOP"
 
+    # The clock's warnings start with this; the agent's prompt explains them.
+    WARN = "WARN"
+
     # Seconds between {#quit!} and the harness terminating whatever is still
     # running. Long enough to write files and a handoff note; short enough
     # that q means quit rather than "quit eventually".
@@ -50,6 +53,18 @@ module Agentilda
       def release(path)
         @mutex.synchronize { @files.delete(path) }
         FileUtils.rm_f(path)
+      end
+
+      # One line into one file, from the clock. Not a broadcast: a warning is
+      # about one agent's own deadline.
+      #
+      # @param path [String]
+      # @param text [String]
+      # @return [void]
+      def write(path, text)
+        File.write(path, text.empty? ? "" : "#{text}\n")
+      rescue SystemCallError
+        # The invocation finished and released its file; nothing to warn.
       end
 
       # `w`: every running agent is asked to finish the essential remainder

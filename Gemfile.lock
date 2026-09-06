@@ -14,6 +14,7 @@ PATH
       strings
       tty-box
       tty-command
+      tty-cursor
       tty-progressbar
       tty-screen
       tty-spinner

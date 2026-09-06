@@ -41,6 +41,7 @@ module Agentilda
     PLACEMENTS = {
       new: Placement.new(type: "backlog", name: "Backlog", labels: []),
       researched: Placement.new(type: "backlog", name: "Backlog", labels: %w[researched]),
+      ready_for_planning: Placement.new(type: "backlog", name: "Backlog", labels: %w[spec-ready]),
       planned: Placement.new(type: "unstarted", name: "Todo", labels: []),
       building: Placement.new(type: "started", name: "In Progress", labels: []),
       # Both halves of building are one column on a board. A reader there

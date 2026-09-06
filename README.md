@@ -7,15 +7,16 @@ The best resource that describes it in detail is the result of running `tilda do
 The gem offers a CLI command `tilda` (as well as `agentilda`) that performs a slew of commands aimed at producing, updating, keeping in sync any project's root directory `.plans`, that will initially contain just the `spec.md` and pull requests documents in the `.plans`, and drives a team of specialist agents over them. The agents implement the following workflow:
 
 ```
-# Hppy path
-⚪️ New ──▶ 
-    🔎 Researched ──▶ 
-        ⭐️ Planned ──▶ o
-            🟡 Building ──▶ 
-                🎨 Building UI ──▶ 
-                    🟢 Ready for Review ──▶ 
-                    👀 In Review ──▶ 
-                        ✅ Approved
+# Happy path
+⚪️ New ──▶
+    🔎 Researched ──▶
+        📋 Ready for Planning ──▶
+            ⭐️ Planned ──▶
+                🟡 Building ──▶
+                    🎨 Building UI ──▶
+                        🟢 Ready for Review ──▶
+                            👀 In Review ──▶
+                                ✅ Approved
 ```
 
 ## Agents
@@ -132,14 +133,37 @@ The canonical folder spelling is `NNN.MM-<emoji>--<slug>`, with **two dashes aft
 
 ### The lifecycle, step by step
 
-A feature moves through five specialists, one state at a time, never two at once, and never further than its own documents currently justify:
+A feature moves through the specialists one state at a time, and never further than its own documents currently justify. The spine, with the agent that drives each hop:
+
+```mermaid
+stateDiagram-v2
+    direction LR
+    New: ⚪️ New
+    Researched: 🔎 Researched
+    Ready: 📋 Ready for Planning
+    Planned: ⭐️ Planned
+    Building: 🟡 Building
+    BuildingUI: 🎨 Building UI
+    Review: 🟢 Ready for Review
+    InReview: 👀 In Review
+    New --> Researched: leah
+    Researched --> Ready: yoda
+    Ready --> Planned: palpatine
+    Planned --> Building: luke starts
+    Building --> BuildingUI: luke done, rey building
+    Building --> Review: last of the pair
+    BuildingUI --> Review: last of the pair
+    Review --> InReview: hansolo starts
+```
+
+Step by step:
 
 1. **⚪️ New.** `agentilda create tax rule dsl` mints `.plans/003.00-⚪️--tax-rule-dsl/`. For a genuinely new feature it also scaffolds `spec.md` with a title and four fixed headings (*What we are trying to achieve*, *Why it matters*, *What already exists*, *What research needs to settle*), makes a best-effort attempt at them from what the project already has on disk, and opens it. You finish the brief by hand.
 1. **🔎 Researched.** `leah-researcher` fans work out across parallel sub-agents and appends spec.md's `## Research` chapter: themes, findings, licensing, a closing `### Findings, Conclusion & References`. Nobody else may write that heading. It *is* the state transition, so an empty one seeds a lie.
-1. **⭐️ Planned.** `yoda-writer` turns the brief plus the research into a complete specification: Goal, Non-Goals, In/Out of scope, Open questions, Conclusion. Or it writes `blocked.md` instead, when a question is a human's to answer, not a guess. `palpatine-planner` then decomposes the finished spec into `plan.md`'s non-overlapping work units, sized for independent sub-agents.
-1. **🟡 Building → 🎨 Building UI.** `luke-backend` writes `implementation-plan.md` first — the interfaces the front end will call, their shapes, their errors, who owns which files, and the test that will prove the halves are joined — then builds the back end: schema, domain, API, source and tests, no commits. Units that own disjoint files are built as one concurrent wave rather than in series. It hands off once no back-end unit is left.
-1. **🎨 Building UI → 🟢 Ready for Review.** `rey-frontend` opens `implementation-plan.md`, builds the interface against the API that now exists rather than the one the spec imagined, and runs the integration test named there — a front end green against a stub and a back end green against a test client are two passing suites and no working feature. It loads the design skills as it goes and fans out over independent units. A plan with no front-end work says so and passes through. The pull request titled `[003.00] …` opens here, for what both halves built.
-1. **👀 In Review → 🔴 Changes Requested, or ✅ Approved & Merged.** `hansolo-reviewer` reads the diff against the plan and either requests changes (back to 🟢 once addressed) or approves. Nothing merges automatically: approving is reversible and attributable, merging changes a branch everyone else builds on, and that line is enforced in code, not just in the prompt.
+1. **📋 Ready for Planning.** `yoda-writer` turns the brief plus the research into a complete specification: Goal, Non-Goals, In/Out of scope, Open questions, Conclusion. Or it writes `blocked.md` instead, when a question is a human's to answer, not a guess. It closes by leaving an empty `plan.md` beside the spec; that blank file is what the harness reads as "ready for planning".
+1. **⭐️ Planned.** `palpatine-planner` fills `plan.md` with the finished spec's non-overlapping work units, sized for independent sub-agents, and splits them by discipline into `plan-backend.md` and `plan-frontend.md`.
+1. **🟡 Building → 🎨 Building UI → 🟢 Ready for Review.** `luke-backend` and `rey-frontend` build at the same time, in the same worktree, toward one pull request; Luke's start is what makes the folder 🟡. Luke writes `implementation-plan.md` first (the interfaces the front end will call, their shapes, their errors, who owns which files, and the test that will prove the halves are joined), then builds the back end: schema, domain, API, source and tests, no commits. Rey builds the interface against the API being written beside it rather than the one the spec imagined, loads the design skills as it goes, and runs the integration test named in the contract: a front end green against a stub and a back end green against a test client are two passing suites and no working feature. Units that own disjoint files are built as one concurrent wave rather than in series. If Luke signs `Completed` first the folder holds at 🎨 while Rey finishes; when the last of the pair signs `pull-requests.md` the folder becomes 🟢 and the pull request titled `[003.00] …` opens, for what both halves built. A plan with no front-end work says so and passes through.
+1. **👀 In Review → 🔴 Changes Requested, ✅ Approved, or 💩 Scrapped.** `hansolo-reviewer` takes the folder to 👀 the moment it starts, reads the diff against the plan, and records its verdict in the note of its `pull-requests.md` line: `(rejected 1/2)` or `(rejected 2/2)` sends the folder to 🔴 for the pair to fix, and a pull request may be rejected twice at most; `(approved)` approves the pull request and leaves the folder 👀 until a human merges; `(slop)` writes `rewrite.md` and the folder becomes 💩. Nothing merges automatically: approving is reversible and attributable, merging changes a branch everyone else builds on, and that line is enforced in code, not just in the prompt.
 
 Off to the side, at any point: ⭕️/🅱️ **Blocked** (an engineering or product decision only a human can make) and ☢️ **Deferred** or ❌ **Discarded**. Blocked plans are never assigned to an agent by the loop; one that could move them would make the states meaningless. `agentilda states` draws the whole machine, every legal transition included.
 
@@ -228,17 +252,17 @@ ______________________________________________________________________
 
 ## The multi-agent harness
 
-Specialists are defined in `agents/*.md`. The frontmatter routes them (`handles:`/`advances_to:` are exactly what `agentilda run` reads to decide who takes a plan); the body is the prompt. An agent's `model:` picks what it runs on; `run --model NAME` overrides that for every agent in the run, typed flag beating declared frontmatter. An agent's `timeout:` does the same for its clock; `leah-researcher` declares 1200 because research has no natural stopping point and will otherwise fill whatever it is given.
+Specialists are defined in `agents/*.md`. The frontmatter routes them (`handles:`/`advances_to:` are exactly what `agentilda run` reads to decide who takes a plan); the body is the prompt. An agent's `model:` picks what it runs on; `run --model NAME` overrides that for every agent in the run, typed flag beating declared frontmatter. An agent's `timeout:` does the same for its clock; `leah-researcher` declares 1200 because research has no natural stopping point and will otherwise fill whatever it is given. `ledger:` names the documents the agent signs, and `starts_as:` and `holds_at:` the states the harness moves a folder to when the agent starts and while its partner is still building; the ledger section below is how those lines drive the loop.
 
-| Agent               | Handles | Advances to | Does                                                                    |
-| :------------------ | :------ | :---------- | :---------------------------------------------------------------------- |
-| `leah-researcher`   | ⚪️      | 🔎          | fans out parallel research, writes spec.md's `## Research` chapter      |
-| `yoda-writer`       | 🔎, 🕰️  | ⭐️          | writes Goal/Non-Goals/Conclusion, or blocks with numbered questions     |
-| `palpatine-planner` | ⭐️      | 🟡          | decomposes the spec into `plan.md`'s concurrent work units              |
-| `luke-backend`      | 🟡, 🔴  | 🎨          | writes the contract, then builds the back end: data, domain, API, tests |
-| `rey-frontend`      | 🎨      | 🟢          | builds the interface against that contract, and proves the halves join  |
-| `hansolo-reviewer`  | 🟢, 👀  | ✅          | adversarial review; requests changes or approves, never merges          |
-| `lando-broker`      | ⭕️, 🅱️  | ⭐️          | folds answered blocks into spec.md/plan.md; never invoked by the loop   |
+| Agent               | Handles    | Advances to                           | Signs                                  | Does                                                         |
+| :------------------ | :--------- | :------------------------------------ | :------------------------------------- | :----------------------------------------------------------- |
+| `leah-researcher`   | ⚪️         | 🔎                                    | `spec.md`                              | fans out parallel research, writes the `## Research` chapter |
+| `yoda-writer`       | 🔎, 🕰️     | 📋                                    | `spec.md`                              | writes Goal/Non-Goals/Conclusion, leaves a blank `plan.md`   |
+| `palpatine-planner` | 📋         | ⭐️                                    | `plan.md`                              | decomposes the spec into concurrent work units, three plans  |
+| `luke-backend`      | ⭐️, 🟡, 🔴 | 🟢 (🟡 on start, 🎨 while rey builds) | `plan-backend.md`, `pull-requests.md`  | back end: data, domain, API, tests                           |
+| `rey-frontend`      | ⭐️, 🟡, 🔴 | 🟢                                    | `plan-frontend.md`, `pull-requests.md` | interface against the contract; proves the halves join       |
+| `hansolo-reviewer`  | 🟢, 👀     | 🔴 / 👀 approved / 💩                 | `pull-requests.md`                     | adversarial review; two rejections at most, never merges     |
+| `lando-broker`      | ⭕️, 🅱️     | ⭐️                                    | `plan.md`                              | folds answered blocks into spec.md/plan.md                   |
 
 ```bash
 agentilda run                              # dry run: who would take what
@@ -246,7 +270,8 @@ agentilda run --commit                     # one git worktree per plan, in paral
 agentilda run --commit -j 4                # …four at a time
 agentilda run --isolation shared           # one tree, serial; no git needed
 agentilda run --commit --plan 003,005.01   # only these plans, see below
-agentilda run --commit --timeout 1800      # give slow agents 30 minutes, not the default 15
+agentilda run --commit --timeout 600       # cap every agent at ten minutes; a shorter clock of its own still wins
+agentilda run --commit --rounds 1          # one round per agent per plan, whatever each declares
 agentilda run --commit --agent yoda-writer --prompt "Rework the risks section first"
 agentilda run --commit --skip hansolo-reviewer   # everyone but the reviewer; its plans wait
 agentilda run --commit --model opus        # this model for every agent, whatever each declares
@@ -260,9 +285,23 @@ agentilda states                           # the whole machine, as a diagram
 
 `run` with no `--plan` loops the **whole tree**. That is exactly wrong right after a batch step creates several plans at once: a bare `run` per `create` starts N overlapping whole-tree loops, each claiming worktrees for plans the others are also touching. `--plan NNN,NNN.MM,...` scopes a round to just the plans named, refusing up front if one doesn't exist rather than silently running everything, and it scopes pushing along with it. The shape that works: create every plan, verify each with `status`, then one `run --commit --plan ...` handoff at the end. Full constraints for that shape (the four headings, what a brief must never write, when to block instead of guess) live in `src/commands/plan-create.md`.
 
-### Chaining: one plan, several agents, one round
+### The ledger: how an agent hands off
 
-When an agent finishes and the plan has genuinely advanced — its folder renamed, or its contents now justifying the next state — the runner hands it straight to the next state's agent **in the same round**: researcher to writer to planner, without paying a full round per hop. Chaining is on by default and forced off by `--agent`, since chaining past a restriction would un-restrict it; `--no-chain` turns it off explicitly. The chain stops exactly where round assignments stop: at a blocked or finished state, a human decides. It also stops short of a state two agents handle as a pair, such as 🟡 Building: a chain is one thread carrying one plan, and a pair is started together by the next round.
+An agent never renames its plan folder. It signs the document it owns and the harness reads the signature. Each definition's `ledger:` names what it may sign: `spec.md` for the researcher and the writer, `plan.md` for the planner and the broker, `plan-backend.md` or `plan-frontend.md` plus `pull-requests.md` for the pair, `pull-requests.md` alone for the reviewer. An entry is one line inside a GitHub `NOTE` alert, written once when the agent starts and once when it stops:
+
+```
+> [!NOTE]
+>
+> [2026-09-04 11:29:20 AM PDT] [ agent: leah-researcher   status: Started, round 1 ]
+> [2026-09-04 11:44:03 AM PDT] [ agent: leah-researcher   status: Completed, round 1 ]
+> [2026-09-04 11:44:04 AM PDT] [ next: yoda-writer ]
+```
+
+The status is one of five words, `Started`, `Completed`, `Almost completed`, `Interrupted` or `Blocked`, followed by the round and an optional note in parentheses. The note is where a verdict lives: `Completed, round 1 (approved)` from the reviewer, `Blocked, round 2 (product)` from anyone who needs a product decision rather than an engineering one. A line that looks like an entry but does not parse is reported, never dropped: an agent that wrote "Done" has said nothing the harness can act on, and silence would read as a stall.
+
+The loop polls those documents once a second and acts on the last word each agent wrote. `Completed` moves the folder to the agent's `advances_to:` state, provided the destination's own files justify it; a `Completed` the disk does not support is reported as a failure and nothing is renamed. `Blocked` parks the folder at ⭕️, or at 🅱️ when the note says `product`. `Almost completed` and `Interrupted` earn another round, up to the agent's own `rounds:`. A `next:` line may follow `Completed` and names who should take the plan next: the harness prefers that agent when it handles the new state, and says so when it does not, so a wrong name reports rather than stalls. The pair is the one case of two signatures on one plan: Luke and Rey each sign their own half, the folder holds at 🎨 if Luke finishes first, and moves to 🟢 when the last of them signs `pull-requests.md`, which is also when the pull request opens.
+
+The harness writes lines of its own, in bold so they cannot be mistaken for an agent's. An agent that stops without a closing entry, whether it crashed, ran out of clock or was killed from the keyboard, gets `**Interrupted**` with the reason; if the state it was advancing to is nevertheless justified on disk, the harness signs `Completed (signed by harness: work verified on disk)` on its behalf and the plan moves on. Everything the ledger cannot hold, which run wrote what, process ids, tokens, and whether the run that wrote a `Started` is still alive, goes to `.plans/tmp/agentilda-state.json`, rewritten every second. The directory is added to `.gitignore` the first time a run needs it, and the run says so. A harness that dies leaves the next one something to restart from: stages the dead run left `Started` are signed `Interrupted` and dispatched again.
 
 ### A pair's mailbox
 
@@ -270,19 +309,28 @@ When an agent finishes and the plan has genuinely advanced — its folder rename
 
 ### Steering one agent, or stepping around one
 
-`--agent NAME` restricts the round to that one agent: plans in every other state are left unassigned, and chaining is off so the restriction holds. An agent that handles none of the in-scope plans' current states is refused up front — naming the state each plan is in and the agent that would take it — rather than running an empty round that exits 0 in silence. `--prompt "…"` rides along with it, appending extra instructions to that agent's prompt for this run only — it refuses to work without `--agent`, because a sentence aimed at one specialist would otherwise reach every agent in the round.
+`--agent NAME` restricts the round to that one agent: plans in every other state are left unassigned, and a `next:` line naming anyone else is reported rather than honoured, so the restriction holds. An agent that handles none of the in-scope plans' current states is refused up front, naming the state each plan is in and the agent that would take it, rather than running an empty round that exits 0 in silence. `--prompt "…"` rides along with it, appending extra instructions to that agent's prompt for this run only; it refuses to work without `--agent`, because a sentence aimed at one specialist would otherwise reach every agent in the round.
 
-`--skip NAME` (comma-separated for several) is the inverse: the named agent is never assigned, its plans simply wait, and the rest of the pipeline runs as usual. A skipped agent whose work already exists on disk costs nothing — the per-round resync still advances any folder whose contents justify the next state, which hands it to the next agent. A misspelled name is refused rather than silently skipping nobody, and `--agent X --skip X` is refused as the contradiction it is.
+`--skip NAME` (comma-separated for several) is the inverse: the named agent is never assigned, its plans simply wait, and the rest of the pipeline runs as usual. A skipped agent's plans wait where they stand until it is allowed back in; nothing else moves them. A misspelled name is refused rather than silently skipping nobody, and `--agent X --skip X` is refused as the contradiction it is.
 
 ### The keyboard, while a run is in flight
 
-When STDIN is a terminal, the loop listens for single keys. `h` or `?` pops up the bindings; the others reach the running agents:
+When STDIN is a terminal, the run draws a table of the agents in flight and listens for single keys. Some keys work the table; the rest reach the running agents:
 
-| Key | What it does                                                                                                      |
-| --- | ----------------------------------------------------------------------------------------------------------------- |
-| `w` | ask every running agent to wrap up the essential remainder as fast as possible                                    |
-| `n` | ask agents to write out what they have and stop; the loop continues, so chaining hands the plan to the next agent |
-| `q` | write out, stop everything, and quit — agents get a 60-second grace to save, then are terminated                  |
+| Key             | What it does                                                                                                      |
+| :-------------- | :---------------------------------------------------------------------------------------------------------------- |
+| `h` `?`         | show or hide the bindings                                                                                         |
+| `s`, down arrow | select the next running agent; the up arrow moves the selection back                                              |
+| `k`             | mark the selected agent to be killed: STOP, fifteen seconds, then `kill -9`                                       |
+| `x`             | extend the selected agent's clock by ten minutes; every press adds ten more                                       |
+| `ENTER`         | apply the pending kills and extensions                                                                            |
+| `ESC`           | discard the pending changes, then clear the selection                                                             |
+| `w`             | ask every running agent to wrap up the essential remainder as fast as possible                                    |
+| `n`             | ask agents to write out what they have and stop; the loop continues, and whoever the ledger names next takes over |
+| `q`             | write out, stop everything, and quit; agents get a 60-second grace to save, then are terminated                   |
+| `ctrl-c`        | interrupt the run, as ever                                                                                        |
+
+`k` and `x` are staged, not instant: select a row, mark it, and nothing happens until ENTER, so a slip of the finger cannot end an agent twenty minutes into its work. A killed agent is treated like any other that stopped without signing: the harness writes its `Interrupted` line, checks the disk, and signs `Completed` on its behalf if the work is there.
 
 `claude -p` takes no input once started, so the keys work through a **control file** per invocation: the agent's prompt names the file and tells it to poll between steps; a keypress writes `WRAP_UP` or `STOP` into every file currently registered. Like the rest of the prompt that is a request — an agent mid-tool-call reacts at its next step — which is why `q` also arms a deadline the harness enforces: anything still running when the grace runs out is aborted, and `--timeout` remains the backstop behind that. Control files only exist when somebody is actually at the keys; a piped or scripted run gets neither the listener nor the polling instructions.
 
@@ -292,7 +340,11 @@ When STDIN is a terminal, the loop listens for single keys. `h` or `?` pops up t
 
 ### Timeouts, and defaults from a config file
 
-One agent gets `--timeout` seconds before it is abandoned (default: 900). A researcher that reads two sibling repositories can genuinely need more, and an agent killed at the cap loses everything it had not yet written. An agent can also declare its own clock with `timeout:` in its frontmatter, which beats the run-wide value for that agent alone. Whichever clock applies is drawn on the agent's progress line as a countdown, grey until the last minute and red from there, so "working" and "about to be abandoned" stop looking identical. The agent is told the same number in its prompt, so it can pace itself rather than discovering the ceiling by dying on it, and no agent's prose can name a figure that has gone stale.
+Every agent runs against an advisory clock. An agent declares its own budget with `timeout:` in its frontmatter, and `--timeout` can only tighten it: whichever of the two is smaller applies, so a flag cannot hand an agent more time than its author thought it needed, and a quick run is one flag away. An agent that declares no clock gets 900 seconds; the flag is not needed for that. The agent is told the number it actually got, in its prompt, so no prose can name a figure that has gone stale.
+
+The clock warns before it stops. It writes into the agent's control file `WARN: 10 minutes left`, then `WARN: 5 minutes left`, then `WRAP_UP: 1 minute left, write to disk now`, then `STOP` at zero; a warning already in the past when a short clock starts is skipped rather than told as a lie. Nothing is killed at STOP. Sixty seconds later a process still running is killed, and the harness signs its document `Interrupted` so the record agrees with what happened. The time left is drawn on the agent's row, and `x` at the keyboard adds ten minutes to a selected agent's clock, re-arming every warning against the new deadline.
+
+`--rounds` is the other cap, and it too only tightens. Each agent declares with `rounds:` how many rounds it may take on one plan (default one, at most five); an `Almost completed` or `Interrupted` line spends one and earns the next, and `--rounds N` lowers that ceiling for every agent in the run. `Completed` and `Blocked` end an agent's rounds on that plan whatever the number says.
 
 Defaults for `run` can live in `~/.local/config/agentilda.json`, keyed by command:
 
@@ -300,7 +352,7 @@ Defaults for `run` can live in `~/.local/config/agentilda.json`, keyed by comman
 { "run": { "timeout": 1800, "jobs": 4 } }
 ```
 
-A flag actually typed beats the file, the file beats the built-in, and an unreadable file is refused rather than silently ignored. The file can supply `timeout`, `jobs`, `rounds`, `log`, `chain` and `max_tokens` — never `--commit`: a run that writes is something a person asks for each time.
+A flag actually typed beats the file, the file beats the built-in, and an unreadable file is refused rather than silently ignored. The file can supply `timeout`, `jobs`, `rounds`, `log` and `max_tokens`, never `--commit`: a run that writes is something a person asks for each time.
 
 ### Isolation, and why it is the default
 
@@ -314,9 +366,9 @@ Worktrees an agent left untouched are pruned. Dirty ones are kept — they are t
 
 ### When it stops
 
-The loop ends at a **fixed point** — a round in which no plan changed state — after two consecutive dry rounds, or at the `--rounds` ceiling. `settled?` reports when every plan is done or deliberately parked.
+The loop ends when nothing is running and nothing is left to start: every plan in scope is settled, blocked, approved and awaiting merge, or has used up the rounds its agents may take on it. `q` ends it sooner. `settled?` reports when every plan is done or deliberately parked.
 
-Progress is read from disk, never from what an agent claims. The runner runs `resync dirs` before it assigns a round, so a folder whose name lags its contents (a run killed before its closing resync, a plan.md written by hand) goes to the agent its contents call for, under the name that agent's prompt will read. It runs `resync dirs` again once every agent in the round has finished and re-reads the folder name, so an agent that reports success but wrote nothing shows as `no change`.
+Progress is read from disk, never from what an agent claims. Folder names are reconciled with their contents before every dispatch, so a folder whose name lags (a run killed before its rename, a plan.md written by hand) goes to the agents its contents call for, under the name their prompts will read; a plan an agent is inside is left alone until that agent is done. A `Completed` line moves the folder only if the destination's own files are there, and an agent that stopped without signing is judged by what it left behind, so one that reports success but wrote nothing shows as `Interrupted`.
 
 **Blocked plans are never assigned to anyone.** ⭕️ and 🅱️ mean a human decides; an agent that could move them would make the states meaningless. They are reported at the end with a pointer to their `blocked.md`.
 

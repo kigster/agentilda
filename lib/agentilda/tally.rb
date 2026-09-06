@@ -34,8 +34,10 @@ module Agentilda
     # @param attempts [Array<Agentilda::Runner::Attempt>]
     # @param seconds [Float] wall clock for the whole loop, which is not the
     #   sum of the agents' own times: several of them run at once
-    # @param rounds [Integer]
-    def initialize(attempts:, seconds:, rounds: 0)
+    # @param rounds [Integer, nil] accepted so an older caller still works, and
+    #   otherwise unused: the loop has no rounds of its own any more, each
+    #   agent counts its own per plan, so the summary counts invocations
+    def initialize(attempts:, seconds:, rounds: nil)
       @attempts = attempts.reject { |a| a.ordinal == "?" }
       @seconds = seconds
       @rounds = rounds
@@ -47,7 +49,7 @@ module Agentilda
     # @return [Float] wall clock
     attr_reader :seconds
 
-    # @return [Integer]
+    # @return [Integer, nil]
     attr_reader :rounds
 
     # Plans an agent was actually started against, counted once each however
@@ -101,7 +103,7 @@ module Agentilda
     def summary
       [
         "#{plans} plan#{"s" unless plans == 1} addressed",
-        "#{rounds} round#{"s" unless rounds == 1}",
+        "#{attempts.size} invocation#{"s" unless attempts.size == 1}",
         duration(seconds),
         "#{format("%.1f", concurrency)} agents at a time",
         "↑ #{UI.abbreviate(up)} ↓ #{UI.abbreviate(down)}"

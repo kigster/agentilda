@@ -5,7 +5,7 @@ require "spec_helper"
 # The loop reports which plan moved and which agent failed. This is the part
 # nobody could see afterwards: what the run cost to get there.
 RSpec.describe Agentilda::Tally do
-  subject(:tally) { described_class.new(attempts:, seconds: 600.0, rounds: 2) }
+  subject(:tally) { described_class.new(attempts:, seconds: 600.0) }
 
   def attempt(agent, ordinal, up:, down:, seconds:, subagents: 0, delegated: 0)
     Agentilda::Runner::Attempt.new(ordinal:, agent:, from: :planned, to: :building, ok: true,
@@ -82,7 +82,14 @@ RSpec.describe Agentilda::Tally do
     end
 
     it "still reports the run when no agent was started" do
-      expect(described_class.new(attempts: [], seconds: 12.0, rounds: 1).render).to include("0 plans addressed").and include("12s")
+      expect(described_class.new(attempts: [], seconds: 12.0).render)
+        .to include("0 plans addressed").and include("0 invocations").and include("12s")
+    end
+
+    # The loop has no rounds of its own: each agent counts its own per plan,
+    # so the summary counts what was actually started.
+    it "counts invocations rather than rounds" do
+      expect(tally.summary).to include("3 invocations")
     end
 
     it "reads the clock in minutes and hours rather than in four-figure seconds" do

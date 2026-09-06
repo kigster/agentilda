@@ -44,9 +44,22 @@ module Agentilda
         def to_s = "#{dirname} → #{File.basename(target)}  (#{reason})"
       end
 
+      # The state a folder's contents justify, or the one it claims when
+      # nothing fits. What a rename moves toward, and what the dispatcher
+      # reads on a dry run, which renames nothing, so the preview still
+      # names the agents a real run would start.
+      #
+      # @param subject [Agentilda::Subject]
+      # @return [Agentilda::Status]
+      def self.target(subject) = subject.best_fit || subject.status
+
       # @param tree [Agentilda::Tree]
-      def initialize(tree:)
+      # @param except [Array<String>] ordinals to leave alone however wrong
+      #   their names are: the dispatcher passes the plans an agent is
+      #   working in right now
+      def initialize(tree:, except: [])
         @tree = tree
+        @except = except.map(&:to_s)
       end
 
       # @return [Agentilda::Tree]
@@ -55,26 +68,11 @@ module Agentilda
       # What would change, without changing anything.
       #
       # @return [Array<Agentilda::Resync::Dirs::Change>]
-      def plan = tree.subjects.filter_map { |subject| change_for(subject) }
-
-      # The state a folder is named for once it has been reconciled: what
-      # its contents justify, or, when nothing fits, what it already claims.
-      #
-      # `best_fit` answers "which state do these contents justify", and falls
-      # back to the state already claimed when nothing fits, so a folder with
-      # an unreadable set of contents still gets its number padded rather than
-      # being skipped for a reason that has nothing to do with its number.
-      #
-      # Invariants are minimum requirements, so a ⚪️ folder that has grown a
-      # `plan.md` still satisfies ⚪️ and is 🟡 anyway.
-      #
-      # {Runner} dispatches on this rather than on the raw name, so that a dry
-      # run, which renames nothing, still previews the agents a real run
-      # would start.
-      #
-      # @param subject [Agentilda::Subject]
-      # @return [Agentilda::Status]
-      def self.target(subject) = subject.best_fit || subject.status
+      def plan
+        tree.subjects.filter_map do |subject|
+          change_for(subject) unless @except.include?(subject.feature.ordinal.to_s)
+        end
+      end
 
       # @param commit [Boolean] actually rename
       # @return [Array<Agentilda::Resync::Dirs::Change>] what was proposed

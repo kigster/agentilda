@@ -36,7 +36,8 @@ module Agentilda
     SPINE = {
       retroactive: :planned,
       new: :researched,
-      researched: :planned,
+      researched: :ready_for_planning,
+      ready_for_planning: :planned,
       planned: :building,
       building: :building_ui,
       building_ui: :ready_for_review,
@@ -54,7 +55,7 @@ module Agentilda
     # absence of documents rather than the presence of any.
     PREFERENCE = %i[
       discarded rolled_back shit deferred blocked product_blocked
-      deployed approved rejected in_review ready_for_review building_ui building planned
+      deployed approved rejected in_review ready_for_review building_ui building planned ready_for_planning
       researched new
       retroactive
     ].freeze
@@ -66,20 +67,19 @@ module Agentilda
     # ⭕️ and 🅱️ both mean "a human must decide before this moves"; *which*
     # human is recorded nowhere but the emoji.
     #
-    # 🟡 🎨 🟢 👀 🔴 all look identical on disk — a `plan.md` and some open
-    # pull requests. Whether the back end is still being built, the interface
-    # is, CI is green and a reviewer is wanted, a reviewer is reading it, or a
-    # reviewer asked for changes is not written down anywhere a program could
-    # read. So `resync` never moves between them; they advance by events
-    # alone. 🎨 left out of this list was renamed back to 🟡 by every resync,
-    # and the hand-off to the front-end half never happened.
+    # ⭐️ 🟡 🎨 look identical on disk: a `spec.md` and a `plan.md` with work
+    # units in it. Whether nobody has started, the back end is under way, or
+    # the interface is, is recorded only by the agent that renamed the folder
+    # when it started. 🟢 👀 🔴 add an open pull request and are just as
+    # mute about whether a reviewer has seen it. So `resync` never moves
+    # between any of them; they advance by events alone.
     #
-    # Order matters: the first member is the *weakest claim* in the family, and
-    # it is where a folder arriving from outside lands. Contents that fit the
-    # family justify only its floor, never its ceiling.
+    # Order matters: the members run weakest claim first, and a folder
+    # arriving from outside lands on the weakest member its contents fit.
+    # Contents that fit the family justify only its floor, never its ceiling.
     FAMILIES = [
       %i[blocked product_blocked],
-      %i[building building_ui ready_for_review in_review rejected]
+      %i[planned building building_ui ready_for_review in_review rejected]
     ].freeze
 
     # States the agent loop leaves alone: work that is finished (✅ 😎), work
@@ -113,13 +113,22 @@ module Agentilda
         transitions from: %i[new retroactive blocked product_blocked deferred], to: :researched
       end
 
+      # The specification is done and the planner has not started. Entered
+      # by the harness when `yoda-writer` completes; `resync` reaches it on
+      # a blank `plan.md`. Without it ⭐️ Planned required a file only the
+      # agent handling ⭐️ Planned writes, and nothing could enter it.
+      event :ready_to_plan, guard: :justified? do
+        transitions from: %i[researched new retroactive shit blocked product_blocked deferred],
+          to: :ready_for_planning
+      end
+
       # `new` stays in this list. The spine routes a plan through research, and
       # that is what the agent loop follows — but a specification somebody has
       # already researched by hand should not have to pretend otherwise to get
       # planned. What research buys is not enforced here; it is enforced by
       # `yoda-writer` handling `researched` and nothing else.
       event :plan, guard: :justified? do
-        transitions from: %i[researched new retroactive shit blocked product_blocked deferred],
+        transitions from: %i[ready_for_planning researched new retroactive shit blocked product_blocked deferred],
           to: :planned
       end
 
@@ -138,8 +147,10 @@ module Agentilda
         transitions from: %i[building rejected], to: :building_ui
       end
 
+      # The pair lands one pull request, and whichever half finishes last
+      # carries the plan to review from wherever the folder stands.
       event :submit, guard: :justified? do
-        transitions from: %i[building_ui rolled_back], to: :ready_for_review
+        transitions from: %i[building building_ui rejected rolled_back], to: :ready_for_review
       end
 
       event :review, guard: :justified? do
@@ -171,15 +182,15 @@ module Agentilda
       end
 
       event :block, guard: :justified? do
-        transitions from: %i[new planned building], to: :blocked
+        transitions from: %i[new planned ready_for_planning building], to: :blocked
       end
 
       event :block_on_product, guard: :justified? do
-        transitions from: %i[new planned building], to: :product_blocked
+        transitions from: %i[new planned ready_for_planning building], to: :product_blocked
       end
 
       event :defer, guard: :justified? do
-        transitions from: %i[new planned building blocked product_blocked], to: :deferred
+        transitions from: %i[new planned ready_for_planning building blocked product_blocked], to: :deferred
       end
 
       # Anything, from anywhere, may be dropped for good.
@@ -312,10 +323,12 @@ module Agentilda
     #
     # - **Already inside one** — the current name wins. Re-deriving it would be
     #   a guess dressed up as a correction, and every ⭕️ would become 🅱️.
-    # - **Arriving from outside** — the family's *first* member wins, not the
-    #   furthest. A ✅ folder found with an open pull request is demonstrably
-    #   back in the PR phase; nothing shows whether a reviewer has seen it, so
-    #   it lands on 🟡 rather than claiming 🔴.
+    # - **Arriving from outside** — the *weakest* member the contents fit
+    #   wins, not the furthest. A 📋 folder whose `plan.md` grew work units
+    #   lands on ⭐️, not 🟡, because nobody has started. A ✅ folder found
+    #   with an open pull request is demonstrably back in the PR phase, and
+    #   ⭐️ refuses an open pull request, so it lands on 🟡 rather than
+    #   claiming 🔴.
     #
     # @return [Agentilda::Status, nil] nil when nothing fits at all
     def best_fit
@@ -326,7 +339,10 @@ module Agentilda
       return status if self.class.family_of(key).include?(best.key)
 
       family = self.class.family_of(best.key)
-      family.empty? ? best : STATUS_BY_KEY.fetch(family.first)
+      return best if family.empty?
+
+      floor = family.find { |k| fitting.any? { |s| s.key == k } }
+      STATUS_BY_KEY.fetch(floor)
     end
 
     private

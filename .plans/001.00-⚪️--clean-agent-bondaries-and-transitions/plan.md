@@ -30,29 +30,29 @@ ______________________________________________________________________
 
 ## File structure
 
-| File | Responsibility |
-| :--- | :--- |
-| `lib/agentilda/ledger.rb` (new) | The one regex, `Entry`, `Handoff`, `Problem`, `Reading`; parse a document, render a block, append a block, find an agent's trailing entry |
-| `lib/agentilda/agent.rb` | Frontmatter gains `ledger:`, `rounds:`, `effort:`, `starts_as:`, `holds_at:`; `Agent#role` |
-| `agents/*.md` | New frontmatter values; prompts lose `git mv`, gain nothing (the ledger paragraph comes from the executor) |
-| `lib/agentilda/status.rb` | 📋 `:ready_for_planning`; ⭐️ Planned requires a heading in `plan.md`; `PLAN_HEADING` |
-| `lib/agentilda/state_machine.rb` | Spine 🔎 → 📋 → ⭐️; `ready_to_plan` event; `submit` from 🟡 and 🔴 too |
-| `lib/agentilda/linear/mapping.rb` | `ready_for_planning` placement |
-| `lib/agentilda/pull_request.rb` | `PullRequests.upsert` keeps everything that is not the table |
-| `lib/agentilda/child.rb` (new) | Spawn `claude`, stream its stdout, own its pid, kill it |
-| `lib/agentilda/clock.rb` (new) | Deadline, the WARN/WRAP_UP/STOP moments, `extend!`, the expiry callback |
-| `lib/agentilda/executor.rb` | Uses `Child` and `Clock`; `Handle` for kill/extend; `--brief`, `--effort`; `ledger_section`; `timeout_for` is a `min` |
-| `lib/agentilda/transcript.rb` | `SendUserMessage` becomes `Progress#message` |
-| `lib/agentilda/state_file.rb` (new) | `.plans/tmp/agentilda-state.json`: run heartbeat, stages, stranded detection, `.gitignore` line |
-| `lib/agentilda/dispatcher.rb` (new) | The tick: poll, settle, promote, chain, rerun, verify-and-sign, dispatch, kill, extend |
-| `lib/agentilda/runner.rb` | `Attempt` gains `round`, `file`, `model`; `Runner#call` drives the `Dispatcher`; publishing on the pair's last `Completed` |
-| `lib/agentilda/screen.rb` (new) | Draws the two bars, the header, the rows, the dialog and the help onto a `TTY::Cursor` screen |
-| `lib/agentilda/console.rb` (new) | Selection, pending changes, ENTER/ESC; the object the keyboard talks to |
-| `lib/agentilda/keyboard.rb` | `s`, arrows, `k`, `x`, ENTER, ESC; help lists them |
-| `lib/agentilda/cli/run/run.rb` | `--rounds` is a cap; `--chain` gone; state file; report per attempt |
-| `lib/agentilda/brief.rb` | The prompt says fifty seconds |
-| `README.md`, `docs/WORKFLOW.md` | 📋 in the pipeline, the agents table, the keys, the ledger |
-| `.standard.yml` (new), `.gitignore` | `standardrb` stops walking up to `~/.standard.yml`; `.plans/tmp/` ignored |
+| File                                | Responsibility                                                                                                                            |
+| :---------------------------------- | :---------------------------------------------------------------------------------------------------------------------------------------- |
+| `lib/agentilda/ledger.rb` (new)     | The one regex, `Entry`, `Handoff`, `Problem`, `Reading`; parse a document, render a block, append a block, find an agent's trailing entry |
+| `lib/agentilda/agent.rb`            | Frontmatter gains `ledger:`, `rounds:`, `effort:`, `starts_as:`, `holds_at:`; `Agent#role`                                                |
+| `agents/*.md`                       | New frontmatter values; prompts lose `git mv`, gain nothing (the ledger paragraph comes from the executor)                                |
+| `lib/agentilda/status.rb`           | 📋 `:ready_for_planning`; ⭐️ Planned requires a heading in `plan.md`; `PLAN_HEADING`                                                      |
+| `lib/agentilda/state_machine.rb`    | Spine 🔎 → 📋 → ⭐️; `ready_to_plan` event; `submit` from 🟡 and 🔴 too                                                                    |
+| `lib/agentilda/linear/mapping.rb`   | `ready_for_planning` placement                                                                                                            |
+| `lib/agentilda/pull_request.rb`     | `PullRequests.upsert` keeps everything that is not the table                                                                              |
+| `lib/agentilda/child.rb` (new)      | Spawn `claude`, stream its stdout, own its pid, kill it                                                                                   |
+| `lib/agentilda/clock.rb` (new)      | Deadline, the WARN/WRAP_UP/STOP moments, `extend!`, the expiry callback                                                                   |
+| `lib/agentilda/executor.rb`         | Uses `Child` and `Clock`; `Handle` for kill/extend; `--brief`, `--effort`; `ledger_section`; `timeout_for` is a `min`                     |
+| `lib/agentilda/transcript.rb`       | `SendUserMessage` becomes `Progress#message`                                                                                              |
+| `lib/agentilda/state_file.rb` (new) | `.plans/tmp/agentilda-state.json`: run heartbeat, stages, stranded detection, `.gitignore` line                                           |
+| `lib/agentilda/dispatcher.rb` (new) | The tick: poll, settle, promote, chain, rerun, verify-and-sign, dispatch, kill, extend                                                    |
+| `lib/agentilda/runner.rb`           | `Attempt` gains `round`, `file`, `model`; `Runner#call` drives the `Dispatcher`; publishing on the pair's last `Completed`                |
+| `lib/agentilda/screen.rb` (new)     | Draws the two bars, the header, the rows, the dialog and the help onto a `TTY::Cursor` screen                                             |
+| `lib/agentilda/console.rb` (new)    | Selection, pending changes, ENTER/ESC; the object the keyboard talks to                                                                   |
+| `lib/agentilda/keyboard.rb`         | `s`, arrows, `k`, `x`, ENTER, ESC; help lists them                                                                                        |
+| `lib/agentilda/cli/run/run.rb`      | `--rounds` is a cap; `--chain` gone; state file; report per attempt                                                                       |
+| `lib/agentilda/brief.rb`            | The prompt says fifty seconds                                                                                                             |
+| `README.md`, `docs/WORKFLOW.md`     | 📋 in the pipeline, the agents table, the keys, the ledger                                                                                |
+| `.standard.yml` (new), `.gitignore` | `standardrb` stops walking up to `~/.standard.yml`; `.plans/tmp/` ignored                                                                 |
 
 ______________________________________________________________________
 
@@ -225,8 +225,7 @@ end
 
 - [ ] **Step 2: Run it to see it fail**
 
-Run: `eval "$(rbenv init -)" && bundle exec rspec spec/agentilda/ledger_spec.rb`
-Expected: `uninitialized constant Agentilda::Ledger`
+Run: `eval "$(rbenv init -)" && bundle exec rspec spec/agentilda/ledger_spec.rb` Expected: `uninitialized constant Agentilda::Ledger`
 
 - [ ] **Step 3: Write the module**
 
@@ -462,8 +461,7 @@ end
 
 In `lib/agentilda.rb`, add `ledger` to the `%w[...]` list on the line after `status`.
 
-Run: `eval "$(rbenv init -)" && bundle exec rspec spec/agentilda/ledger_spec.rb`
-Expected: all green.
+Run: `eval "$(rbenv init -)" && bundle exec rspec spec/agentilda/ledger_spec.rb` Expected: all green.
 
 - [ ] **Step 5: Commit**
 
@@ -548,8 +546,7 @@ Append to `spec/agentilda/agents_spec.rb`, inside the top-level `describe`:
 
 - [ ] **Step 2: Run to see them fail**
 
-Run: `eval "$(rbenv init -)" && bundle exec rspec spec/agentilda/agents_spec.rb`
-Expected: `NoMethodError: undefined method 'ledger'` and friends.
+Run: `eval "$(rbenv init -)" && bundle exec rspec spec/agentilda/agents_spec.rb` Expected: `NoMethodError: undefined method 'ledger'` and friends.
 
 - [ ] **Step 3: Extend `Agent` and `Agents#parse`**
 
@@ -732,11 +729,9 @@ writes: [spec.md, plan.md, blocked.md]
 
 - [ ] **Step 5: Run the spec, then the whole suite**
 
-Run: `eval "$(rbenv init -)" && bundle exec rspec spec/agentilda/agents_spec.rb`
-Expected: green.
+Run: `eval "$(rbenv init -)" && bundle exec rspec spec/agentilda/agents_spec.rb` Expected: green.
 
-Run: `eval "$(rbenv init -)" && bundle exec rspec`
-Expected: the executor example "runs the model the agent's frontmatter declares" now fails because yoda is `sonnet`; change its expectation to `["--model", "sonnet"]`. Expected count afterwards: baseline failures only (the 9 named above), plus whichever `runner_spec` examples assume palpatine handles `planned`. Leave those; Task 10 rewrites `runner_spec.rb` whole.
+Run: `eval "$(rbenv init -)" && bundle exec rspec` Expected: the executor example "runs the model the agent's frontmatter declares" now fails because yoda is `sonnet`; change its expectation to `["--model", "sonnet"]`. Expected count afterwards: baseline failures only (the 9 named above), plus whichever `runner_spec` examples assume palpatine handles `planned`. Leave those; Task 10 rewrites `runner_spec.rb` whole.
 
 - [ ] **Step 6: Commit**
 
@@ -823,8 +818,7 @@ Append inside `RSpec.describe Agentilda::StateMachine`:
 
 - [ ] **Step 2: Run to see them fail**
 
-Run: `eval "$(rbenv init -)" && bundle exec rspec spec/agentilda/state_machine_spec.rb`
-Expected: failures naming `:ready_for_planning`.
+Run: `eval "$(rbenv init -)" && bundle exec rspec spec/agentilda/state_machine_spec.rb` Expected: failures naming `:ready_for_planning`.
 
 - [ ] **Step 3: Add the status and tighten ⭐️**
 
@@ -888,8 +882,7 @@ In `lib/agentilda/linear/mapping.rb` add to `PLACEMENTS` after `researched`:
 
 - [ ] **Step 4: Run the machine, Linear, docs and diagram specs**
 
-Run: `eval "$(rbenv init -)" && bundle exec rspec spec/agentilda/state_machine_spec.rb spec/agentilda/linear spec/agentilda/documentation_spec.rb spec/agentilda/diagram_spec.rb spec/agentilda/resync spec/agentilda/cli/docs_states_spec.rb`
-Expected: green. If `documentation_spec` or `diagram_spec` assert a literal list of states, add 📋 in spine order.
+Run: `eval "$(rbenv init -)" && bundle exec rspec spec/agentilda/state_machine_spec.rb spec/agentilda/linear spec/agentilda/documentation_spec.rb spec/agentilda/diagram_spec.rb spec/agentilda/resync spec/agentilda/cli/docs_states_spec.rb` Expected: green. If `documentation_spec` or `diagram_spec` assert a literal list of states, add 📋 in spine order.
 
 Also fix `spec/agentilda/runner_spec.rb:31` fixture: `t.plan "001.00", :planned, ..., files: {..., "plan.md" => "# P"}` is still ⭐️ because `# P` is a heading. Leave it.
 
@@ -956,8 +949,7 @@ Append to `spec/agentilda/pull_requests_render_spec.rb`:
 
 - [ ] **Step 2: Run to see them fail**
 
-Run: `eval "$(rbenv init -)" && bundle exec rspec spec/agentilda/pull_requests_render_spec.rb`
-Expected: `NoMethodError: undefined method 'upsert'`.
+Run: `eval "$(rbenv init -)" && bundle exec rspec spec/agentilda/pull_requests_render_spec.rb` Expected: `NoMethodError: undefined method 'upsert'`.
 
 - [ ] **Step 3: Implement `upsert`**
 
@@ -1007,8 +999,7 @@ In `Runner#record_pull_request` replace the final `File.write(...)` with:
 
 - [ ] **Step 4: Run and commit**
 
-Run: `eval "$(rbenv init -)" && bundle exec rspec spec/agentilda/pull_requests_render_spec.rb spec/agentilda/pull_request_spec.rb`
-Expected: green.
+Run: `eval "$(rbenv init -)" && bundle exec rspec spec/agentilda/pull_requests_render_spec.rb spec/agentilda/pull_request_spec.rb` Expected: green.
 
 ```bash
 git add lib/agentilda/pull_request.rb lib/agentilda/runner.rb spec/agentilda/pull_requests_render_spec.rb
@@ -1158,8 +1149,7 @@ end
 
 - [ ] **Step 3: Run both to see them fail**
 
-Run: `eval "$(rbenv init -)" && bundle exec rspec spec/agentilda/child_spec.rb spec/agentilda/clock_spec.rb`
-Expected: uninitialized constants.
+Run: `eval "$(rbenv init -)" && bundle exec rspec spec/agentilda/child_spec.rb spec/agentilda/clock_spec.rb` Expected: uninitialized constants.
 
 - [ ] **Step 4: Write `Child`**
 
@@ -1390,8 +1380,7 @@ Register `child` and `clock` in `lib/agentilda.rb` after `control`.
 
 - [ ] **Step 6: Run, then commit**
 
-Run: `eval "$(rbenv init -)" && bundle exec rspec spec/agentilda/child_spec.rb spec/agentilda/clock_spec.rb spec/agentilda/control_spec.rb`
-Expected: green.
+Run: `eval "$(rbenv init -)" && bundle exec rspec spec/agentilda/child_spec.rb spec/agentilda/clock_spec.rb spec/agentilda/control_spec.rb` Expected: green.
 
 ```bash
 git add lib/agentilda/child.rb lib/agentilda/clock.rb lib/agentilda/control.rb lib/agentilda.rb spec/agentilda/child_spec.rb spec/agentilda/clock_spec.rb
@@ -1411,6 +1400,7 @@ ______________________________________________________________________
 **Interfaces:**
 
 - Consumes: `Child`, `Clock`, `Control.write`, `Agent#effort`, `Agent#ledger`, `Agent#rounds`.
+
 - Produces: `Executor.new(root:, spawn: Child.method(:spawn), timeout: 900, ...)` (the `command:` keyword goes). `Executor#call(agent, subject, root:, round: 1, successor: nil, handle: nil, &on_progress)`. `Executor::Handle` with `child`, `clock`, `control`, `pid`, `remaining`, `phase`, `kill!(grace:)`, `extend!(seconds)`, `killed` (`nil`, `:key`, `:timeout`). `Executor::Result` gains `killed` and `pid`. `Executor#timeout_for(agent) = [agent.timeout, @timeout].compact.min`. `Executor#ledger_section(agent, round:, successor:)`. Argv gains `--brief` always and `--effort <level>` when the agent declares one. `Transcript::Progress#message`.
 
 - [ ] **Step 1: Replace the executor examples that name `TTY::Command`**
@@ -1533,8 +1523,7 @@ And in `spec/agentilda/transcript_spec.rb`:
 
 - [ ] **Step 2: Run to see them fail**
 
-Run: `eval "$(rbenv init -)" && bundle exec rspec spec/agentilda/executor_spec.rb spec/agentilda/transcript_spec.rb`
-Expected: `unknown keyword: :spawn` and `undefined method 'message'`.
+Run: `eval "$(rbenv init -)" && bundle exec rspec spec/agentilda/executor_spec.rb spec/agentilda/transcript_spec.rb` Expected: `unknown keyword: :spawn` and `undefined method 'message'`.
 
 - [ ] **Step 3: Rewrite the executor's process handling**
 
@@ -1832,8 +1821,7 @@ In `Transcript`:
 
 - [ ] **Step 5: Run and commit**
 
-Run: `eval "$(rbenv init -)" && bundle exec rspec spec/agentilda/executor_spec.rb spec/agentilda/transcript_spec.rb spec/agentilda/control_spec.rb`
-Expected: green.
+Run: `eval "$(rbenv init -)" && bundle exec rspec spec/agentilda/executor_spec.rb spec/agentilda/transcript_spec.rb spec/agentilda/control_spec.rb` Expected: green.
 
 ```bash
 git add lib/agentilda/executor.rb lib/agentilda/transcript.rb spec/agentilda/executor_spec.rb spec/agentilda/transcript_spec.rb
@@ -2091,8 +2079,7 @@ Register `state_file` in `lib/agentilda.rb` after `ledger`.
 
 - [ ] **Step 3: Run and commit**
 
-Run: `eval "$(rbenv init -)" && bundle exec rspec spec/agentilda/state_file_spec.rb`
-Expected: green.
+Run: `eval "$(rbenv init -)" && bundle exec rspec spec/agentilda/state_file_spec.rb` Expected: green.
 
 ```bash
 git add lib/agentilda/state_file.rb lib/agentilda.rb spec/agentilda/state_file_spec.rb
@@ -2113,6 +2100,7 @@ ______________________________________________________________________
 **Interfaces:**
 
 - Consumes: `Ledger`, `StateFile`, `Executor#call(agent, subject, root:, round:, successor:, handle:)`, `Executor::Handle`, `Agent#ledger/rounds/starts_as/holds_at/advances_to`, `StateMachine#may?/promote!`, `PullRequests.upsert`.
+
 - Produces: `Board` and `Board::Row` (the screen's model), `Dispatcher.new(runner:, state:, rounds: nil, sleeper:, on_board: nil)`, `Dispatcher#run` (returns `Array<Runner::Attempt>`), `#tick`, `#running` (`Array<Dispatcher::Job>`), `#board`, `#kill(key)`, `#extend(key, seconds)`, `Dispatcher::Job` (`key`, `task`, `handle`, `started_at`, `file`, `status`, `message`, `up`, `down`). `Runner.new(tree:, executor:, agents:, isolation:, jobs:, worktree:, plans:, publisher:, dry_run:, rounds:, state:, sleeper:, on_board:)`, `Runner#call` returning attempts, `Runner::Attempt` with `round`, `file`, `model`, `status`; `Runner#attempts`, `#prepare`, `#in_scope`, `#publish`, `#dry_run?`, `#executor`, `#agents`.
 
 - [ ] **Step 1: Write the board**
@@ -2449,8 +2437,7 @@ end
 
 - [ ] **Step 3: Run it to see it fail**
 
-Run: `eval "$(rbenv init -)" && bundle exec rspec spec/agentilda/dispatcher_spec.rb`
-Expected: `uninitialized constant Agentilda::Dispatcher`.
+Run: `eval "$(rbenv init -)" && bundle exec rspec spec/agentilda/dispatcher_spec.rb` Expected: `uninitialized constant Agentilda::Dispatcher`.
 
 - [ ] **Step 4: Write the dispatcher**
 
@@ -3109,8 +3096,7 @@ Delete the "chaining", "termination", "progress is read from disk", and "publish
 
 - [ ] **Step 7: Run both specs and commit**
 
-Run: `eval "$(rbenv init -)" && bundle exec rspec spec/agentilda/dispatcher_spec.rb spec/agentilda/runner_spec.rb`
-Expected: green.
+Run: `eval "$(rbenv init -)" && bundle exec rspec spec/agentilda/dispatcher_spec.rb spec/agentilda/runner_spec.rb` Expected: green.
 
 ```bash
 git add lib/agentilda/board.rb lib/agentilda/dispatcher.rb lib/agentilda/runner.rb lib/agentilda.rb spec/agentilda/dispatcher_spec.rb spec/agentilda/runner_spec.rb
@@ -3136,6 +3122,7 @@ ______________________________________________________________________
 **Interfaces:**
 
 - Consumes: `Board`, `Board::Row`, `UI.paint`, `UI.fit`, `UI.abbreviate`, `UI.countdown`.
+
 - Produces: `Screen.new(output:, width:, height:)`, `#open`, `#close`, `#draw(board)`, `#render(board)` (the frame as a String, no cursor codes), `Screen::COLUMNS`, `Screen::SPINNER`, `Screen::FILE_STYLES`, `Screen.hyperlink(text, url)`.
 
 - [ ] **Step 1: Write the failing spec**
@@ -3487,8 +3474,7 @@ The help overlay shows the key list; when `board.help` is a String it is rendere
 
 - [ ] **Step 3: Run and commit**
 
-Run: `eval "$(rbenv init -)" && bundle exec rspec spec/agentilda/screen_spec.rb`
-Expected: green.
+Run: `eval "$(rbenv init -)" && bundle exec rspec spec/agentilda/screen_spec.rb` Expected: green.
 
 ```bash
 git add lib/agentilda/screen.rb lib/agentilda.rb agentilda.gemspec Gemfile.lock spec/agentilda/screen_spec.rb
@@ -3509,6 +3495,7 @@ ______________________________________________________________________
 **Interfaces:**
 
 - Consumes: `Dispatcher#kill(key)`, `Dispatcher#extend(key, seconds)`, `Screen#draw`, `Board`.
+
 - Produces: `Console.new(screen:)`, `#attach(dispatcher)`, `#paint(board)`, `#select_next`, `#select_prev`, `#toggle_kill`, `#extend`, `#apply`, `#escape`, `#toggle_help`, `#selected`, `#pending`, `#dialog?`, `#help?`, `Console::EXTENSION = 600`. `Keyboard.listen(input:, sink:)`, `Keyboard#handle(key)` with the new keys, `Keyboard::BINDINGS` listing them.
 
 - [ ] **Step 1: Write the failing console spec**
@@ -3852,8 +3839,7 @@ and `handle` gains:
 
 - [ ] **Step 5: Run and commit**
 
-Run: `eval "$(rbenv init -)" && bundle exec rspec spec/agentilda/console_spec.rb spec/agentilda/keyboard_spec.rb`
-Expected: green.
+Run: `eval "$(rbenv init -)" && bundle exec rspec spec/agentilda/console_spec.rb spec/agentilda/keyboard_spec.rb` Expected: green.
 
 ```bash
 git add lib/agentilda/console.rb lib/agentilda/keyboard.rb lib/agentilda.rb spec/agentilda/console_spec.rb spec/agentilda/keyboard_spec.rb
@@ -3874,6 +3860,7 @@ ______________________________________________________________________
 **Interfaces:**
 
 - Consumes: `Runner`, `Dispatcher`, `StateFile`, `Screen`, `Console`, `Keyboard.listen(sink:)`.
+
 - Produces: `run --rounds N` as a cap; no `--chain`; the report as one line per attempt; `.plans/tmp/` ignored and announced.
 
 - [ ] **Step 1: Change the run examples**
@@ -3897,11 +3884,14 @@ In `spec/agentilda/cli/run_spec.rb`:
     end
 ```
 
-  (`with_executor` must return an `Executor::Result`, not an array; change the helper to wrap: `Agentilda::Executor::Result.new(ok: r[0], note: r[1], up: 0, down: 0, subagents: 0, delegated: 0, seconds: 0.0)`.)
+(`with_executor` must return an `Executor::Result`, not an array; change the helper to wrap: `Agentilda::Executor::Result.new(ok: r[0], note: r[1], up: 0, down: 0, subagents: 0, delegated: 0, seconds: 0.0)`.)
 
 - "shows a plan that actually moved as from -> to": the ⭐️ fixture now moves at dispatch because luke `starts_as` building; expect `"planned -> building"` still, and `err` to include `1 advanced`.
+
 - "--rounds": add an example that `--rounds 1` reaches the runner as `rounds: 1` (spy on `Agentilda::Runner.new`).
+
 - Add: `it "adds .plans/tmp/ to .gitignore once and says so"` using `system("git", "-C", root, "init", "-q")` then `run(commit: true)` and expecting `err` to include `.plans/tmp/`.
+
 - In `spec/agentilda/tally_spec.rb`, any expectation on `"N rounds"` becomes `"N invocations"`.
 
 - [ ] **Step 2: Rewrite the command**
@@ -3962,7 +3952,7 @@ In `lib/agentilda/cli/run/run.rb`:
         exit(failures(attempts).empty? ? 0 : 1)
 ```
 
-  `Console` gains `attr_reader :screen`. `Runner#call` becomes:
+`Console` gains `attr_reader :screen`. `Runner#call` becomes:
 
 ```ruby
     def call
@@ -3998,14 +3988,13 @@ In `lib/agentilda/cli/run/run.rb`:
         summary = ["#{attempts.size} invocation#{"s" unless attempts.size == 1}", "#{advanced} advanced"]
 ```
 
-  The rest of `report` (blocked, failures, dry-run warning) stays, with `rounds` replaced by `attempts` throughout.
+The rest of `report` (blocked, failures, dry-run warning) stays, with `rounds` replaced by `attempts` throughout.
 
 - In `Tally`: `def initialize(attempts:, seconds:, rounds: nil)`; `summary` replaces `"#{rounds} round#{...}"` with `"#{attempts.size} invocation#{"s" unless attempts.size == 1}"`.
 
 - [ ] **Step 3: Run and commit**
 
-Run: `eval "$(rbenv init -)" && bundle exec rspec spec/agentilda/cli/run_spec.rb spec/agentilda/tally_spec.rb`
-Expected: green.
+Run: `eval "$(rbenv init -)" && bundle exec rspec spec/agentilda/cli/run_spec.rb spec/agentilda/tally_spec.rb` Expected: green.
 
 ```bash
 git add lib/agentilda/cli/run/run.rb lib/agentilda/runner.rb lib/agentilda/tally.rb lib/agentilda/console.rb spec/agentilda/cli/run_spec.rb spec/agentilda/tally_spec.rb
@@ -4019,8 +4008,11 @@ ______________________________________________________________________
 **Files:**
 
 - Modify: `agents/leah-researcher.md`, `agents/yoda-writer.md`, `agents/palpatine-planner.md`, `agents/luke-backend.md`, `agents/rey-frontend.md`, `agents/hansolo-reviewer.md`, `agents/lando-broker.md` (bodies)
+
 - Modify: `lib/agentilda/brief.rb`
+
 - Modify: `README.md`, `docs/WORKFLOW.md` (regenerated)
+
 - Test: `spec/agentilda/brief_spec.rb`, `spec/agentilda/agents_spec.rb`
 
 - [ ] **Step 1: Write the failing examples**
@@ -4072,7 +4064,7 @@ In `spec/agentilda/brief_spec.rb`:
 - Sign `pull-requests.md` with your `Completed` ledger line (create the file with a `# Pull Requests` heading if it does not exist yet). Your `Started` line went into `plan-backend.md` (or `plan-frontend.md`) while you planned your half; the moment you write code, add a `Started` line to `pull-requests.md` too. The harness renames the folder and opens the pull request when the last of you signs `Completed`; you never rename anything.
 ```
 
-  In each "When to stop" section, after "Write `blocked.md` ...": add "and sign your document `Blocked, round N (technical)` or `(product)`".
+In each "When to stop" section, after "Write `blocked.md` ...": add "and sign your document `Blocked, round N (technical)` or `(product)`".
 
 `agents/yoda-writer.md`: replace "## Done when" with:
 
@@ -4084,7 +4076,7 @@ You stop writing the spec when it is clear as day what we are building and what 
 Then create an empty `plan.md` next to `spec.md` (`touch plan.md`). That blank file is what the harness reads as "ready for planning"; the planner fills it. Sign `spec.md` with your `Completed` line and `next: palpatine-planner`.
 ```
 
-  In "When to stop and block instead", replace the two bullets about the folder becoming ⭕️/🅱️ with: "Sign `spec.md` with `Blocked, round N (technical)` for an engineering decision or `Blocked, round N (product)` for a product one; the harness parks the folder accordingly."
+In "When to stop and block instead", replace the two bullets about the folder becoming ⭕️/🅱️ with: "Sign `spec.md` with `Blocked, round N (technical)` for an engineering decision or `Blocked, round N (product)` for a product one; the harness parks the folder accordingly."
 
 `agents/leah-researcher.md`: in "Stop and block rather than guess", replace "Say which kind each block is: ... makes the folder 🅱️." with "Sign `spec.md` with `Blocked, round N (technical)` or `Blocked, round N (product)`; the harness parks the folder." Leave the closing paragraph about 🔎 but change "the folder moves" to "the harness moves the folder".
 
@@ -4105,7 +4097,7 @@ Your ledger line in `pull-requests.md` carries the verdict in its note, and the 
 If `pull-requests.md` lists several pull requests, judge each; the plan is done only when every one is approved.
 ```
 
-  Delete the sentence in the opening paragraph about changing "the status to `shit`" and the item 6 instruction to change the status; the verdict word does it.
+Delete the sentence in the opening paragraph about changing "the status to `shit`" and the item 6 instruction to change the status; the verdict word does it.
 
 `agents/lando-broker.md`: replace "Do not rename the plan folder. `resync dirs` reads ..." with "Do not rename the plan folder; the harness does, from your `Completed` line in `plan.md`."
 
@@ -4126,15 +4118,15 @@ In `README.md`:
 - The pipeline block at the top: add `📋 Ready for Planning ──▶` between 🔎 and ⭐️.
 - The agents table:
 
-| Agent | Handles | Advances to | Signs | Does |
-| :-- | :-- | :-- | :-- | :-- |
-| `leah-researcher` | ⚪️ | 🔎 | `spec.md` | fans out parallel research, writes the `## Research` chapter |
-| `yoda-writer` | 🔎, 🕰️ | 📋 | `spec.md` | writes Goal/Non-Goals/Conclusion, leaves a blank `plan.md` |
-| `palpatine-planner` | 📋 | ⭐️ | `plan.md` | decomposes the spec into concurrent work units, three plans |
-| `luke-backend` | ⭐️, 🟡, 🔴 | 🟢 (🟡 on start, 🎨 while rey builds) | `plan-backend.md`, `pull-requests.md` | back end: data, domain, API, tests |
-| `rey-frontend` | ⭐️, 🟡, 🔴 | 🟢 | `plan-frontend.md`, `pull-requests.md` | interface against the contract; proves the halves join |
-| `hansolo-reviewer` | 🟢, 👀 | 🔴 / 👀 approved / 💩 | `pull-requests.md` | adversarial review; two rejections at most, never merges |
-| `lando-broker` | ⭕️, 🅱️ | ⭐️ | `plan.md` | folds answered blocks into spec.md/plan.md |
+| Agent               | Handles    | Advances to                           | Signs                                  | Does                                                         |
+| :------------------ | :--------- | :------------------------------------ | :------------------------------------- | :----------------------------------------------------------- |
+| `leah-researcher`   | ⚪️         | 🔎                                    | `spec.md`                              | fans out parallel research, writes the `## Research` chapter |
+| `yoda-writer`       | 🔎, 🕰️     | 📋                                    | `spec.md`                              | writes Goal/Non-Goals/Conclusion, leaves a blank `plan.md`   |
+| `palpatine-planner` | 📋         | ⭐️                                    | `plan.md`                              | decomposes the spec into concurrent work units, three plans  |
+| `luke-backend`      | ⭐️, 🟡, 🔴 | 🟢 (🟡 on start, 🎨 while rey builds) | `plan-backend.md`, `pull-requests.md`  | back end: data, domain, API, tests                           |
+| `rey-frontend`      | ⭐️, 🟡, 🔴 | 🟢                                    | `plan-frontend.md`, `pull-requests.md` | interface against the contract; proves the halves join       |
+| `hansolo-reviewer`  | 🟢, 👀     | 🔴 / 👀 approved / 💩                 | `pull-requests.md`                     | adversarial review; two rejections at most, never merges     |
+| `lando-broker`      | ⭕️, 🅱️     | ⭐️                                    | `plan.md`                              | folds answered blocks into spec.md/plan.md                   |
 
 - Replace "### Chaining: one plan, several agents, one round" with "### The ledger: how an agent hands off" describing the entry grammar, the `next:` line, that the harness renames, and the state file under `.plans/tmp/`.
 - "### The keyboard, while a run is in flight": add `s`, arrows, `k`, `x`, ENTER, ESC.
@@ -4166,8 +4158,7 @@ Regenerate `docs/WORKFLOW.md`: run `./exe/agentilda docs --help` to confirm the 
 
 - [ ] **Step 5: Run and commit**
 
-Run: `eval "$(rbenv init -)" && bundle exec rspec spec/agentilda/agents_spec.rb spec/agentilda/brief_spec.rb spec/agentilda/documentation_spec.rb`
-Expected: green.
+Run: `eval "$(rbenv init -)" && bundle exec rspec spec/agentilda/agents_spec.rb spec/agentilda/brief_spec.rb spec/agentilda/documentation_spec.rb` Expected: green.
 
 ```bash
 git add agents/ lib/agentilda/brief.rb README.md docs/WORKFLOW.md spec/agentilda/agents_spec.rb spec/agentilda/brief_spec.rb
@@ -4181,6 +4172,7 @@ ______________________________________________________________________
 **Files:**
 
 - Create: `.standard.yml`
+
 - Modify: whatever `standardrb --fix` touches
 
 - [ ] **Step 1: Give the repo its own standard config**
@@ -4196,18 +4188,15 @@ ignore:
 
 - [ ] **Step 2: Lint**
 
-Run: `eval "$(rbenv init -)" && bundle exec standardrb --fix && bundle exec standardrb`
-Expected: no offences. Fix by hand what `--fix` cannot.
+Run: `eval "$(rbenv init -)" && bundle exec standardrb --fix && bundle exec standardrb` Expected: no offences. Fix by hand what `--fix` cannot.
 
 - [ ] **Step 3: The whole suite**
 
-Run: `eval "$(rbenv init -)" && bundle exec rspec`
-Expected: `0 failures`; coverage printed at or above 95%. If any of the 3 pending examples is now implementable, leave it pending; it predates this work.
+Run: `eval "$(rbenv init -)" && bundle exec rspec` Expected: `0 failures`; coverage printed at or above 95%. If any of the 3 pending examples is now implementable, leave it pending; it predates this work.
 
 - [ ] **Step 4: A real dry run against this repository**
 
-Run: `eval "$(rbenv init -)" && ./exe/agentilda run` from the repo root.
-Expected: the plan of work lists `001.00` under `leah-researcher`, nothing is renamed, `.plans/tmp` is not created.
+Run: `eval "$(rbenv init -)" && ./exe/agentilda run` from the repo root. Expected: the plan of work lists `001.00` under `leah-researcher`, nothing is renamed, `.plans/tmp` is not created.
 
 - [ ] **Step 5: Commit, push, open the pull request, verify**
 
@@ -4240,30 +4229,33 @@ ______________________________________________________________________
 
 **Spec coverage.**
 
-| Spec requirement | Task |
-| :-- | :-- |
-| Dated ledger entries at start and end, naming agent, purpose (round) and outcome | 1, 6 (the section every prompt gets) |
-| The four outcomes plus Blocked; `next:` after Completed | 1, 8 |
-| Yoda leaves a blank `plan.md`; the state between yoda and palpatine | 3, 12 |
-| `--brief` on the agents, the agent's own words on the row | 6, 9 |
-| Warn at ten, five and one minute; stop at zero; kill sixty seconds later | 5, 6 |
-| `--timeout` only tightens | 6 |
-| Poll every second, row updated each second | 8 (`tick`, `poll`), 9 |
-| Briefer told fifty seconds, haiku | 12 |
-| Luke owns the 🟡 transition; the harness performs it | 2 (`starts_as`), 8 (`rename_on_start`) |
-| Han Solo may reject, the folder becomes 🔴, at most twice, then approve or scrap | 8 (`verdict_of`), 12 |
-| Two white bars, magenta up / cyan down on grey, header, rule, fixed columns, status on yellow | 9 |
-| File colours, PR number as a clickable link, red when rejected | 9 |
-| `[R:n/m]`, rounds default 1 max 5 | 2, 8, 9 |
-| Model column | 9 |
-| Help on `?`, `s` select, `k` kill, `x` extend, ENTER applies, ESC discards | 10 |
-| Kill = STOP, 15s, `kill -9`; verify and sign afterwards, bold red | 6 (`Handle#kill!`), 8 (`verify_and_sign`), 9 |
-| State file for restarts | 7, 8 (`resume_stranded`) |
-| Getting killed and knowing where to restart from | 7, 8 |
-| Models and efforts per agent | 2, 6 |
-| No overlap between predecessor and successor | 8 (`start` only from `dispatch`, after `reap`) |
-| `pull-requests.md` is where luke and rey sign | 2, 4, 12 |
+| Spec requirement                                                                              | Task                                           |
+| :-------------------------------------------------------------------------------------------- | :--------------------------------------------- |
+| Dated ledger entries at start and end, naming agent, purpose (round) and outcome              | 1, 6 (the section every prompt gets)           |
+| The four outcomes plus Blocked; `next:` after Completed                                       | 1, 8                                           |
+| Yoda leaves a blank `plan.md`; the state between yoda and palpatine                           | 3, 12                                          |
+| `--brief` on the agents, the agent's own words on the row                                     | 6, 9                                           |
+| Warn at ten, five and one minute; stop at zero; kill sixty seconds later                      | 5, 6                                           |
+| `--timeout` only tightens                                                                     | 6                                              |
+| Poll every second, row updated each second                                                    | 8 (`tick`, `poll`), 9                          |
+| Briefer told fifty seconds, haiku                                                             | 12                                             |
+| Luke owns the 🟡 transition; the harness performs it                                          | 2 (`starts_as`), 8 (`rename_on_start`)         |
+| Han Solo may reject, the folder becomes 🔴, at most twice, then approve or scrap              | 8 (`verdict_of`), 12                           |
+| Two white bars, magenta up / cyan down on grey, header, rule, fixed columns, status on yellow | 9                                              |
+| File colours, PR number as a clickable link, red when rejected                                | 9                                              |
+| `[R:n/m]`, rounds default 1 max 5                                                             | 2, 8, 9                                        |
+| Model column                                                                                  | 9                                              |
+| Help on `?`, `s` select, `k` kill, `x` extend, ENTER applies, ESC discards                    | 10                                             |
+| Kill = STOP, 15s, `kill -9`; verify and sign afterwards, bold red                             | 6 (`Handle#kill!`), 8 (`verify_and_sign`), 9   |
+| State file for restarts                                                                       | 7, 8 (`resume_stranded`)                       |
+| Getting killed and knowing where to restart from                                              | 7, 8                                           |
+| Models and efforts per agent                                                                  | 2, 6                                           |
+| No overlap between predecessor and successor                                                  | 8 (`start` only from `dispatch`, after `reap`) |
+| `pull-requests.md` is where luke and rey sign                                                 | 2, 4, 12                                       |
 
 **Placeholder scan.** No TBDs. Every code step carries the code. The one thing left to look up at execution time is the `docs` command's output flag, and the step says how.
 
 **Type consistency.** `Executor#call(agent, subject, root:, round:, successor:, handle:)` is the signature in Task 6 and what Task 8's dispatcher and specs call. `Runner::Attempt` fields `round`, `file`, `model`, `status` are defined in Task 8 and read in Tasks 9 and 11. `Board::Row` fields in Task 8 match every `Row.new` in Tasks 9 and 10. `Console#paint` is what Task 11 passes as `on_board`. `StateFile#record(ordinal, agent:, round:, **fields)` is called that way in Task 8. `Ledger::Entry.new` in Task 8 passes `file: "", line: 0` because those two have no default, matching Task 1.
+
+> [!NOTE]
+> [2026-09-06 10:31:01 AM PDT] [ agent: luke-backend status: Interrupted, round 1 (STOP arrived from the control file before any code or plan split was written. Nothing under lib/ or spec/ changed. Intended split: luke owns Tasks 1-8, 12 and 13; rey owns Tasks 9-11 and the docs. plan-backend.md, plan-frontend.md and implementation-plan.md still need writing. Baseline suite at start: see line below.) ] [2026-09-06 10:31:01 AM PDT] [ agent: luke-backend status: Interrupted, round 1 (Baseline: 867 examples, 9 failures, 3 pending) ] [2026-09-06 10:43:38 AM PDT] [ agent: luke-backend status: Started, round 2 (Extracting Tasks 1-8, 12, 13 from plan.md into files with one wave of sub-agents; plan-backend.md, plan-frontend.md and implementation-plan.md written) ]

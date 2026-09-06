@@ -77,6 +77,40 @@ module Agentilda
       MARKDOWN
     end
 
+    # The table alone, for splicing into a file that already says other
+    # things: the ledger blocks luke and rey write before a pull request
+    # exists. Rewriting the whole file deleted their signatures.
+    #
+    # @param prs [Array<Hash>]
+    # @return [String] header, rule and rows, newline-terminated
+    def self.table(prs)
+      rows = prs.map { |pr| "| #{pr[:number]} | [#{escape(pr[:title])}](#{pr[:url]}) | #{pr[:state]} |" }
+      ["| Pull Request Number | Pull Request Name | Status |",
+        "| ------------------: | :---------------- | -----: |", *rows].join("\n") + "\n"
+    end
+
+    # Write the table into +path+ without touching anything else there.
+    #
+    # @param path [String]
+    # @param prs [Array<Hash>]
+    # @return [void]
+    def self.upsert(path, prs)
+      return File.write(path, render(prs)) unless File.file?(path)
+
+      lines = File.read(path, encoding: "UTF-8").lines
+      start = lines.index { |l| l.strip.start_with?("|") && lines[lines.index(l) + 1].to_s.strip.start_with?("|") }
+      if start
+        stop = start
+        stop += 1 while lines[stop + 1]&.strip&.start_with?("|")
+        lines[start..stop] = [table(prs)]
+      else
+        at = lines.index { |l| l.start_with?("# ") }
+        insertion = ["\n", table(prs)]
+        at ? lines.insert(at + 1, *insertion) : lines.unshift("# Pull Requests\n", *insertion, "\n")
+      end
+      File.write(path, lines.join)
+    end
+
     # @param pr [Hash]
     # @return [String]
     def self.describe(pr)
