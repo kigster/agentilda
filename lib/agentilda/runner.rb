@@ -1,448 +1,104 @@
 # frozen_string_literal: true
 
 module Agentilda
-  # Drives specialist agents over a `.plans` tree until it stops changing.
+  # Drives specialist agents over a `.plans` tree until nothing is left to
+  # dispatch.
   #
-  # The hard part of any agent loop is knowing when to stop, and this one does
-  # not have to guess: the state machine already defines "satisfied". A round
-  # advances plans; the loop ends at a FIXED POINT — a round in which no plan
-  # changed state — or when nothing is left that an agent may touch.
-  #
-  # Blocked plans are not failures and not work. ⭕️ and 🅱️ mean a human must
-  # decide, so the loop reports them and steps around them. An agent that could
-  # move them would make the states meaningless.
+  # The loop itself is {Dispatcher}. This holds what the loop needs about
+  # the run: the tree and its scope, the roster, the executor, how many run
+  # at once, where each plan is checked out, and how a finished plan is
+  # published. Blocked plans (⭕️ 🅱️) are stepped around, never assigned.
   class Runner
     # What one agent did to one plan.
-    #
-    # @!attribute [r] ordinal
-    #   @return [String]
-    # @!attribute [r] agent
-    #   @return [String]
-    # @!attribute [r] from
-    #   @return [Symbol] state before
-    # @!attribute [r] to
-    #   @return [Symbol] state after
-    # @!attribute [r] ok
-    #   @return [Boolean]
-    # @!attribute [r] note
-    #   @return [String]
-    # @!attribute [r] up
-    #   @return [Integer] tokens sent, sub-agents included
-    # @!attribute [r] down
-    #   @return [Integer] tokens generated
-    # @!attribute [r] subagents
-    #   @return [Integer] sub-agents this agent spawned
-    # @!attribute [r] delegated
-    #   @return [Integer] of {#up}, how much arrived unsplit from a sub-agent
-    # @!attribute [r] seconds
-    #   @return [Float] how long the agent ran
     Attempt = Data.define(:ordinal, :agent, :from, :to, :ok, :note, :up, :down, :subagents,
-      :delegated, :seconds) do
+      :delegated, :seconds, :round, :file, :model, :status) do
+      def initialize(round: 1, file: "", model: nil, status: nil, **rest) = super
+
       # @return [Boolean] whether the plan actually moved
       def advanced? = ok && from != to
     end
 
-    # One pass over the tree.
-    #
-    # @!attribute [r] number
-    #   @return [Integer] 1-based
-    # @!attribute [r] attempts
-    #   @return [Array<Agentilda::Runner::Attempt>]
-    Round = Data.define(:number, :attempts) do
-      # @return [Integer]
-      def advanced = attempts.count(&:advanced?)
-
-      # @return [Boolean] nothing moved, so another identical round is pointless
-      def dry? = advanced.zero?
-    end
-
     # One unit of work: an agent, a plan, and the checkout it happens in.
-    #
-    # @!attribute [r] agent
-    #   @return [Agentilda::Agent]
-    # @!attribute [r] subject
-    #   @return [Agentilda::Subject]
-    # @!attribute [r] root
-    #   @return [String] the tree this agent sees
-    # @!attribute [r] checkout
-    #   @return [Agentilda::Worktree::Checkout, nil] nil when sharing a tree
-    # @!attribute [r] round
-    #   @return [Integer] which pass over the tree this task belongs to
     Task = Data.define(:agent, :subject, :root, :checkout, :round) do
-      # @return [String] for the spinner line — the pid and round render
-      #   beside this through the line's own `:pid` token, once known
-      def label = "#{subject.feature.ordinal}  #{UI.paint(agent.name, :yellow, :bold)}"
-
-      # The same facts unpainted and apart, for the log file, where they
-      # are columns rather than a sentence.
-      #
-      # @return [Hash]
+      # @return [Hash] columns for the log
       def log_fields
         {plan: subject.feature.ordinal.to_s, status: subject.status.to_s,
          agent: agent.name, round: format("%02d", round)}
       end
     end
 
-    # How a task's return value reads on its spinner line: any hop that was
-    # not ok makes the whole line a failure, shown with that hop's note. The
-    # executor reports failure by returning rather than raising, and a line
-    # that drew ✓ "done" over a timed-out agent — directly above a round
-    # table saying FAIL — was the contradiction this closes.
-    FAILURE = ->(result) { result.find { |a| !a.ok }&.note if result.is_a?(Array) }
-
-    # Rounds with no movement before the loop concedes. One is not enough: an
-    # agent can legitimately spend a round writing something another agent needs
-    # before either can advance.
-    DRY_ROUNDS = 2
-
-    # The most agents one task will chain through in a single round. The
-    # pipeline is shorter than this, so hitting the cap means states are
-    # cycling, and a cap beats a loop.
-    MAX_CHAIN_HOPS = 6
-
-    # @param tree [Agentilda::Tree]
-    # @param executor [#call] receives (agent, subject) and returns [ok, note]
-    # @param agents [Agentilda::Agents]
-    # @param max_rounds [Integer] a hard ceiling, so a loop cannot run forever
-    # @param isolation [Symbol] `:worktree` gives each plan its own checkout
-    #   and branch; `:shared` runs every agent against one tree, which is only
-    #   safe serially
-    # @param jobs [Integer] how many agents run at once
-    # @param plans [Array<Agentilda::Ordinal>, nil] restrict the loop to
-    #   these plans; nil (the default) is the whole tree
-    # @param publisher [Agentilda::Publisher, nil] pushes a finished
-    #   worktree and opens its pull request as soon as one lands, rather than
-    #   once at the very end of the whole loop. nil (the default) never
-    #   pushes anything — the caller's opt-out.
-    # @param dry_run [Boolean] no agent is invoked, so the per-round resync
-    #   must not rename anything either — a preview that moves folders is
-    #   not a preview.
-    # @param chain [Boolean] when an agent finishes and the plan's CONTENTS
-    #   now justify the next state, hand the plan straight to that state's
-    #   agent in the same round — researcher to writer to planner — instead
-    #   of paying a full round per hop. The folder is not renamed mid-round
-    #   (the serial resync still owns that); the chain reads {Subject#best_fit}
-    #   afresh, which needs no rename. Off when the caller restricted the run
-    #   to one agent, since chaining past the restriction would un-restrict it.
-    def initialize(tree:, executor:, agents: Agents.new, max_rounds: 10,
-      isolation: :shared, jobs: 1, worktree: nil, plans: nil, publisher: nil,
-      dry_run: false, chain: false)
+    # @param rounds [Integer, nil] `--rounds`, capping each agent's own
+    # @param state [Agentilda::StateFile, nil]
+    # @param sleeper [Proc]
+    # @param on_board [Proc, nil]
+    def initialize(tree:, executor:, agents: Agents.new, isolation: :shared, jobs: 1, worktree: nil,
+      plans: nil, publisher: nil, dry_run: false, rounds: nil, state: nil,
+      sleeper: ->(seconds) { sleep(seconds) }, on_board: nil)
       @tree = tree
       @executor = executor
       @agents = agents
-      @max_rounds = max_rounds
       @isolation = isolation
       @worktree = worktree
       @plans = plans
       @publisher = publisher
       @dry_run = dry_run
-      @chain = chain
-      @rounds = []
-
-      # Concurrency without isolation is the exact failure the worktree exists
-      # to prevent: two agents editing one checkout produce no git conflict, so
-      # the last writer wins silently. Refuse rather than corrupt.
+      @rounds = rounds
+      @state = dry_run ? nil : state
+      @sleeper = sleeper
+      @on_board = on_board
+      @attempts = []
       @jobs = isolated? ? jobs : 1
     end
+
+    attr_reader :jobs, :worktree, :tree, :attempts, :executor, :agents
 
     # @return [Boolean]
     def isolated? = @isolation == :worktree
 
+    # @return [Boolean]
+    def dry_run? = @dry_run
+
+    # @return [String] the repository root
+    def root = isolated? ? worktree.root : shared_root
+
     # @param subject [Agentilda::Subject]
-    # @return [Boolean] whether this run's scope covers this plan at all —
-    #   `--plan` restricts it; with no `--plan` every plan is in scope
+    # @return [Boolean]
     def in_scope?(subject) = @plans.nil? || @plans.include?(subject.feature.ordinal)
 
-    # @return [Integer] agents running at once
-    attr_reader :jobs
+    # @return [Array<Agentilda::Subject>]
+    def in_scope = tree.subjects.select { |s| in_scope?(s) }
 
-    # @return [Agentilda::Worktree, nil]
-    attr_reader :worktree
-
-    # @return [Agentilda::Tree]
-    attr_reader :tree
-
-    # @return [Array<Agentilda::Runner::Round>]
-    attr_reader :rounds
-
-    # Run until the tree stops changing.
+    # Run until nothing is dispatchable.
     #
-    # @return [Array<Agentilda::Runner::Round>]
+    # @yieldparam dispatcher [Agentilda::Dispatcher] before it runs, so a
+    #   console can attach itself and reach the running jobs
+    # @return [Array<Agentilda::Runner::Attempt>]
     def call
-      dry = 0
-
-      1.upto(@max_rounds) do |number|
-        # `q` ends the loop at the next seam rather than instantly: the round
-        # in flight finishes (its agents were asked to STOP and get a grace
-        # period to write out), and no new round starts.
-        break if Control.quit?
-
-        round = run_round(number)
-        @rounds << round
-        break if round.attempts.empty?
-
-        dry = round.dry? ? dry + 1 : 0
-        break if dry >= DRY_ROUNDS
-      end
-
-      @rounds
+      dispatcher = Dispatcher.new(runner: self, state: @state, rounds: @rounds, sleeper: @sleeper, on_board: @on_board)
+      yield dispatcher if block_given?
+      @attempts = dispatcher.run
     end
 
-    # Plans nobody may act on, for the closing report.
-    #
     # @return [Array<Agentilda::Subject>]
     def blocked = in_scope.select { |s| %i[blocked product_blocked].include?(s.status.key) }
 
-    # @return [Boolean] every plan in scope is either finished or deliberately parked
-    def settled?
-      in_scope.all? { |s| StateMachine::SETTLED.include?(s.status.key) }
-    end
+    # @return [Boolean]
+    def settled? = in_scope.all? { |s| StateMachine::SETTLED.include?(s.status.key) }
 
-    private
-
-    # @param number [Integer]
-    # @return [Agentilda::Runner::Round]
-    def run_round(number)
-      tree.reload
-      tasks = assignments.map { |agent, subject| prepare(agent, subject, number) }
-      return Round.new(number:, attempts: []) if tasks.empty?
-
-      results = UI.concurrently(tasks, "round #{number} — #{tasks.size} plans", jobs:,
-        label: :label.to_proc, fields: :log_fields.to_proc, failure: FAILURE,
-        header: {round: format("%02d", number)}, timeout: timeout_for) do |task, progress|
-        attempt(task, &progress)
-      end
-
-      # One serial pass over the *main* tree, run once per round rather than
-      # once per task. `Executor#prompt_for` always names a plan folder by its
-      # main-tree path — that is where `spec.md`/`plan.md`/a rename actually
-      # land, under every isolation mode — and running `Resync::Dirs` from
-      # `jobs` threads at once on the one tree they all share would be exactly
-      # the hazard a worktree exists to prevent for code, just aimed at
-      # `.plans` instead. Doing it here, after `UI.concurrently` has already
-      # joined every thread, costs nothing: nobody is still writing.
-      #
-      # It renames only what a real round may have moved: a dry run invoked
-      # no agent, and "dry run" that renames a folder anyway is a preview
-      # that already happened.
-      Resync::Dirs.new(tree:).call(commit: !@dry_run)
-
-      attempts = tasks.zip(results).flat_map do |task, r|
-        next [failed(r)] unless r.is_a?(Array)
-
-        *hops, last = r
-        hops + [finish(task, last)]
-      end
-      Round.new(number:, attempts:)
-    end
-
-    # Each line's countdown starts from that agent's own clock. The executor
-    # is a seam the suite fills with doubles that answer only `call`, so a
-    # stand-in without the method simply draws no timer rather than failing
-    # the round.
+    # A dry run gets the shared root whatever the isolation says: nothing
+    # runs in the checkout, and `git worktree add` is a side effect a
+    # preview must not have. It also fails outright when the plan's branch
+    # is the one checked out where the run was typed, which is where a dry
+    # run of that plan is typed.
     #
-    # @return [Proc] task -> seconds, or nil when the executor keeps no clock
-    def timeout_for
-      return UI::NO_TIMEOUT unless @executor.respond_to?(:timeout_for)
-
-      ->(task) { @executor.timeout_for(task.agent) }
-    end
-
-    # Give the task somewhere to work. Under isolation that is a fresh git
-    # worktree on its own branch named `<user>/NNN.MM-slug` — which is also
-    # what `resync prs` reads first, so the plan number carries itself all the
-    # way to a merged pull request.
-    #
-    # @param agent [Agentilda::Agent]
-    # @param subject [Agentilda::Subject]
-    # @param round [Integer]
     # @return [Agentilda::Runner::Task]
     def prepare(agent, subject, round)
-      return Task.new(agent:, subject:, root: shared_root, checkout: nil, round:) unless isolated?
+      return Task.new(agent:, subject:, root: shared_root, checkout: nil, round:) if !isolated? || dry_run?
 
       checkout = worktree.checkout_for(subject.feature)
       Task.new(agent:, subject:, root: checkout.path, checkout:, round:)
     end
 
-    # @return [String]
-    def shared_root = File.dirname(tree.dir)
-
-    # @return [Array<Agentilda::Subject>] the tree, or just the plans
-    #   `--plan` named — computed fresh each call, since {#run_round} reloads
-    #   {#tree} before reading it
-    def in_scope = tree.subjects.select { |s| in_scope?(s) }
-
-    # @param error [Exception]
-    # @return [Agentilda::Runner::Attempt]
-    def failed(error)
-      Attempt.new(ordinal: "?", agent: "?", from: :unknown, to: :unknown, ok: false,
-        note: error.is_a?(Exception) ? error.message.lines.first.to_s.strip : error.to_s,
-        up: 0, down: 0, subagents: 0, delegated: 0, seconds: 0.0)
-    end
-
-    # Every agent that handles a plan's state, dispatched together.
-    #
-    # A state with two agents is a deliberate pairing, not an accident of the
-    # roster: `luke-backend` and `rey-frontend` both handle `building` and
-    # build the two halves of one feature at once, in one checkout, toward one
-    # pull request. {#task_for} keys the worktree on the plan rather than the
-    # agent, so a pair shares a tree by construction.
-    #
-    # What keeps them off each other's files is the split `palpatine-planner`
-    # writes: `plan-backend.md` and `plan-frontend.md` name, per unit, the
-    # files that unit owns. Two agents editing one checkout produce no git
-    # conflict, so the ownership statement is the only thing standing between
-    # a pair and a silently clobbered file. A plan whose halves are not split
-    # is a plan that should run one agent, and that is a planning defect to
-    # fix in the plan rather than here.
-    #
-    # @return [Array<Array(Agentilda::Agent, Agentilda::Subject)>]
-    def assignments
-      in_scope.flat_map do |subject|
-        next [] if StateMachine::SETTLED.include?(subject.status.key)
-
-        @agents.for_status(subject.status).map { |agent| [agent, subject] }
-      end
-    end
-
-    # Runs the agent and records what it claimed. `to` is left equal to
-    # `from` here — deliberately unfinished — because whether the folder
-    # actually moved cannot be answered yet: several of these run at once,
-    # each in its own checkout, and the one tree that would prove it moved is
-    # not safe to resync until every thread has stopped writing. {#finish}
-    # settles it, once, after {#run_round}'s single serial resync.
-    #
-    # With chaining on, one task can carry a plan through several agents:
-    # each hop re-reads the folder's contents, and only a state the contents
-    # JUSTIFY (per {Subject#best_fit}) hands the plan to the next agent. A
-    # state in {StateMachine::SETTLED} — parked, blocked, done — ends the
-    # chain the same way it keeps a plan out of {#assignments}.
-    #
-    # @param task [Agentilda::Runner::Task]
-    # @return [Array<Agentilda::Runner::Attempt>] one per agent that ran
-    # @yieldparam progress [Agentilda::Transcript::Progress] what the agent
-    #   is doing and what it has spent, forwarded to its line
-    def attempt(task, &on_progress)
-      ordinal = task.subject.feature.ordinal.to_s
-      agent = task.agent
-      subject = task.subject
-      from = subject.status.key
-      attempts = []
-
-      loop do
-        result = @executor.call(agent, subject, root: task.root, &on_progress)
-        ok, note = result
-        note = "#{note} (#{task.checkout.branch})" if task.checkout
-
-        attempts << Attempt.new(ordinal:, agent: agent.name, from:, ok: !!ok, note: note.to_s, to: from,
-          up: spend(result, :up), down: spend(result, :down), subagents: spend(result, :subagents),
-          delegated: spend(result, :delegated), seconds: spend(result, :seconds))
-
-        # `n` deliberately does not appear here: stopping an agent early and
-        # letting the chain hand its plan to the next one is what n means.
-        # `q` stops the chain along with everything else.
-        break unless @chain && ok && attempts.size < MAX_CHAIN_HOPS && !Control.quit?
-
-        # Re-locate the plan by ordinal rather than by path: several agents
-        # rename their own folder when they finish, so the path this hop
-        # started with may already be stale. A fresh single-use Tree keeps the
-        # read out of the shared, memoized one that other threads see.
-        current = Tree.new(dir: tree.dir).find(task.subject.feature.ordinal)
-        break if current.nil?
-
-        fit = further_of(current)
-        break if fit.nil? || fit.key == from || StateMachine::SETTLED.include?(fit.key)
-
-        succ = @agents.for_status(fit).first
-        break if succ.nil?
-
-        attempts[-1] = attempts[-1].with(to: fit.key)
-        agent = succ
-        from = fit.key
-        subject = current
-      end
-
-      attempts
-    end
-
-    # The state a hop hands forward: whichever of the name the folder claims
-    # and the state its contents justify sits FURTHER along the pipeline.
-    # Either alone misleads — an agent that renamed its folder is ahead of
-    # what `best_fit` can prove (yoda-writer moves to ⭐️ before `plan.md`
-    # exists), and an agent that only wrote files is ahead of its unrenamed
-    # folder (leah-researcher leaves ⚪️ on the door of a researched spec).
-    # Taking the maximum is forward-monotonic, so a chain cannot cycle.
-    #
-    # @param subject [Agentilda::Subject]
-    # @return [Agentilda::Status, nil]
-    def further_of(subject)
-      [subject.status, subject.best_fit].compact.max_by { |s| STATUSES.index { |x| x.key == s.key } || -1 }
-    end
-
-    # An executor is anything that answers `call` and returns something that
-    # destructures as `ok, note` — the specs pass an array, and a future one
-    # may too. Whatever it spent is an extra it does not have to report.
-    #
-    # @param result [Object]
-    # @param field [Symbol]
-    # @return [Numeric]
-    def spend(result, field) = result.respond_to?(field) ? result.public_send(field) : 0
-
-    # Reads what {#run_round}'s resync just settled, rather than trusting
-    # what the agent claims — an agent that says "done" but wrote nothing
-    # shows up as not having moved. Publishing is the one further thing this
-    # adds on top of that read.
-    #
-    # `resync` never moves a folder within a {StateMachine::FAMILIES} group on
-    # its own — a `plan.md` and some pull requests look identical whether
-    # nobody has looked yet or a reviewer just asked for changes, so guessing
-    # between them would be a coin flip dressed up as a correction. Whether a
-    # plan is ready to leave a building state is the implementer's call, not
-    # the harness's: each renames the plan folder itself once there is no unit
-    # of its own left in `plan.md` — `luke-backend` to 🎨 and `rey-frontend`
-    # to 🟢 — and the resync
-    # above leaves that rename standing — "the current name always wins"
-    # inside a family — even though nothing has opened a pull request yet.
-    # This is what reacts to it: publish, so the invariant that rename is
-    # jumping ahead of becomes true within the same round.
-    #
-    # @param task [Agentilda::Runner::Task]
-    # @param attempt [Agentilda::Runner::Attempt]
-    # @return [Agentilda::Runner::Attempt]
-    def finish(task, attempt)
-      return attempt unless attempt.ok
-
-      current = tree.find(task.subject.feature.ordinal)
-      to = current&.status&.key || attempt.from
-      settled = attempt.with(to:)
-      # The agent that ran last is the attempt's, which under chaining is not
-      # necessarily the one the task started with.
-      finisher = @agents.find(attempt.agent) || task.agent
-      return settled unless finisher.advances_to == :ready_for_review && to == :ready_for_review
-
-      publication = publish(task, current)
-      note = if publication&.published?
-        "#{settled.note}; opened #{publication.url}"
-      elsif publication&.refusal
-        "#{settled.note}; publish refused: #{publication.refusal}"
-      else
-        settled.note
-      end
-
-      settled.with(note:)
-    end
-
-    # Push the finished branch and open its pull request, then record it in
-    # the plan's own `pull-requests.md` — the file {Status::STATUS_BY_KEY}'s
-    # `ready_for_review` invariant actually reads.
-    #
-    # `--isolation shared` has no branch of its own to push, so this is a
-    # no-op there by construction rather than by a special case: {@publisher}
-    # is nil unless the caller asked for pushing, and a shared task never has
-    # a {Worktree::Checkout} to push in the first place.
-    #
-    # @param task [Agentilda::Runner::Task]
-    # @param subject [Agentilda::Subject] read fresh, under its new name
     # @return [Agentilda::Publisher::Publication, nil]
     def publish(task, subject)
       return nil unless @publisher && task.checkout&.dirty?
@@ -452,8 +108,11 @@ module Agentilda
       publication
     end
 
-    # @param path [String] the plan folder, in the main tree
-    # @param publication [Agentilda::Publisher::Publication]
+    private
+
+    # @return [String]
+    def shared_root = File.dirname(tree.dir)
+
     # @return [void]
     def record_pull_request(path, publication)
       number = publication.url.to_s[%r{/pull/(\d+)}, 1]
@@ -461,7 +120,7 @@ module Agentilda
         {number: pr.number, title: pr.title, url: pr.url, state: pr.state, body: ""}
       }
       rows << {number:, title: publication.title, url: publication.url, state: "Open 🟡", body: ""}
-      File.write(File.join(path, PullRequests::FILENAME), PullRequests.render(rows))
+      PullRequests.upsert(File.join(path, PullRequests::FILENAME), rows)
     end
   end
 end

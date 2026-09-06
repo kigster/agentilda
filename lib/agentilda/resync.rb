@@ -44,9 +44,22 @@ module Agentilda
         def to_s = "#{dirname} → #{File.basename(target)}  (#{reason})"
       end
 
+      # The state a folder's contents justify, or the one it claims when
+      # nothing fits. What a rename moves toward, and what the dispatcher
+      # reads on a dry run, which renames nothing, so the preview still
+      # names the agents a real run would start.
+      #
+      # @param subject [Agentilda::Subject]
+      # @return [Agentilda::Status]
+      def self.target(subject) = subject.best_fit || subject.status
+
       # @param tree [Agentilda::Tree]
-      def initialize(tree:)
+      # @param except [Array<String>] ordinals to leave alone however wrong
+      #   their names are: the dispatcher passes the plans an agent is
+      #   working in right now
+      def initialize(tree:, except: [])
         @tree = tree
+        @except = except.map(&:to_s)
       end
 
       # @return [Agentilda::Tree]
@@ -55,7 +68,11 @@ module Agentilda
       # What would change, without changing anything.
       #
       # @return [Array<Agentilda::Resync::Dirs::Change>]
-      def plan = tree.subjects.filter_map { |subject| change_for(subject) }
+      def plan
+        tree.subjects.filter_map do |subject|
+          change_for(subject) unless @except.include?(subject.feature.ordinal.to_s)
+        end
+      end
 
       # @param commit [Boolean] actually rename
       # @return [Array<Agentilda::Resync::Dirs::Change>] what was proposed

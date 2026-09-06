@@ -9,6 +9,7 @@ require "unicode/display_width"
 require "strings"
 require "tty/box"
 require "tty/command"
+require "tty/cursor"
 require "tty/screen"
 require "tty/progressbar"
 require "tty/spinner"
@@ -116,6 +117,8 @@ end
   config
   ordinal
   status
+  ledger
+  state_file
   progress_log
   state_machine
   dev_work
@@ -133,6 +136,9 @@ end
   resync
   reporter
   tally
+  board
+  screen
+  console
   index
   linear
   agent
@@ -142,8 +148,11 @@ end
   worktree
   publisher
   control
+  child
+  clock
   keyboard
   executor
+  dispatcher
   runner
   unblocker
   documentation
