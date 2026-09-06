@@ -353,11 +353,16 @@ module Agentilda
         fit = further_of(current)
         break if fit.nil? || fit.key == from || StateMachine::SETTLED.include?(fit.key)
 
-        succ = @agents.for_status(fit).first
-        break if succ.nil?
+        # A chain is one thread carrying one plan, so it can hand the plan to
+        # one agent. Two agents on a state are a pair that builds one tree in
+        # one round, and starting only the first of them left it waiting on a
+        # partner nobody had dispatched. A pair is the next round's to start,
+        # together, once the resync has renamed the folder.
+        successors = @agents.for_status(fit)
+        break unless successors.size == 1
 
         attempts[-1] = attempts[-1].with(to: fit.key)
-        agent = succ
+        agent = successors.first
         from = fit.key
         subject = current
       end

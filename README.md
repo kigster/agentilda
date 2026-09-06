@@ -260,7 +260,7 @@ agentilda states                           # the whole machine, as a diagram
 
 ### Chaining: one plan, several agents, one round
 
-When an agent finishes and the plan has genuinely advanced — its folder renamed, or its contents now justifying the next state — the runner hands it straight to the next state's agent **in the same round**: researcher to writer to planner, without paying a full round per hop. Chaining is on by default and forced off by `--agent`, since chaining past a restriction would un-restrict it; `--no-chain` turns it off explicitly. The chain stops exactly where round assignments stop: at a blocked or finished state, a human decides.
+When an agent finishes and the plan has genuinely advanced — its folder renamed, or its contents now justifying the next state — the runner hands it straight to the next state's agent **in the same round**: researcher to writer to planner, without paying a full round per hop. Chaining is on by default and forced off by `--agent`, since chaining past a restriction would un-restrict it; `--no-chain` turns it off explicitly. The chain stops exactly where round assignments stop: at a blocked or finished state, a human decides. It also stops short of a state two agents handle as a pair, such as 🟡 Building: a chain is one thread carrying one plan, and a pair is started together by the next round.
 
 ### Steering one agent, or stepping around one
 

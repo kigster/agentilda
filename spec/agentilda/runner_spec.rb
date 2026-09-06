@@ -122,6 +122,23 @@ RSpec.describe Agentilda::Runner, :tree do
           .to eq(%w[leah-researcher yoda-writer palpatine-planner])
       end
 
+      # A chain is one thread carrying one plan, so it can hand the plan to
+      # one agent. `luke-backend` and `rey-frontend` handle 🟡 as a pair, and
+      # each prompt promises the other is working the same tree in the same
+      # round. Handing the chain to whichever of them is defined first
+      # started luke alone, waiting on a partner the round never dispatched.
+      # A pair is a round's to start, together, once the resync has renamed
+      # the folder.
+      it "stops the chain short of a paired state, so the next round starts the pair together" do
+        runner.call
+
+        aggregate_failures do
+          expect(runner.rounds.first.attempts.map(&:agent))
+            .to eq(%w[leah-researcher yoda-writer palpatine-planner])
+          expect(runner.rounds[1].attempts.map(&:agent)).to contain_exactly("luke-backend", "rey-frontend")
+        end
+      end
+
       it "records each hop's transition on its own attempt" do
         runner.call
 
