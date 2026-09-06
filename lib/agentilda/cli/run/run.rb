@@ -211,8 +211,9 @@ module Agentilda
         roster = Agentilda::Agents.new
         lines = active.map { |s|
           takers = roster.for_status(s.status).map(&:name)
+          verb = (takers.size == 1) ? "takes" : "take"
           "  #{s.feature.ordinal} is #{s.status.emoji} #{s.status.label}" \
-            "#{" - #{takers.join(", ")} take#{"s" if takers.size == 1} it" unless takers.empty?}"
+            "#{" - #{takers.join(" and ")} #{verb} it" unless takers.empty?}"
         }
         handled = agent.handles.map { |k| Agentilda::STATUS_BY_KEY[k]&.then { |st| "#{st.emoji} #{st.label}" } || k }
         refuse("#{name} handles #{handled.join(", ")}, and no plan in scope is there:\n\n" \

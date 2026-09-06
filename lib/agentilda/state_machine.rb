@@ -55,7 +55,7 @@ module Agentilda
     # absence of documents rather than the presence of any.
     PREFERENCE = %i[
       discarded rolled_back shit deferred blocked product_blocked
-      deployed approved rejected in_review ready_for_review building planned ready_for_planning
+      deployed approved rejected in_review ready_for_review building_ui building planned ready_for_planning
       researched new
       retroactive
     ].freeze

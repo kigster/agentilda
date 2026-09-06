@@ -205,6 +205,8 @@ agentilda create --after 002 k1 sync   # 002.01-⬜️--k1-sync (retroactive)
 agentilda list-plans                   # the table; exits 1 if a name lies
 agentilda resync dirs                  # folder emoji vs folder contents
 agentilda resync prs                   # [NNN.MM] prefixes on PR titles
+agentilda mail send --plan 003 --from luke-backend --to rey-frontend "…"   # leave a message for the other half
+agentilda mail read --plan 003 --for rey-frontend                          # what is waiting, numbered
 agentilda linear import --prefix TAX   # the plans, as Linear projects and issues
 agentilda docs                         # regenerate the conventions
 agentilda states                       # the state machine, as a diagram
@@ -301,6 +303,10 @@ The loop polls those documents once a second and acts on the last word each agen
 
 The harness writes lines of its own, in bold so they cannot be mistaken for an agent's. An agent that stops without a closing entry, whether it crashed, ran out of clock or was killed from the keyboard, gets `**Interrupted**` with the reason; if the state it was advancing to is nevertheless justified on disk, the harness signs `Completed (signed by harness: work verified on disk)` on its behalf and the plan moves on. Everything the ledger cannot hold, which run wrote what, process ids, tokens, and whether the run that wrote a `Started` is still alive, goes to `.plans/tmp/agentilda-state.json`, rewritten every second. The directory is added to `.gitignore` the first time a run needs it, and the run says so. A harness that dies leaves the next one something to restart from: stages the dead run left `Started` are signed `Interrupted` and dispatched again.
 
+### A pair's mailbox
+
+`luke-backend` and `rey-frontend` build one plan in one worktree at the same time, as two separate `claude -p` processes. The channel between them is `mailbox.md` in the plan folder: append-only, one numbered and timestamped entry per message, written with `agentilda mail send` and polled with `agentilda mail read` between steps. Each half's prompt names the file, the partner and both commands, `--dir` included, so neither has to find the other among every Claude session on the machine, and the exchange is still there to read once the round is over. A message is delivered when the reader next polls, not when it is written, so the prompts tell each half to note an assumption in `implementation-plan.md` and carry on rather than wait.
+
 ### Steering one agent, or stepping around one
 
 `--agent NAME` restricts the round to that one agent: plans in every other state are left unassigned, and a `next:` line naming anyone else is reported rather than honoured, so the restriction holds. An agent that handles none of the in-scope plans' current states is refused up front, naming the state each plan is in and the agent that would take it, rather than running an empty round that exits 0 in silence. `--prompt "…"` rides along with it, appending extra instructions to that agent's prompt for this run only; it refuses to work without `--agent`, because a sentence aimed at one specialist would otherwise reach every agent in the round.
@@ -362,7 +368,7 @@ Worktrees an agent left untouched are pruned. Dirty ones are kept — they are t
 
 The loop ends when nothing is running and nothing is left to start: every plan in scope is settled, blocked, approved and awaiting merge, or has used up the rounds its agents may take on it. `q` ends it sooner. `settled?` reports when every plan is done or deliberately parked.
 
-Progress is read from disk, never from what an agent claims: a `Completed` line moves the folder only if the destination's own files are there, and an agent that stopped without signing is judged by what it left behind, so one that reports success but wrote nothing shows as `Interrupted`.
+Progress is read from disk, never from what an agent claims. Folder names are reconciled with their contents before every dispatch, so a folder whose name lags (a run killed before its rename, a plan.md written by hand) goes to the agents its contents call for, under the name their prompts will read; a plan an agent is inside is left alone until that agent is done. A `Completed` line moves the folder only if the destination's own files are there, and an agent that stopped without signing is judged by what it left behind, so one that reports success but wrote nothing shows as `Interrupted`.
 
 **Blocked plans are never assigned to anyone.** ⭕️ and 🅱️ mean a human decides; an agent that could move them would make the states meaningless. They are reported at the end with a pointer to their `blocked.md`.
 

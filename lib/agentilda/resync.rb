@@ -88,20 +88,13 @@ module Agentilda
       private
 
       # A folder moves when the name it has is not the name it should have.
-      #
-      # `best_fit` answers "which state do these contents justify", and falls
-      # back to the state already claimed when nothing fits — so a folder with
-      # an unreadable set of contents still gets its number padded rather than
-      # being skipped for a reason that has nothing to do with its number.
-      #
-      # Invariants are minimum requirements, so a ⚪️ folder that has grown a
-      # `plan.md` still satisfies ⚪️ and is ⭐️ anyway.
+      # {target} says what that name is.
       #
       # @param subject [Agentilda::Subject]
       # @return [Agentilda::Resync::Dirs::Change, nil]
       def change_for(subject)
         feature = subject.feature
-        fit = subject.best_fit || subject.status
+        fit = self.class.target(subject)
         dirname = feature.dirname_as(fit)
         return nil if dirname == feature.dirname
 

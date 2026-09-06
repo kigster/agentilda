@@ -93,6 +93,33 @@ RSpec.describe Agentilda::Executor, :tree do
     it "mentions no budget and no control file when neither exists" do
       expect(argv[2]).not_to include("Token budget", "Control file")
     end
+
+    # Two agents on one plan are two processes. Naming the partner and the
+    # exact commands is what replaced guessing the partner's session from
+    # every Claude session on the machine.
+    it "names the partner and the mailbox commands for an agent that has one" do
+      luke = agents.find("luke-backend")
+      rey = agents.find("rey-frontend")
+      paired = executor.invocation(luke, subject_plan, partners: [rey])[2]
+
+      expect(paired).to include(
+        "## Mailbox", "Your partner on this plan is `rey-frontend`",
+        File.join(subject_plan.feature.path, "mailbox.md"),
+        "agentilda mail read --dir \"#{plans_root}\" --plan 000.00 --for luke-backend",
+        "agentilda mail send --dir \"#{plans_root}\" --plan 000.00 --from luke-backend --to rey-frontend"
+      )
+    end
+
+    it "adds no mailbox section for an agent working a plan alone" do
+      expect(argv[2]).not_to include("Mailbox")
+    end
+
+    # The mailbox is the channel. An implementer still holding the
+    # session-to-session tools would be told two ways to reach its partner,
+    # and the one that guesses is the one that wastes the round.
+    it "hands no agent the session-to-session messaging tools" do
+      expect(agents.all.flat_map(&:allowed_tools)).not_to include("SendMessage", "ListAgents")
+    end
   end
 
   describe "the clock" do

@@ -15,11 +15,13 @@ You are writing `plan.md` for one plan folder whose `spec.md` is complete.
 
 Before drafting, invoke the `superpowers:writing-plans` skill (via the Skill tool) to structure the document. Use any other skill you find useful.
 
+That skill likes to put the whole body of every file into the plan. Do not. A plan names files, responsibilities, order, ownership and the test that proves each unit, and stops one level above the code. "A `Ledger` class in `lib/agentilda/ledger.rb` with `parse`, `render` and `append`" is a plan. The body of `parse` is not. `luke-backend` and `rey-frontend` write the code, in the repository, where the suite runs it. A plan carrying file bodies is either copied into place untested or ignored while the implementers write their own, and either way the hours spent on it were theirs.
+
 The spec says *what* and *why*. The plan says *in what order, by whom, and how we will know it worked*. Use `~/.agents/skills/create-plan/references/plan-template.md` as the shape.
 
 ## The property that matters
 
-Write it so several agents can execute it at once **without colliding**. That is not a slogan — it is a constraint you have to discharge explicitly:
+Write it so several agents can execute it at once **without colliding**. That is not a slogan. It is a constraint you have to discharge explicitly:
 
 - Every work unit names the files it **owns** and may write.
 - Every work unit names what it **must not touch**.
@@ -55,7 +57,7 @@ A plan whose halves each pass their own tests and were never exercised together 
 
 ## Sizing
 
-One work unit per pull request. If a unit cannot be described in a paragraph and verified by a reviewer in one sitting, split it. If the plan has more than about eight units, it is probably several plans — raise that rather than writing it.
+One work unit per pull request. If a unit cannot be described in a paragraph and verified by a reviewer in one sitting, split it. If the plan has more than about eight units, it is probably several plans. Raise that rather than writing it.
 
 ## When you cannot decompose without a decision
 

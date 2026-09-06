@@ -227,9 +227,11 @@ module Agentilda
     # @param round [Integer] which attempt on this plan this is
     # @param successor [String, nil] who the agent names on its `next:` line
     # @param handle [Agentilda::Executor::Handle, nil] filled in for the caller
+    # @param partners [Array<Agentilda::Agent>] the other agents working this
+    #   plan right now, named in the prompt beside the plan's mailbox
     # @return [Agentilda::Executor::Result]
     # @yieldparam progress [Agentilda::Transcript::Progress]
-    def call(agent, subject, root: @root, round: 1, successor: nil, handle: nil, &on_progress)
+    def call(agent, subject, root: @root, round: 1, successor: nil, handle: nil, partners: [], &on_progress)
       started = UI.monotonic
       if @dry_run
         return Result.new(ok: true, note: "dry run - would invoke #{agent.name}", up: 0, down: 0,
@@ -242,7 +244,7 @@ module Agentilda
       transcript = Transcript.new(trace:, &on_progress)
       control = Control.register(@trace_dir, "#{subject.feature.ordinal}-#{agent.name}")
       handle.control = control
-      argv = invocation(agent, subject, root:, control:, round:, successor:)
+      argv = invocation(agent, subject, root:, control:, round:, successor:, partners:)
 
       child = @spawn.call(argv, chdir: root)
       handle.child = child
@@ -322,13 +324,14 @@ module Agentilda
     # @param subject [Agentilda::Subject]
     # @param round [Integer] which attempt on this plan this is
     # @param successor [String, nil] who the agent names on its `next:` line
+    # @param partners [Array<Agentilda::Agent>]
     # @return [Array<String>]
-    def invocation(agent, subject, root: @root, control: nil, round: 1, successor: nil)
+    def invocation(agent, subject, root: @root, control: nil, round: 1, successor: nil, partners: [])
       # `--include-partial-messages` is what the token meter runs on. Without
       # it the stream reports a settled input count and a placeholder output
       # count — 2 for a four-thousand-token answer — and a spinner counting
       # what came back would read zero all run. See {Transcript#meter}.
-      argv = ["claude", "-p", prompt_for(agent, subject, root, control:, round:, successor:), "--add-dir", root,
+      argv = ["claude", "-p", prompt_for(agent, subject, root, control:, round:, successor:, partners:), "--add-dir", root,
         "--output-format", "stream-json", "--verbose", "--include-partial-messages", "--brief"]
       denied = denied_for(agent)
       argv += ["--disallowedTools", denied.join(",")] unless denied.empty?
@@ -379,8 +382,9 @@ module Agentilda
     # @param subject [Agentilda::Subject]
     # @param round [Integer]
     # @param successor [String, nil]
+    # @param partners [Array<Agentilda::Agent>]
     # @return [String]
-    def prompt_for(agent, subject, root = @root, control: nil, round: 1, successor: nil)
+    def prompt_for(agent, subject, root = @root, control: nil, round: 1, successor: nil, partners: [])
       <<~PROMPT
         #{agent.prompt}
 
@@ -394,7 +398,7 @@ module Agentilda
         Repository root: #{root}
 
         #{"The folder's name is not currently justified: #{subject.violation}" if subject.violation}
-        #{operator_instructions}#{ledger_section(agent, round:, successor:)}#{budget_section}#{time_budget_section(agent)}#{control_section(control)}
+        #{operator_instructions}#{ledger_section(agent, round:, successor:)}#{budget_section}#{time_budget_section(agent)}#{control_section(control)}#{mailbox_section(agent, subject, partners)}
         ## Boundary — enforced, not requested
 
         You may read anything, and write source, tests and the plan's own
@@ -517,6 +521,49 @@ module Agentilda
       " Where the work divides into parts that do not read each other's output, run them " \
         "as one wave of concurrent sub-agents rather than in series: the wave costs one " \
         "part's wall clock, and the series costs the sum of all of them."
+    end
+
+    # Two agents on one plan are two processes. Naming the partner and the
+    # exact commands is what replaced guessing the partner's session from
+    # every Claude session on the machine.
+    #
+    # @param agent [Agentilda::Agent]
+    # @param subject [Agentilda::Subject]
+    # @param partners [Array<Agentilda::Agent>]
+    # @return [String]
+    def mailbox_section(agent, subject, partners)
+      return "" if partners.empty?
+
+      plans_dir = File.dirname(subject.feature.path)
+      plan = subject.feature.ordinal
+      names = partners.map { |p| "`#{p.name}`" }
+      who = (names.size == 1) ? "Your partner on this plan is #{names.first}" : "Your partners on this plan are #{names.join(" and ")}"
+
+      <<~SECTION
+
+        ## Mailbox - poll it between steps
+
+        #{who}. You share one worktree and one branch, but not a process, so
+        the only way to reach each other is the plan's mailbox:
+
+            #{File.join(subject.feature.path, Mailbox::FILENAME)}
+
+        Read it before each significant step and whenever you finish a unit:
+
+            agentilda mail read --dir "#{plans_dir}" --plan #{plan} --for #{agent.name}
+
+        Pass `--after N`, with the number of the last message you have read,
+        to see only what is new. Write to it when you land an interface your
+        partner is waiting on, when you amend the contract, when you need
+        something from their half, and when you finish:
+
+            agentilda mail send --dir "#{plans_dir}" --plan #{plan} --from #{agent.name} --to #{partners.first.name} "what you need them to know"
+
+        Every message is appended with a number and a timestamp and never
+        edited, so a person can read the exchange after the round. A question
+        your partner has not answered within a few steps is not a reason to
+        stop: write your assumption into implementation-plan.md and carry on.
+      SECTION
     end
 
     # The section a control file adds. Present on every invocation, because

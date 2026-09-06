@@ -251,6 +251,9 @@ module Agentilda
       job = Job.new(key: "#{ordinal}/#{agent.name}", task:, handle:, started_at: UI.monotonic,
         from:, state: subject.status.key, up: 0, down: 0, frame: 0)
       successor = @runner.agents.for_status(STATUS_BY_KEY.fetch(agent.advances_to)).first&.name if agent.advances_to && STATUS_BY_KEY.key?(agent.advances_to)
+      # Each member of a pair is told who the others are, so the executor
+      # can name them beside the plan's mailbox.
+      partners = @runner.agents.for_status(Resync::Dirs.target(subject)) - [agent]
       remember(ordinal, agent.name, job.state, "Started", round)
       @state&.record(ordinal, agent: agent.name, round:, status: "Started", state: from.to_s,
         model: model_for(agent), file: agent.ledger.first, started_at: Time.now.iso8601)
@@ -258,7 +261,7 @@ module Agentilda
       job.thread = Thread.new do
         Thread.current.report_on_exception = false
         job.result = begin
-          @runner.executor.call(agent, subject, root: task.root, round:, successor:, handle:) { |progress|
+          @runner.executor.call(agent, subject, root: task.root, round:, successor:, handle:, partners:) { |progress|
             job.up = progress.up
             job.down = progress.down
             job.message = progress.message || progress.activity

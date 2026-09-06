@@ -212,7 +212,7 @@ RSpec.describe Agentilda::CLI::Run, :tree do
     it "refuses an agent that handles no in-scope plan's state, naming who does" do
       _out, err, status = run(agent: "leah-researcher")
 
-      expect(unwrapped(err)).to include("leah-researcher handles", "🟡 Building", "luke-backend, rey-frontend take it")
+      expect(unwrapped(err)).to include("leah-researcher handles", "🟡 Building", "luke-backend and rey-frontend take it")
       expect(status).to eq(65)
     end
   end

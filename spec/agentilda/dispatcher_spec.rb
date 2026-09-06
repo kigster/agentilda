@@ -99,6 +99,32 @@ RSpec.describe Agentilda::Dispatcher, :tree do
     end
   end
 
+  describe "pairing" do
+    let!(:built) do
+      plans do |t|
+        t.plan "000.00", :new, "alone", files: {"spec.md" => spec_body}
+        t.plan "001.00", :building, "paired", files: {"spec.md" => spec_body, "plan.md" => "# P"}
+      end
+    end
+
+    # The executor puts the partner's name and the mailbox into the prompt.
+    # It can only do that if the dispatch tells it who the partner is.
+    it "tells each half of a pair who its partner is, and a lone agent nothing" do
+      seen = {}
+      executor = lambda { |agent, subject, partners: [], **|
+        seen[[agent.name, subject.feature.ordinal.to_s]] = partners.map(&:name)
+        Agentilda::Executor::Result.new(ok: true, note: "noop", up: 0, down: 0, subagents: 0, delegated: 0, seconds: 0.0)
+      }
+      runner_with(executor).call
+
+      expect(seen).to eq(
+        ["leah-researcher", "000.00"] => [],
+        ["luke-backend", "001.00"] => ["rey-frontend"],
+        ["rey-frontend", "001.00"] => ["luke-backend"]
+      )
+    end
+  end
+
   describe "handoffs" do
     let!(:built) { plans { |t| t.plan "001.00", :new, "relay", files: {"spec.md" => spec_body} } }
 
