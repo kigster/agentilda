@@ -8,11 +8,10 @@ module Agentilda
 
       option :commit, type: :boolean, default: false,
         desc: "Actually invoke the agents (default: dry run, prints the plan of work)"
-      option :rounds, desc: "Hard ceiling on loop iterations (default: 10)"
-      option :timeout, desc: "Seconds before one agent is abandoned (default: 900)"
-      option :chain, type: :boolean,
-        desc: "When an agent advances a plan, run the next agent in the same round " \
-              "(default: on; forced off by --agent)"
+      option :rounds, desc: "Cap on rounds per agent per plan; each agent declares its own, at most 5 " \
+        "(default: the agent's own)"
+      option :timeout, desc: "Seconds before one agent is abandoned; only tightens an agent's own clock " \
+        "(default: the agent's own, else 900)"
       option :agent, desc: "Only run this one agent"
       option :prompt, desc: "Extra instructions appended to the agent's prompt (only with --agent)"
       option :skip, desc: "Never assign this agent; its plans wait, the rest of the pipeline runs. " \
@@ -39,7 +38,7 @@ module Agentilda
         "--commit               # run them, one worktree per plan, in parallel",
         "--commit -j 4          # …with four at a time",
         "--isolation shared     # one tree, serial — no git required",
-        "--commit --rounds 3    # …with a tighter ceiling",
+        "--commit --rounds 3    # …capping every agent at three rounds per plan",
         "--commit --plan 005,006,007  # only the plans a batch step just created"
       ]
 
@@ -72,14 +71,7 @@ module Agentilda
 
         isolation = options.fetch(:isolation, "worktree").to_sym
         jobs = (options[:jobs] || config[:jobs] || UI.default_jobs).to_i
-        timeout = (options[:timeout] || config[:timeout] || 900).to_i
-        chain = if options[:agent]
-          false
-        elsif options.key?(:chain)
-          options[:chain]
-        else
-          config.fetch(:chain, true)
-        end
+        timeout = (options[:timeout] || config[:timeout])&.to_i
 
         if isolation == :worktree && !::Agentilda::Worktree.new(root:).repository?
           refuse("#{root} is not a git repository, so plans cannot be isolated.\n\n" \
@@ -95,29 +87,50 @@ module Agentilda
         info("Progress: #{UI.log_path}") unless quiet?(options)
         credentials_warning if commit?(options) && !quiet?(options)
 
+        # The state file is what a harness that dies leaves for the next one.
+        # It sits under .plans/tmp/ so a reboot keeps it, and that directory
+        # is ignored so it never rides along in a commit. Editing somebody's
+        # .gitignore is announced, the once it happens. The runner drops the
+        # file on a dry run, which is why it can be built unconditionally.
+        state = StateFile.new(path: StateFile.for(tree))
+        if commit?(options) && StateFile.ensure_ignored!(root) && !quiet?(options)
+          info("Added #{StateFile::IGNORE} to .gitignore: the run keeps its state there.")
+        end
+
+        # The screen only on a terminal that is actually running agents: a dry
+        # run has nothing to draw and a pipe has nowhere to draw it. Without a
+        # screen the keys still work, so the one line says which.
         Control.reset!
-        keyboard = Keyboard.listen
-        UI.line("keys: h for help — w wrap up · n write out and stop · q quit") if keyboard && !quiet?(options)
+        screen = (Screen.new if UI.animate? && commit?(options))
+        console = (Console.new(screen:) if screen)
+        keyboard = Keyboard.listen(sink: console)
+        UI.line("keys: h for help - s select, k kill, x extend, w wrap up, n stop, q quit") if keyboard && console.nil? && !quiet?(options)
 
         runner = Runner.new(
-          tree:, agents:, isolation:, jobs:, plans:, chain:,
+          tree:, agents:, isolation:, jobs:, plans:, state:,
           worktree: (::Agentilda::Worktree.new(root:) if isolation == :worktree),
-          max_rounds: (options[:rounds] || config[:rounds] || 10).to_i,
+          rounds: (options[:rounds] || config[:rounds])&.to_i,
           executor: Executor.new(root:, timeout:, dry_run: !commit?(options),
             instructions: options[:prompt], model: options[:model],
             max_tokens: (options[:max_tokens] || config[:max_tokens])&.to_i,
-            interactive: !keyboard.nil? && commit?(options)), dry_run: !commit?(options),
-          publisher: publisher_for(root, isolation, options)
+            interactive: !keyboard.nil? && commit?(options)),
+          dry_run: !commit?(options),
+          publisher: publisher_for(root, isolation, options),
+          on_board: console&.method(:paint)
         )
 
+        # The dispatcher exists only once the run starts, so the console is
+        # introduced to it through the block rather than up front.
         started = UI.monotonic
-        rounds = begin
-          runner.call
+        attempts = begin
+          screen&.open
+          runner.call { |dispatcher| console&.attach(dispatcher) }
         ensure
+          screen&.close
           keyboard&.stop
         end
-        report(runner, rounds, options, seconds: UI.monotonic - started)
-        exit(failures(rounds).empty? ? 0 : 1)
+        report(runner, attempts, options, seconds: UI.monotonic - started)
+        exit(failures(attempts).empty? ? 0 : 1)
       end
 
       private
@@ -199,16 +212,16 @@ module Agentilda
         lines = active.map { |s|
           takers = roster.for_status(s.status).map(&:name)
           "  #{s.feature.ordinal} is #{s.status.emoji} #{s.status.label}" \
-            "#{" — #{takers.join(", ")} takes it" unless takers.empty?}"
+            "#{" - #{takers.join(", ")} take#{"s" if takers.size == 1} it" unless takers.empty?}"
         }
         handled = agent.handles.map { |k| Agentilda::STATUS_BY_KEY[k]&.then { |st| "#{st.emoji} #{st.label}" } || k }
         refuse("#{name} handles #{handled.join(", ")}, and no plan in scope is there:\n\n" \
                "#{lines.join("\n")}\n\nName the agent that takes these states, or drop --agent.", 65)
       end
 
-      # @param rounds [Array]
-      # @return [Array]
-      def failures(rounds) = rounds.flat_map(&:attempts).reject(&:ok)
+      # @param attempts [Array<Agentilda::Runner::Attempt>]
+      # @return [Array<Agentilda::Runner::Attempt>]
+      def failures(attempts) = attempts.reject(&:ok)
 
       # The one thing this harness does that leaves the machine — pushing a
       # branch and opening its pull request — so it takes one more thing to
@@ -229,30 +242,33 @@ module Agentilda
         Publisher.new(root:, dry_run: !commit?(options))
       end
 
+      # One line per attempt: the plan, who ran, which of that agent's rounds
+      # it was, what moved, and the note. There is no round header any more
+      # because the loop has no rounds of its own: each agent counts its own
+      # per plan, so two agents on one plan can be on different numbers.
+      #
       # @param runner [Agentilda::Runner]
-      # @param rounds [Array]
+      # @param attempts [Array<Agentilda::Runner::Attempt>]
       # @param options [Hash]
       # @param seconds [Float] wall clock for the whole loop
       # @return [void]
-      def report(runner, rounds, options, seconds: 0.0)
-        rounds.each do |round|
-          puts "round #{round.number}"
-          round.attempts.each do |a|
-            mark = if !a.ok
-              "FAIL"
-            elsif a.advanced?
-              "#{a.from} -> #{a.to}"
-            else
-              "no change"
-            end
-            puts "  #{a.ordinal}\t#{a.agent}\t#{mark}\t#{a.note}"
+      def report(runner, attempts, options, seconds: 0.0)
+        puts "attempts"
+        attempts.each do |a|
+          mark = if !a.ok
+            "FAIL"
+          elsif a.advanced?
+            "#{a.from} -> #{a.to}"
+          else
+            "no change"
           end
+          puts "  #{a.ordinal}\t#{a.agent}\t[R:#{a.round}]\t#{mark}\t#{a.note}"
         end
 
-        # What the run cost, on STDOUT with the rounds it belongs to, so a run
+        # What the run cost, on STDOUT with the attempts it belongs to, so a run
         # redirected to a file keeps its bill. A dry run spent nothing and gets
         # none of this.
-        tally = Tally.new(attempts: rounds.flat_map(&:attempts), seconds:, rounds: rounds.size)
+        tally = Tally.new(attempts:, seconds:)
         puts("", tally.render) if commit?(options)
 
         return if quiet?(options)
@@ -262,19 +278,19 @@ module Agentilda
                "re-run to resume where they stand.")
         end
 
-        advanced = rounds.sum(&:advanced)
+        advanced = attempts.count(&:advanced?)
         blocked = runner.blocked
-        summary = ["#{rounds.size} round#{"s" unless rounds.size == 1}", "#{advanced} advanced"]
+        summary = ["#{attempts.size} invocation#{"s" unless attempts.size == 1}", "#{advanced} advanced"]
         summary << (runner.isolated? ? "#{runner.jobs} at a time, one worktree each" : "serial, shared tree")
         summary << "#{blocked.size} blocked" unless blocked.empty?
-        summary << "#{failures(rounds).size} failed" unless failures(rounds).empty?
+        summary << "#{failures(attempts).size} failed" unless failures(attempts).empty?
 
         if !commit?(options)
           warn("Dry run — no agent was invoked.\n#{summary.join(" · ")}\n\nRe-run with --commit.")
-        elsif failures(rounds).empty?
+        elsif failures(attempts).empty?
           success("#{summary.join(" · ")}#{"\n\nEvery plan is done or deliberately parked." if runner.settled?}")
         else
-          error("#{summary.join(" · ")}\n\n#{failures(rounds).map { |f| "#{f.ordinal} #{f.agent}: #{f.note}" }.join("\n")}")
+          error("#{summary.join(" · ")}\n\n#{failures(attempts).map { |f| "#{f.ordinal} #{f.agent}: #{f.note}" }.join("\n")}")
         end
 
         return if blocked.empty?

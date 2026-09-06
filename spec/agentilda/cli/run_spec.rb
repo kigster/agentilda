@@ -15,6 +15,15 @@ RSpec.describe Agentilda::CLI::Run, :tree do
   # terminal into raw mode and eat the developer's keys byte by byte.
   before { allow(Agentilda::Keyboard).to receive(:listen).and_return(nil) }
 
+  # The loop sleeps a second between ticks. Every example hands the runner
+  # the no-op sleeper runner_spec uses, or each `--commit` example is two
+  # seconds of waiting for nothing. The same spy serves the --rounds examples.
+  before do
+    allow(Agentilda::Runner).to receive(:new).and_wrap_original do |original, **keywords|
+      original.call(**keywords, sleeper: ->(_) {})
+    end
+  end
+
   def run(**options)
     out = CapturedStream.new
     err = CapturedStream.new
@@ -47,12 +56,15 @@ RSpec.describe Agentilda::CLI::Run, :tree do
     plans { |t| t.plan(ordinal, :building, slug, files: {"spec.md" => spec_body, "plan.md" => "# Plan"}) }
   end
 
-  # The `--commit` seam. The block sees the subject before answering, so an
-  # example can have "the agent" actually change the folder.
+  # The `--commit` seam. The block sees the subject and the agent before
+  # answering, so an example can have "the agent" actually change the folder
+  # and sign its own ledger. It answers `[ok, note]`, wrapped here into the
+  # {Agentilda::Executor::Result} the dispatcher reads.
   def with_executor(&decide)
     executor = instance_double(Agentilda::Executor)
-    allow(executor).to receive(:call) do |_agent, subject, **|
-      decide ? decide.call(subject) : [true, "completed"]
+    allow(executor).to receive(:call) do |agent, subject, **|
+      ok, note = decide ? decide.call(subject, agent) : [true, "completed"]
+      Agentilda::Executor::Result.new(ok:, note:, up: 0, down: 0, subagents: 0, delegated: 0, seconds: 0.0)
     end
     allow(Agentilda::Executor).to receive(:new).and_return(executor)
     executor
@@ -106,11 +118,13 @@ RSpec.describe Agentilda::CLI::Run, :tree do
       expect(Agentilda::Executor).to have_received(:new).with(hash_including(timeout: 600))
     end
 
-    it "falls back to 900 seconds when neither names one" do
+    # The executor falls back to 900 only for an agent with no clock of its
+    # own; a flag defaulting to 900 here silently cut every longer agent.
+    it "leaves each agent to its own clock when neither names one" do
       with_executor
       run(commit: true)
 
-      expect(Agentilda::Executor).to have_received(:new).with(hash_including(timeout: 900))
+      expect(Agentilda::Executor).to have_received(:new).with(hash_including(timeout: nil))
     end
 
     it "refuses an unreadable config file rather than silently ignoring it" do
@@ -123,17 +137,19 @@ RSpec.describe Agentilda::CLI::Run, :tree do
     end
   end
 
-  describe "chaining defaults" do
+  describe "--rounds" do
     before { building_plan }
 
-    it "chains by default, and --agent forces it off" do
-      allow(Agentilda::Runner).to receive(:new).and_call_original
-      with_executor
-      run(commit: true)
-      run(commit: true, agent: "luke-backend")
+    it "reaches the runner as a cap on every agent's own rounds" do
+      run(rounds: 1)
 
-      expect(Agentilda::Runner).to have_received(:new).with(hash_including(chain: true)).once
-      expect(Agentilda::Runner).to have_received(:new).with(hash_including(chain: false)).once
+      expect(Agentilda::Runner).to have_received(:new).with(hash_including(rounds: 1))
+    end
+
+    it "leaves each agent to its own count when none is given" do
+      run
+
+      expect(Agentilda::Runner).to have_received(:new).with(hash_including(rounds: nil))
     end
   end
 
@@ -143,7 +159,7 @@ RSpec.describe Agentilda::CLI::Run, :tree do
     it "prints which agent would take which plan, and invokes none" do
       out, err, status = run
 
-      expect(out).to include("001.00\tluke-backend\tno change\tdry run — would invoke luke-backend")
+      expect(out).to include("001.00\tluke-backend\t[R:1]\tno change\tdry run - would invoke luke-backend")
       expect(unwrapped(err)).to include("Dry run — no agent was invoked", "--commit")
       expect(status).to eq(0)
     end
@@ -196,7 +212,7 @@ RSpec.describe Agentilda::CLI::Run, :tree do
     it "refuses an agent that handles no in-scope plan's state, naming who does" do
       _out, err, status = run(agent: "leah-researcher")
 
-      expect(unwrapped(err)).to include("leah-researcher handles", "🟡 Building", "luke-backend takes it")
+      expect(unwrapped(err)).to include("leah-researcher handles", "🟡 Building", "luke-backend, rey-frontend take it")
       expect(status).to eq(65)
     end
   end
@@ -320,25 +336,47 @@ RSpec.describe Agentilda::CLI::Run, :tree do
   describe "--commit" do
     before { building_plan }
 
-    it "reports each attempt, prints the bill, and exits zero on success" do
+    # The stub answers ok and signs nothing, so the dispatcher looks for the
+    # work on disk, finds no pull request to justify 🟢, and marks the attempt
+    # Interrupted with no rounds left. Both of the pair get their turn at 🟡,
+    # which is why one plan makes two invocations and two failures.
+    it "reports each attempt, prints the bill, and exits non-zero when nothing was signed" do
       with_executor
       out, err, status = run(commit: true, rounds: 1)
 
-      expect(out).to include("round 1", "001.00\tluke-backend")
-      # A committed run spent something, so the tally belongs with the rounds
-      # it bills for, on STDOUT, where a redirected run keeps it.
-      expect(out).to include("1 round")
-      expect(unwrapped(err)).to include("0 advanced")
+      expect(out).to include("attempts", "001.00\tluke-backend")
+      # A committed run spent something, so the tally belongs with the
+      # attempts it bills for, on STDOUT, where a redirected run keeps it.
+      expect(out).to include("2 invocations")
+      expect(unwrapped(err)).to include("0 advanced", "2 failed")
+      expect(status).to eq(1)
+    end
+
+    # Narrowed to luke: once he moves the plan to 🟢, hansolo would take it
+    # next, sign nothing, and fail the run for a reason this example is not
+    # about.
+    it "exits zero when the agent signs Completed and the folder moves" do
+      with_executor { |subject|
+        File.write(File.join(subject.feature.path, "plan-backend.md"), "> [2026-09-04 11:29:20 AM PDT] [ agent: luke-backend   status: Completed, round 1 ]\n")
+        File.write(File.join(subject.feature.path, "plan-frontend.md"), "> [2026-09-04 11:29:20 AM PDT] [ agent: rey-frontend   status: Completed, round 1 ]\n")
+        File.write(File.join(subject.feature.path, "pull-requests.md"), "| Pull Request Number | Pull Request Name | Status |\n| --: | :-- | --: |\n| 1 | [x](https://github.com/example/repo/pull/1) | Open 🟡 |\n")
+        [true, "completed"]
+      }
+      out, _err, status = run(commit: true, agent: "luke-backend")
+      expect(out).to include("building -> ready_for_review")
       expect(status).to eq(0)
     end
 
+    # luke `starts_as` 🟡, so a ⭐️ folder moves the moment he is dispatched.
+    # The stub signs Almost completed rather than Completed: the attempt is
+    # then ok without claiming 🟢, and the plan sits at 🟡 where it landed.
     it "shows a plan that actually moved as from -> to" do
-      # A ⭐️ folder whose plan.md already exists best-fits 🟡, so the round's
-      # own serial resync advances it — which is the property under test: the
-      # harness reads the disk after the round rather than trusting what the
-      # agent claimed to have done.
       plans { |t| t.plan("002.00", :planned, "moves", files: {"spec.md" => spec_body, "plan.md" => "# Plan"}) }
-      with_executor
+      with_executor { |subject, agent|
+        File.write(File.join(subject.feature.path, agent.ledger.first),
+          "> [2026-09-04 11:29:20 AM PDT] [ agent: #{agent.name}   status: Almost completed, round 1 ]\n")
+        [true, "paused"]
+      }
       out, err, = run(commit: true)
 
       expect(out).to include("planned -> building")
@@ -365,13 +403,45 @@ RSpec.describe Agentilda::CLI::Run, :tree do
     end
   end
 
+  describe "the state file" do
+    before { building_plan }
+
+    # The run's memory lives under .plans/tmp/, which is about one machine and
+    # must not ride along in a commit. Somebody's .gitignore is edited once,
+    # and the edit is announced once.
+    it "adds .plans/tmp/ to .gitignore once and says so" do
+      root = File.dirname(plans_root)
+      system("git", "-C", root, "init", "-q")
+      with_executor
+      _out, first, = run(commit: true)
+      _out, second, = run(commit: true)
+
+      aggregate_failures do
+        expect(unwrapped(first)).to include("Added .plans/tmp/ to .gitignore")
+        expect(unwrapped(second)).not_to include("Added .plans/tmp/")
+        expect(File.read(File.join(root, ".gitignore")).scan(".plans/tmp/").size).to eq(1)
+      end
+    end
+
+    it "touches neither .gitignore nor .plans/tmp on a dry run" do
+      root = File.dirname(plans_root)
+      system("git", "-C", root, "init", "-q")
+      run
+
+      aggregate_failures do
+        expect(File).not_to exist(File.join(root, ".gitignore"))
+        expect(File).not_to exist(File.join(plans_root, "tmp"))
+      end
+    end
+  end
+
   describe "worktree isolation with a repository to isolate in" do
     # The real thing shells out to `git worktree add`; the double answers the
     # two questions the command asks — is this a repository, and where does
     # this plan's checkout live — so the wiring to {Publisher} is exercised
     # without git. The checkout is a plain directory, which `dirty?` reads as
     # clean, so the publisher is constructed and then rightly never pushes.
-    it "wires a publisher in and labels each attempt with its branch" do
+    it "wires a publisher in and runs each plan in its own checkout" do
       building_plan
       checkout = Agentilda::Worktree::Checkout.new(
         ordinal: Agentilda::Ordinal.parse("001.00"), branch: "kig/001.00-tax-rule-dsl",
@@ -382,7 +452,7 @@ RSpec.describe Agentilda::CLI::Run, :tree do
 
       out, err, status = run(isolation: "worktree")
 
-      expect(out).to include("(kig/001.00-tax-rule-dsl)")
+      expect(out).to include("001.00\tluke-backend")
       expect(unwrapped(err)).to include("one worktree each")
       expect(status).to eq(0)
     end
