@@ -8,14 +8,14 @@ Agents state their progress in the documents they own. `Ledger` parses those dat
 
 ## The contract, what Rey's half calls
 
-| Interface | Shape | On failure |
-| :--- | :--- | :--- |
-| `Board::Row` | `Data.define` in `lib/agentilda/board.rb`; fields as written in plan.md Task 8 | none, a value |
-| `Runner::Attempt` | gains `round`, `file`, `model`, `status` | none, a value |
-| `Dispatcher#board` | current `Board` snapshot for the tick | never raises |
-| `Dispatcher#kill(ordinal)` / `#extend(ordinal, seconds)` | via `Executor::Handle`; kill writes STOP, waits 15 s, SIGKILL | unknown ordinal is a no-op |
-| `Runner#call` | drives the dispatcher; Task 11 (Rey) adds the `yield dispatcher` before the loop | returns the attempts list |
-| `Control::WARN`, `Control.write(path, word)` | in `lib/agentilda/control.rb` | raises on an unwritable path |
+| Interface                                                | Shape                                                                            | On failure                   |
+| :------------------------------------------------------- | :------------------------------------------------------------------------------- | :--------------------------- |
+| `Board::Row`                                             | `Data.define` in `lib/agentilda/board.rb`; fields as written in plan.md Task 8   | none, a value                |
+| `Runner::Attempt`                                        | gains `round`, `file`, `model`, `status`                                         | none, a value                |
+| `Dispatcher#board`                                       | current `Board` snapshot for the tick                                            | never raises                 |
+| `Dispatcher#kill(ordinal)` / `#extend(ordinal, seconds)` | via `Executor::Handle`; kill writes STOP, waits 15 s, SIGKILL                    | unknown ordinal is a no-op   |
+| `Runner#call`                                            | drives the dispatcher; Task 11 (Rey) adds the `yield dispatcher` before the loop | returns the attempts list    |
+| `Control::WARN`, `Control.write(path, word)`             | in `lib/agentilda/control.rb`                                                    | raises on an unwritable path |
 
 ## Ownership
 

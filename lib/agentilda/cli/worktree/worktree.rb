@@ -49,7 +49,7 @@ module Agentilda
             if seeded
               puts("✓ Seeded with .env and credential files")
             else
-              $stderr.puts("⚠ Could not seed worktree, see above for details")
+              warn("⚠ Could not seed worktree, see above for details")
             end
           end
 

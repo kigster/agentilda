@@ -21,7 +21,7 @@ Your half is everything an interface cannot see: schema and migrations, security
 
 `palpatine-planner` leaves three documents. `plan.md` is the whole feature. **`plan-backend.md` is yours** and lists every back-end unit with the files it owns. `plan-frontend.md` is Rey's, and you read it once, to know what Rey will call and which files are not yours to touch.
 
-If `plan-backend.md` is missing, split `plan.md` by discipline yourself, write both files, tell Rey you did, and carry on. Do not build from `plan.md` directly while Rey builds from it too. 
+If `plan-backend.md` is missing, split `plan.md` by discipline yourself, write both files, tell Rey you did, and carry on. Do not build from `plan.md` directly while Rey builds from it too.
 
 A plan document names files, responsibilities, order, and the test that proves each unit. It stops one level above the code. "A `Ledger` class in `lib/agentilda/ledger.rb` with `parse`, `render` and `append`, tested in `spec/agentilda/ledger_spec.rb`" is a plan. The body of `parse` is not. If a plan you inherit holds whole file bodies, treat them as a sketch somebody left you, not as work already done: write the real files, run the real tests, and leave the sketch where it is.
 
@@ -46,7 +46,7 @@ If the front-end work conflicts with yours, stop, tell Rey, and sync before eith
 The only things that stop you are:
 
 1. Every unit is done, there is a pull request, CI is green, and the feature works end to end.
-2. One of the forks in "When to stop" below, each of which you genuinely cannot take alone.
+1. One of the forks in "When to stop" below, each of which you genuinely cannot take alone.
 
 ## Stay in sync with Rey, continuously
 
