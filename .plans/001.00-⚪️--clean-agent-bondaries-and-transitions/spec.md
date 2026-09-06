@@ -65,23 +65,24 @@ Three defects meet in that transcript, and they are separable:
 - `lib/agentilda/ui.rb` holds `UI.concurrently`, `Line`, the countdown and the meter. The two bars are drawn around `TTY::Spinner::Multi` with an ANSI scroll region rather than replacing it.
 - `agents/*.md` carry `timeout:` already (only `leah-researcher` sets one). `subagents:` is new.
 
-## What research needs to settle
+## Research
 
 The design settles the shape. What it does not settle, and what an implementer would otherwise have to guess:
 
 1. **Does `DECSTBM` behave across the terminals actually in use here?** Specifically iTerm2, Terminal.app, tmux and a plain pipe. Whether the region survives `SIGWINCH`, and whether `TTY::Spinner::Multi`'s cursor handling fights it.
-   ***Answer: DO NOT WORRY ABOUT MULTI-TERMINAL. Do worry about getting killed and knowing where to restar from.***
-1. ******Can an agent be relied on to write its own closing ledger entry?** If a meaningful fraction of invocations forget, the design's central assumption fails and the harness has to write the entry from the agent's exit status instead. This is answerable by instrumenting one real run.
+   ***Answer: DO NOT WORRY ABOUT MULTI-TERMINAL. It must work on iTerm2.*** 
+1. ******Can an agent be relied on to write its own closing ledger entry?** If a meaningful fraction of invocations forget, the design's central assumption fails and the harness has to write the entry from the agent's exit status instead. This is answerable by instrumenting one real run. It's also answerable by providing an instruction for the agent to maintain a memory of what is you being asked at the end throughout their work.
    ***Answer: generally the agent should be trusted to write to the ledger.*** 
 1. **What is the right poll interval?** Ten seconds is asserted, not measured. Cost of the poll against handoff latency, over a tree with a realistic number of plans. 
    ***ANSWER: Poll every second and update agent's status line (see the dashboard below)***
 1. **Does `Brief::TIMEOUT = 60` want the same advisory treatment?** The drafting shell-out that created this very folder timed out and discarded its work, which is the same defect in a different file.
-   ***ANSWER: The prompt to briefer must be that he has 50 seconds to explore the codebase and write a brief. Use Haiku model.***
+   ***ANSWER: The prompt to briefer must be that he has 50 seconds to explore the codebase and write a brief. Use Haiku model for him. For consistency, create an jabba-briefer agent that does exactly what you need, so you do not need to pass a dynamic prompts.***
 1. **What happens to 🟡 Building?** With `luke-backend` and `rey-frontend` handling ⭐️ Planned, nothing writes 🟡 unless luke renames on start. Confirm that is wanted rather than retiring the state.
-   ANSWER: Yes let's have Luke be in charge of that name transition. 
-   Hans Solo may reject the PR which renames the folder again,
-1. **Which existing plan folders break?** An audit across `qualified-at`'s `.plans` and this repo's, run before the state insert lands, the same way DSL vocabulary changes are audited before tightening.
-   ANSWER: irrelevant.
+   
+   ***ANSWER: Yes let's have Luke be in charge of that name transition. If he doesn't do it, it's a bug, so please fix it.*** 
+   ***Hans Solo may reject the PR which renames the folder again and should restart Luke/Rey's work,.***
+1. *******Which existing plan folders break?** An audit across `qualified-at`'s `.plans` and this repo's, run before the state insert lands, the same way DSL vocabulary changes are audited before tightening.*
+   ***ANSWER: irrelevant.***
 
 
 
@@ -122,10 +123,10 @@ Other colored elements in the table are:
 
 Files:
 
-* spec.md -> green
-* Plan.md -> yellow
-* Plan-backend -> bold yellow
-* Plan-frontend -> cyan
+* `spec.md` -> green
+* 'plan.md` -> yellow
+* `plan-backend.md` -> bold yellow
+* `plan-frontend.md` -> cyan
 * Implementation started, we say both luke and jey are working on the pull-requests.md file (magenta)
 * Once the joined draft PR from Luke and Jey is pushed, reviewer starts to check it. Instead of the file name it should say the number of the PR: #43 and be clickable to the real PR. It should be in light blue color while the "reviewer" is reviewing it. If it returns to luke and rey rejected the PR # stays in the file column, but it turns red in color. The agents double in size (we should see both Luke and Rey in two lines working on the same red PR).  Once they fixed it, the PR# changes to light blue and reviewer again is the agent working on in.  The reviewer has the right to reject the PR maximum twice per PR. Once they've done it twice, they review the same PR and if they find it acceptable the approve it by commenting " 👍🏼 to deploy". At that point the work on this ticket finishes.
 * When do so, the hansolo leaves the 
