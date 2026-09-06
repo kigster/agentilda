@@ -181,6 +181,8 @@ agentilda create --after 002 k1 sync   # 002.01-⬜️--k1-sync (retroactive)
 agentilda list-plans                   # the table; exits 1 if a name lies
 agentilda resync dirs                  # folder emoji vs folder contents
 agentilda resync prs                   # [NNN.MM] prefixes on PR titles
+agentilda mail send --plan 003 --from luke-backend --to rey-frontend "…"   # leave a message for the other half
+agentilda mail read --plan 003 --for rey-frontend                          # what is waiting, numbered
 agentilda linear import --prefix TAX   # the plans, as Linear projects and issues
 agentilda docs                         # regenerate the conventions
 agentilda states                       # the state machine, as a diagram
@@ -261,6 +263,10 @@ agentilda states                           # the whole machine, as a diagram
 ### Chaining: one plan, several agents, one round
 
 When an agent finishes and the plan has genuinely advanced — its folder renamed, or its contents now justifying the next state — the runner hands it straight to the next state's agent **in the same round**: researcher to writer to planner, without paying a full round per hop. Chaining is on by default and forced off by `--agent`, since chaining past a restriction would un-restrict it; `--no-chain` turns it off explicitly. The chain stops exactly where round assignments stop: at a blocked or finished state, a human decides. It also stops short of a state two agents handle as a pair, such as 🟡 Building: a chain is one thread carrying one plan, and a pair is started together by the next round.
+
+### A pair's mailbox
+
+`luke-backend` and `rey-frontend` build one plan in one worktree at the same time, as two separate `claude -p` processes. The channel between them is `mailbox.md` in the plan folder: append-only, one numbered and timestamped entry per message, written with `agentilda mail send` and polled with `agentilda mail read` between steps. Each half's prompt names the file, the partner and both commands, `--dir` included, so neither has to find the other among every Claude session on the machine, and the exchange is still there to read once the round is over. A message is delivered when the reader next polls, not when it is written, so the prompts tell each half to note an assumption in `implementation-plan.md` and carry on rather than wait.
 
 ### Steering one agent, or stepping around one
 
