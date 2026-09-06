@@ -23,7 +23,7 @@ module Agentilda
             .call(commit: commit?(options))
 
           if changes.empty?
-            success("Every folder is already named NNN.MM-<emoji>-<slug> and the emoji matches.") unless quiet?(options)
+            success("Every folder is already named NNN.MM-<emoji> → <slug> and the emoji matches.") unless quiet?(options)
             return
           end
 
