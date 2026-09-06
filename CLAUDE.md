@@ -94,6 +94,7 @@ lib/agentilda/
   viewer.rb            hands a Markdown file to `open` or to mdfried
   runner.rb            the round loop, run until a fixed point
   executor.rb          one `claude -p` invocation, and the autonomy boundary
+  mailbox.rb           mailbox.md in a plan folder: how a pair talks, append-only and numbered
   transcript.rb        parses --output-format stream-json into a spinner phrase
   worktree.rb          a git worktree and branch per plan
   publisher.rb         push the branch, open the [NNN.MM](X) pull request
@@ -106,7 +107,7 @@ lib/agentilda/
   cli/base.rb          shared flags, tree_for, refuse, the dry-run footer
   cli/<command>/       one file per command (create/create.rb, run/run.rb, …),
                        subcommands/ under the prefixed groups (agents, resync,
-                       linear); linear/linear.rb is the shared Team base
+                       linear, mail); linear/linear.rb is the shared Team base
 ```
 
 ### The run loop

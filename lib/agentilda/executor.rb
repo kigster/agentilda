@@ -273,12 +273,14 @@ module Agentilda
 
     # @param agent [Agentilda::Agent]
     # @param subject [Agentilda::Subject]
+    # @param partners [Array<Agentilda::Agent>] the other agents working
+    #   this plan in this round, named in the prompt beside the mailbox
     # @return [Agentilda::Executor::Result] whether it worked, a one-line
     #   note, and what it spent. Destructures as `ok, note` for callers that
     #   want no more than that.
     # @yieldparam progress [Agentilda::Transcript::Progress] what the
     #   agent is doing and what it has spent, as both change
-    def call(agent, subject, root: @root, &on_progress)
+    def call(agent, subject, root: @root, partners: [], &on_progress)
       started = UI.monotonic
       if @dry_run
         return Result.new(ok: true, note: "dry run — would invoke #{agent.name}", up: 0, down: 0,
@@ -293,7 +295,7 @@ module Agentilda
       timeout = timeout_for(agent)
       begin
         hunted = false
-        @command.run(*invocation(agent, subject, root:, control:), timeout:) do |out, _err|
+        @command.run(*invocation(agent, subject, root:, control:, partners:), timeout:) do |out, _err|
           # Once, on the first chunk: the child exists by the time it has
           # produced output, and a `ps` per chunk would be a `ps` per token.
           unless hunted
@@ -358,12 +360,12 @@ module Agentilda
     # @param agent [Agentilda::Agent]
     # @param subject [Agentilda::Subject]
     # @return [Array<String>]
-    def invocation(agent, subject, root: @root, control: nil)
+    def invocation(agent, subject, root: @root, control: nil, partners: [])
       # `--include-partial-messages` is what the token meter runs on. Without
       # it the stream reports a settled input count and a placeholder output
       # count — 2 for a four-thousand-token answer — and a spinner counting
       # what came back would read zero all run. See {Transcript#meter}.
-      argv = ["claude", "-p", prompt_for(agent, subject, root, control:), "--add-dir", root,
+      argv = ["claude", "-p", prompt_for(agent, subject, root, control:, partners:), "--add-dir", root,
         "--output-format", "stream-json", "--verbose", "--include-partial-messages"]
       denied = denied_for(agent)
       argv += ["--disallowedTools", denied.join(",")] unless denied.empty?
@@ -412,7 +414,7 @@ module Agentilda
     # @param agent [Agentilda::Agent]
     # @param subject [Agentilda::Subject]
     # @return [String]
-    def prompt_for(agent, subject, root = @root, control: nil)
+    def prompt_for(agent, subject, root = @root, control: nil, partners: [])
       <<~PROMPT
         #{agent.prompt}
 
@@ -426,7 +428,7 @@ module Agentilda
         Repository root: #{root}
 
         #{"The folder's name is not currently justified: #{subject.violation}" if subject.violation}
-        #{operator_instructions}#{budget_section}#{time_budget_section(agent)}#{control_section(control)}
+        #{operator_instructions}#{budget_section}#{time_budget_section(agent)}#{control_section(control)}#{mailbox_section(agent, subject, partners)}
         ## Boundary — enforced, not requested
 
         You may read anything, and write source, tests and the plan's own
@@ -531,6 +533,54 @@ module Agentilda
         "A line saying WRAP_UP means finish the essential remainder as fast " \
         "as possible. STOP means write what you have to disk, note where you " \
         "stopped in the plan folder's markdown, and end your turn now.\n"
+    end
+
+    # The section a paired agent gets, and a lone agent does not. Two agents
+    # on one plan are two `claude -p` processes. Claude Code can message
+    # between local sessions, but names a session after its directory plus a
+    # random suffix, so a pair had to guess its partner from every session on
+    # the machine by start time. Here the partner is named, and so is the
+    # file the two talk through, with the exact commands, `--dir` included,
+    # because the agent's shell may be sitting in a worktree whose own
+    # `.plans` copy is not the one the harness reads.
+    #
+    # @param agent [Agentilda::Agent]
+    # @param subject [Agentilda::Subject]
+    # @param partners [Array<Agentilda::Agent>]
+    # @return [String]
+    def mailbox_section(agent, subject, partners)
+      return "" if partners.empty?
+
+      plans_dir = File.dirname(subject.feature.path)
+      plan = subject.feature.ordinal
+      names = partners.map { |p| "`#{p.name}`" }
+      who = (names.size == 1) ? "Your partner on this plan is #{names.first}" : "Your partners on this plan are #{names.join(" and ")}"
+
+      <<~SECTION
+
+        ## Mailbox — poll it between steps
+
+        #{who}. You share one worktree and one branch, but not a process, so
+        the only way to reach each other is the plan's mailbox:
+
+            #{File.join(subject.feature.path, Mailbox::FILENAME)}
+
+        Read it before each significant step and whenever you finish a unit:
+
+            agentilda mail read --dir "#{plans_dir}" --plan #{plan} --for #{agent.name}
+
+        Pass `--after N`, with the number of the last message you have read,
+        to see only what is new. Write to it when you land an interface your
+        partner is waiting on, when you amend the contract, when you need
+        something from their half, and when you finish:
+
+            agentilda mail send --dir "#{plans_dir}" --plan #{plan} --from #{agent.name} --to #{partners.first.name} "what you need them to know"
+
+        Every message is appended with a number and a timestamp and never
+        edited, so a person can read the exchange after the round. A question
+        your partner has not answered within a few steps is not a reason to
+        stop: write your assumption into implementation-plan.md and carry on.
+      SECTION
     end
 
     # The section `run --prompt` adds, labelled as coming from the person who

@@ -22,6 +22,9 @@ require_relative "cli/states/states"
 require_relative "cli/agents/subcommands/list"
 require_relative "cli/agents/subcommands/describe"
 require_relative "cli/worktree/worktree"
+require_relative "cli/mail/mail"
+require_relative "cli/mail/subcommands/send"
+require_relative "cli/mail/subcommands/read"
 
 module Agentilda
   # The command line. Every command is a thin shell over one library class:
@@ -69,6 +72,12 @@ module Agentilda
     register "linear" do |prefix|
       prefix.register "import", Linear::Import
       prefix.register "projects", Linear::Projects
+    end
+
+    # What a paired agent shells out to between steps. See {Agentilda::Mailbox}.
+    register "mail" do |prefix|
+      prefix.register "send", Mail::Send
+      prefix.register "read", Mail::Read
     end
 
     register "completion", ::Dry::CLI::Autocomplete::Command[::Agentilda::CLI]

@@ -68,7 +68,11 @@ module Agentilda
     #   @return [Agentilda::Worktree::Checkout, nil] nil when sharing a tree
     # @!attribute [r] round
     #   @return [Integer] which pass over the tree this task belongs to
-    Task = Data.define(:agent, :subject, :root, :checkout, :round) do
+    # @!attribute [r] partners
+    #   @return [Array<Agentilda::Agent>] the other agents handling the same
+    #     state, working the same plan in the same round; empty for an agent
+    #     on its own
+    Task = Data.define(:agent, :subject, :root, :checkout, :round, :partners) do
       # @return [String] for the spinner line — the pid and round render
       #   beside this through the line's own `:pid` token, once known
       def label = "#{subject.feature.ordinal}  #{UI.paint(agent.name, :yellow, :bold)}"
@@ -210,7 +214,7 @@ module Agentilda
       # went to `leah-researcher` for a whole round, and every re-run started
       # her again, because nothing renamed the folder until she finished.
       reconcile
-      tasks = assignments.map { |agent, subject| prepare(agent, subject, number) }
+      tasks = assignments.map { |agent, subject, partners| prepare(agent, subject, number, partners) }
       return Round.new(number:, attempts: []) if tasks.empty?
 
       results = UI.concurrently(tasks, "round #{number} — #{tasks.size} plans", jobs:,
@@ -278,12 +282,13 @@ module Agentilda
     # @param agent [Agentilda::Agent]
     # @param subject [Agentilda::Subject]
     # @param round [Integer]
+    # @param partners [Array<Agentilda::Agent>] the rest of the pair, if any
     # @return [Agentilda::Runner::Task]
-    def prepare(agent, subject, round)
-      return Task.new(agent:, subject:, root: shared_root, checkout: nil, round:) unless isolated?
+    def prepare(agent, subject, round, partners = [])
+      return Task.new(agent:, subject:, root: shared_root, checkout: nil, round:, partners:) unless isolated?
 
       checkout = worktree.checkout_for(subject.feature)
-      Task.new(agent:, subject:, root: checkout.path, checkout:, round:)
+      Task.new(agent:, subject:, root: checkout.path, checkout:, round:, partners:)
     end
 
     # @return [String]
@@ -327,7 +332,12 @@ module Agentilda
         state = Resync::Dirs.target(subject)
         next [] if StateMachine::SETTLED.include?(state.key)
 
-        @agents.for_status(state).map { |agent| [agent, subject] }
+        # Each member of a pair is told who the others are. The executor
+        # names them in the prompt, along with the plan's mailbox, so no
+        # agent has to find its partner among every Claude session on the
+        # machine.
+        handlers = @agents.for_status(state)
+        handlers.map { |agent| [agent, subject, handlers - [agent]] }
       end
     end
 
@@ -353,10 +363,13 @@ module Agentilda
       agent = task.agent
       subject = task.subject
       from = subject.status.key
+      # A chain stops short of a pair, so only the first hop can have one.
+      partners = task.partners
       attempts = []
 
       loop do
-        result = @executor.call(agent, subject, root: task.root, &on_progress)
+        result = @executor.call(agent, subject, root: task.root, partners:, &on_progress)
+        partners = []
         ok, note = result
         note = "#{note} (#{task.checkout.branch})" if task.checkout
 

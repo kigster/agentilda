@@ -88,6 +88,33 @@ RSpec.describe Agentilda::Runner, :tree do
       end
     end
 
+    describe "pairing" do
+      let!(:built) do
+        plans do |t|
+          t.plan "000.00", :new, "alone", files: {"spec.md" => spec_body}
+          t.plan "001.00", :building, "paired", files: {"spec.md" => spec_body, "plan.md" => "# P"}
+        end
+      end
+
+      # The executor puts the partner's name and the mailbox into the prompt.
+      # It can only do that if the round tells it who the partner is.
+      it "tells each half of a pair who its partner is, and a lone agent nothing" do
+        seen = {}
+        told = described_class.new(tree:, agents:, max_rounds: 1,
+          executor: ->(agent, subject, partners: [], **) {
+            seen[[agent.name, subject.feature.ordinal.to_s]] = partners.map(&:name)
+            [true, "noop"]
+          })
+        told.call
+
+        expect(seen).to eq(
+          ["leah-researcher", "000.00"] => [],
+          ["luke-backend", "001.00"] => ["rey-frontend"],
+          ["rey-frontend", "001.00"] => ["luke-backend"]
+        )
+      end
+    end
+
     # The bug this kills: a round read every folder's name before the resync
     # had made the name honest, so a ⚪️ folder that already held a researched
     # spec.md and a plan.md went to `leah-researcher` for a whole round, twenty
