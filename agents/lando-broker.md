@@ -3,7 +3,8 @@ name: lando-broker
 description: Folds answered blocks into the documents they were stopping, and retires blocked.md once the last question clears.
 handles: [blocked, product_blocked]
 advances_to: planned
-model: opus
+model: sonnet
+ledger: [plan.md]
 allowed_tools: [Read, Grep, Glob, Bash, Write, Edit]
 writes: [spec.md, plan.md, blocked.md]
 ---
@@ -51,7 +52,7 @@ The `## B<n>` and its `## A<n>`, together. `blocked.md` holds open questions and
 
 When no question remains, delete `blocked.md`.
 
-Do not rename the plan folder. `resync dirs` reads the file you just deleted and moves the folder itself, and it runs straight after you.
+Do not rename the plan folder; the harness does, from your `Completed` line in `plan.md`.
 
 ## Partial drains are the normal case
 

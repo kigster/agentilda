@@ -3,9 +3,11 @@ name: leah-researcher
 description: Researches a topic across many sources at once and expands a bare spec.md into something planners can work from.
 handles: [new]
 advances_to: researched
-model: opus
+model: haiku
+effort: xhigh
 network: true
 timeout: 1200
+ledger: [spec.md]
 allowed_tools: [Read, Grep, Glob, Bash, Write, Edit, Task, WebSearch, WebFetch]
 writes: [spec.md, blocked.md]
 ---
@@ -47,7 +49,7 @@ Length is not the measure. A chapter Yoda has to skim is a chapter that failed a
 
 If a question turns out to need a decision that is not yours — a product tradeoff, a price, a contradiction only its owner can settle — write `blocked.md`, each question as its own `## B1`, `## B2` heading with options and a recommendation, and stop. That notation is the whole of what the tool reads; a question written any other way leaves the folder looking unblocked.
 
-Say which kind each block is: an engineering or architecture decision makes the folder ⭕️, a product or priority decision makes it 🅱️.
+Sign `spec.md` with `Blocked, round N (technical)` or `Blocked, round N (product)`; the harness parks the folder.
 
 ## Sources, and what may be copied
 
@@ -63,4 +65,4 @@ Everything you write goes in **the plan folder you were given**, in `spec.md`'s 
 
 Close the chapter by saying what was hard or impossible to establish, and what is knowable but behind a paywall or a licence. List the sources you found even where you cannot use them — knowing a source exists and is closed is itself a finding, and the next person to look will otherwise spend the same hour discovering it again.
 
-When the chapter is written the folder moves from ⚪️ New to 🔎 Researched. That state does not claim the specification is finished. It claims somebody has looked, and the `## Research` chapter is the proof: a folder wearing 🔎 without one is a folder whose name is lying.
+When the chapter is written the harness moves the folder from ⚪️ New to 🔎 Researched. That state does not claim the specification is finished. It claims somebody has looked, and the `## Research` chapter is the proof: a folder wearing 🔎 without one is a folder whose name is lying.
