@@ -85,6 +85,11 @@ RSpec.describe Agentilda::Brief, :tree do
       expect(argv[2]).to include("do not research the web", "do not invent facts")
     end
 
+    it "tells the drafter it has fifty seconds, ten fewer than the kill" do
+      expect(brief.invocation[2]).to include("50 seconds")
+      expect(described_class::TIMEOUT).to eq(60)
+    end
+
     context "when the project keeps context files" do
       before { File.write(File.join(root, "CLAUDE.md"), "# Widgets Inc.\n\nWe build widgets.") }
 

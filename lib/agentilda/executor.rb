@@ -12,13 +12,6 @@ module Agentilda
   #            appeared. A prompt is a request; a check is a guarantee, and only
   #            one of them survives a model deciding it knows better.
   class Executor
-    # Raised from inside the streaming block to stop an invocation
-    # mid-flight — the token budget crossed, or the grace period after `q`
-    # run out. TTY::Command's reader thread re-raises it out of `run`, and
-    # its `ensure` terminates the child on the way, so raising here is how
-    # the child is killed rather than merely abandoned.
-    class Aborted < StandardError; end
-
     # What one invocation did, and what it spent doing it.
     #
     # {#to_ary} is deliberate: every caller of {Executor#call} destructures
@@ -41,9 +34,62 @@ module Agentilda
     #     total rather than as a direction of its own
     # @!attribute [r] seconds
     #   @return [Float] wall clock, from argv to exit
-    Result = Data.define(:ok, :note, :up, :down, :subagents, :delegated, :seconds) do
+    # @!attribute [r] killed
+    #   @return [Symbol, nil] :timeout when the clock's backstop fired, :key
+    #     when somebody pressed k, :budget when the token meter crossed the
+    #     cap, :quit when the grace period after q ran out, nil otherwise
+    # @!attribute [r] pid
+    #   @return [Integer, nil]
+    Result = Data.define(:ok, :note, :up, :down, :subagents, :delegated, :seconds, :killed, :pid) do
+      def initialize(killed: nil, pid: nil, **rest) = super
+
       # @return [Array(Boolean, String)]
       def to_ary = [ok, note]
+    end
+
+    # What the dispatcher holds on a running invocation, so a keypress can
+    # reach it: the process, its clock and its control file.
+    #
+    # Filled in by {#call} once the child exists. Every method tolerates the
+    # gap before that, because the keyboard does not wait.
+    class Handle
+      # @return [Agentilda::Child, nil]
+      attr_accessor :child
+
+      # @return [Agentilda::Clock, nil]
+      attr_accessor :clock
+
+      # @return [String, nil]
+      attr_accessor :control
+
+      # @return [Symbol, nil] why the process was killed, once it was
+      attr_reader :killed
+
+      # @return [Integer, nil]
+      def pid = child&.pid
+
+      # @return [Integer, nil]
+      def remaining = clock&.remaining
+
+      # @return [Symbol, nil]
+      def phase = clock&.phase
+
+      # STOP, a grace period, then SIGKILL if it is still there. The grace is
+      # what lets an agent mid-write finish the line.
+      #
+      # @param grace [Integer] seconds
+      # @param reason [Symbol] :key, :timeout, :budget or :quit
+      # @return [void]
+      def kill!(grace: 15, reason: :key)
+        @killed ||= reason
+        Control.write(control, Control::STOP) if control
+        sleep(grace) if grace.positive?
+        child&.kill("KILL") if child&.alive?
+      end
+
+      # @param seconds [Integer]
+      # @return [void]
+      def extend!(seconds) = clock&.extend!(seconds)
     end
 
     # Tools no agent may use under this autonomy level, whatever its definition
@@ -81,14 +127,11 @@ module Agentilda
     # `hansolo-reviewer` approving and `hansolo-reviewer` merging.
     UNGRANTABLE = ["git push", "gh pr merge"].freeze
 
-    # The `stdout:` and `stderr:` sections of a {TTY::Command::ExitError}
-    # message. stdout runs until stderr starts; stderr runs to the end, because
-    # what an agent prints there is not guaranteed to be one line.
-    STDOUT_SECTION = /^[ \t]*stdout:[ \t]*(.*?)(?=\n[ \t]*stderr:|\z)/m
-    STDERR_SECTION = /^[ \t]*stderr:[ \t]*(.*)\z/m
-
     # How much of what the agent said survives into a one-line report.
     REASON_LIMIT = 300
+
+    # Seconds an agent gets when neither its frontmatter nor `--timeout` says.
+    DEFAULT_TIMEOUT = 900
 
     # Where the raw stream of each invocation is kept.
     #
@@ -129,106 +172,11 @@ module Agentilda
       CREDENTIAL_VARS.reject { |name| env[name].to_s.strip.empty? }
     end
 
-    # Guards {.claim_child}'s registry: under `-j` several invocations spawn
-    # at once, and two of them finding the same fresh child would put one pid
-    # on two spinner lines.
-    CHILDREN_MUTEX = Mutex.new
-    @claimed_children = []
-
-    # The pid of a `claude` child this process spawned and nobody has claimed
-    # yet, so a spinner line can name the process it is narrating.
-    #
-    # TTY::Command never exposes the pid it spawned, so this reads the
-    # process table instead: direct children of this process whose command is
-    # `claude`. With several invocations racing, first-come order cannot say
-    # which child belongs to which caller — a claimed pid might in principle
-    # label a sibling's line — which is why the pid decorates the UI and is
-    # never used to signal or kill anything.
-    #
-    # @param parent [Integer]
-    # @param listing [String, nil] `ps` output, injectable for the suite
-    # @return [Integer, nil] nil when no unclaimed child is found
-    def self.claim_child(parent: Process.pid, listing: nil)
-      listing ||= `ps -ax -o pid=,ppid=,command= 2>/dev/null`
-      CHILDREN_MUTEX.synchronize do
-        pid = listing.lines.filter_map { |line|
-          child, ppid, command = line.strip.split(/\s+/, 3)
-          child.to_i if ppid.to_i == parent && command.to_s.match?(%r{(\A|/)claude(\s|\z)})
-        }.find { |candidate| !@claimed_children.include?(candidate) }
-        @claimed_children << pid if pid
-        pid
-      end
-    end
-
-    # Forget a finished invocation's pid, so the registry does not grow for
-    # the life of a long run and a recycled pid stays claimable.
-    #
-    # @param pid [Integer, nil]
-    # @return [void]
-    def self.release_child(pid)
-      CHILDREN_MUTEX.synchronize { @claimed_children.delete(pid) } if pid
-    end
-
-    # What `claude` said, out of the four labelled sections
-    # {TTY::Command::ExitError} builds its message from.
-    #
-    # The first of those sections is the command line, which for an agent is a
-    # shell-escaped copy of its several-thousand-character prompt. Reporting it
-    # said that an invocation had failed, at length, and nothing at all about
-    # why. The run that found this printed the same escaped prompt ten times
-    # while the answer, `401 API key is invalid`, sat unread in `stdout:`.
-    #
-    # This keeps both streams, because they carry different halves. `claude`
-    # reports its own failures on stdout; the line naming the *cause* of that
-    # 401 (`ANTHROPIC_API_KEY … takes precedence over your claude.ai login`)
-    # was on stderr.
-    #
-    # @param error [TTY::Command::ExitError]
-    # @return [String]
-    def self.failure_reason(error)
-      status = error.message[/^[ \t]*exit status:[ \t]*(\S+)/, 1]
-      outcome = status ? "exited #{status}" : "failed"
-      said = [STDOUT_SECTION, STDERR_SECTION]
-        .filter_map { |section| tail(error.message[section, 1]) }
-        .join(" | ")
-
-      said.empty? ? "#{outcome} and said nothing" : "#{outcome}: #{said}"
-    end
-
-    # @param text [String, nil]
-    # @return [String, nil] the last few meaningful lines, on one line
-    def self.tail(text)
-      lines = text.to_s.split("\n").map(&:strip).reject { |line| line.empty? || line == "Nothing written" }
-      return nil if lines.empty?
-
-      joined = lines.last(3).join(" ")
-      (joined.length > REASON_LIMIT) ? "#{joined[0, REASON_LIMIT - 1]}…" : joined
-    end
-    private_class_method :tail
-
-    # What went wrong, preferring what the stream managed to parse.
-    #
-    # `claude` reports its own failures two different ways. A run that got far
-    # enough emits a `result` event saying so, and that is the readable one. A
-    # run that failed before it started — the 401 that cost a whole round three
-    # minutes an agent — prints prose on stdout and never emits an event at
-    # all, so those lines are what {Transcript#plain} holds and what is left to
-    # report. {.failure_reason} stays the last resort, for a failure that
-    # printed nothing either way.
-    #
-    # @param error [TTY::Command::ExitError]
-    # @param transcript [Agentilda::Transcript]
-    # @return [String]
-    def reason_for(error, transcript)
-      return "failed: #{transcript.error}" if transcript.failed?
-
-      said = transcript.plain.last(3).join(" ")
-      said.empty? ? self.class.failure_reason(error) : "failed: #{said}"
-    end
-
     # @param root [String] the repository the agents work in
-    # @param command [TTY::Command]
-    # @param timeout [Integer] seconds before one agent is abandoned
+    # @param spawn [Proc] `argv, chdir:` → {Agentilda::Child}, swappable so the
+    #   suite can play back a fake process without spawning one
+    # @param timeout [Integer, nil] `--timeout`: a cap on every agent's clock,
+    #   or nil to let each agent's own frontmatter clock stand
     # @param dry_run [Boolean] plan the invocation, do not run it
     # @param trace_dir [String] where each invocation's raw stream is kept
     # @param instructions [String, nil] what `run --prompt` typed, appended
@@ -241,14 +189,14 @@ module Agentilda
     #   output, sub-agents included. The prompt states it so the agent can
     #   plan to finish inside it, and the meter enforces it so the statement
     #   is true. nil is unmetered.
-    # @param interactive [Boolean] whether someone is at the keyboard. Only
-    #   then does each invocation get a control file, because a prompt that
-    #   says "poll this file" when nothing will ever write to it is asking
-    #   for wasted reads all run long.
-    def initialize(root:, command: TTY::Command.new(printer: :null), timeout: 900, dry_run: false,
+    # @param interactive [Boolean] whether someone is at the keyboard, which
+    #   the keyboard help reads. Every invocation gets a control file either
+    #   way, because the clock writes its own warnings into it regardless of
+    #   whether anyone is watching.
+    def initialize(root:, spawn: Child.method(:spawn), timeout: nil, dry_run: false,
       trace_dir: TRACE_DIR, instructions: nil, model: nil, max_tokens: nil, interactive: false)
       @root = File.expand_path(root)
-      @command = command
+      @spawn = spawn
       @timeout = timeout
       @dry_run = dry_run
       @trace_dir = trace_dir
@@ -261,73 +209,74 @@ module Agentilda
     # @return [String]
     attr_reader :root
 
-    # The seconds this agent gets before it is abandoned: its own
-    # `timeout:` frontmatter when it declares one, the run-wide default
-    # otherwise. Public so the UI can count the same clock down that this
-    # class will enforce — two clocks is how a timer hits zero and the
-    # agent keeps running.
+    # The clock this agent runs against: the tighter of its own frontmatter
+    # and `--timeout`. A flag that could only loosen was useless the day
+    # somebody wanted a quick run.
+    #
+    # {DEFAULT_TIMEOUT} steps in only when neither names a figure. It used
+    # to be the flag's default instead, which silently cut every 1200-second
+    # agent to 900 on the runs where nobody had typed `--timeout` at all.
     #
     # @param agent [Agentilda::Agent]
     # @return [Integer]
-    def timeout_for(agent) = agent.timeout || @timeout
+    def timeout_for(agent) = [agent.timeout, @timeout].compact.min || DEFAULT_TIMEOUT
 
     # @param agent [Agentilda::Agent]
     # @param subject [Agentilda::Subject]
-    # @return [Agentilda::Executor::Result] whether it worked, a one-line
-    #   note, and what it spent. Destructures as `ok, note` for callers that
-    #   want no more than that.
-    # @yieldparam progress [Agentilda::Transcript::Progress] what the
-    #   agent is doing and what it has spent, as both change
-    def call(agent, subject, root: @root, &on_progress)
+    # @param root [String] the checkout the agent works in
+    # @param round [Integer] which attempt on this plan this is
+    # @param successor [String, nil] who the agent names on its `next:` line
+    # @param handle [Agentilda::Executor::Handle, nil] filled in for the caller
+    # @return [Agentilda::Executor::Result]
+    # @yieldparam progress [Agentilda::Transcript::Progress]
+    def call(agent, subject, root: @root, round: 1, successor: nil, handle: nil, &on_progress)
       started = UI.monotonic
       if @dry_run
-        return Result.new(ok: true, note: "dry run — would invoke #{agent.name}", up: 0, down: 0,
+        return Result.new(ok: true, note: "dry run - would invoke #{agent.name}", up: 0, down: 0,
           subagents: 0, delegated: 0, seconds: 0.0)
       end
 
+      handle ||= Handle.new
       before = head(root)
       trace = trace_path(agent, subject)
       transcript = Transcript.new(trace:, &on_progress)
-      control = (Control.register(@trace_dir, "#{subject.feature.ordinal}-#{agent.name}") if @interactive)
+      control = Control.register(@trace_dir, "#{subject.feature.ordinal}-#{agent.name}")
+      handle.control = control
+      argv = invocation(agent, subject, root:, control:, round:, successor:)
 
-      timeout = timeout_for(agent)
-      begin
-        hunted = false
-        @command.run(*invocation(agent, subject, root:, control:), timeout:) do |out, _err|
-          # Once, on the first chunk: the child exists by the time it has
-          # produced output, and a `ps` per chunk would be a `ps` per token.
-          unless hunted
-            hunted = true
-            transcript.pid = self.class.claim_child
-          end
-          transcript.push(out)
-          abort_if_over(transcript)
-        end
-        transcript.finish
-      rescue Aborted => e
-        transcript.finish
-        return failure(transcript, started, "aborted: #{e.message} — trace: #{trace}")
-      rescue TTY::Command::TimeoutExceeded
-        transcript.finish
-        return failure(transcript, started,
-          "timed out after #{timeout}s, last seen #{transcript.activity || "starting up"} — trace: #{trace}")
-      rescue TTY::Command::ExitError => e
-        transcript.finish
-        return failure(transcript, started, "claude #{reason_for(e, transcript)} — trace: #{trace}")
-      ensure
-        Control.release(control) if control
-        self.class.release_child(transcript.pid)
+      child = @spawn.call(argv, chdir: root)
+      handle.child = child
+      transcript.pid = child.pid
+      clock = Clock.new(seconds: timeout_for(agent), control:,
+        on_expire: -> { handle.kill!(grace: 0, reason: :timeout) })
+      handle.clock = clock
+      clock.start
+
+      child.each_chunk do |out|
+        transcript.push(out)
+        abort_if_over(transcript, handle)
       end
+      status = child.wait
+      transcript.finish
+      clock.stop
+      Control.release(control)
 
+      if handle.killed
+        return spent(transcript, started, ok: false, pid: child.pid, killed: handle.killed,
+          note: "#{killed_note(handle.killed, clock)}, last seen #{transcript.activity || "starting up"} - trace: #{trace}")
+      end
+      unless status.success?
+        return failure(transcript, started, "claude exited #{status.exitstatus}: #{said(transcript)} - trace: #{trace}", pid: child.pid)
+      end
       if transcript.failed?
-        return failure(transcript, started, "claude reported: #{transcript.error} — trace: #{trace}")
+        return failure(transcript, started, "claude reported: #{transcript.error} - trace: #{trace}", pid: child.pid)
       end
 
       violation = boundary_violation(before, root)
-      return failure(transcript, started, violation) if violation
+      return failure(transcript, started, violation, pid: child.pid) if violation
 
-      spent(transcript, started, ok: true,
-        note: "completed#{" · #{transcript.tools} tool calls" if transcript.tools.positive?}")
+      spent(transcript, started, ok: true, pid: child.pid,
+        note: "completed#{" - #{transcript.tools} tool calls" if transcript.tools.positive?}")
     end
 
     # A failed invocation still spent what it spent, and a run that burned two
@@ -335,21 +284,35 @@ module Agentilda
     # that failed to authenticate and spent nothing. Both used to report the
     # same thing.
     #
-    # @param transcript [Agentilda::Transcript]
-    # @param started [Float]
-    # @param note [String]
     # @return [Agentilda::Executor::Result]
-    def failure(transcript, started, note) = spent(transcript, started, ok: false, note:)
+    def failure(transcript, started, note, pid: nil) = spent(transcript, started, ok: false, note:, pid:)
 
-    # @param transcript [Agentilda::Transcript]
-    # @param started [Float]
-    # @param ok [Boolean]
-    # @param note [String]
     # @return [Agentilda::Executor::Result]
-    def spent(transcript, started, ok:, note:)
+    def spent(transcript, started, ok:, note:, pid: nil, killed: nil)
       Result.new(ok:, note:, up: transcript.up, down: transcript.down,
         subagents: transcript.spawned, delegated: transcript.delegated,
-        seconds: UI.monotonic - started)
+        seconds: UI.monotonic - started, killed:, pid:)
+    end
+
+    # @param transcript [Agentilda::Transcript]
+    # @return [String] the last few plain lines, clipped
+    def said(transcript)
+      text = (transcript.failed? ? transcript.error : transcript.plain.last(3).join(" ")).to_s.strip
+      return "said nothing" if text.empty?
+
+      (text.length > REASON_LIMIT) ? "#{text[0, REASON_LIMIT - 1]}..." : text
+    end
+
+    # @param reason [Symbol]
+    # @param clock [Agentilda::Clock]
+    # @return [String]
+    def killed_note(reason, clock)
+      case reason
+      when :timeout then "timed out (killed #{Clock::GRACE}s after STOP)"
+      when :budget then "token budget of #{@max_tokens} exceeded"
+      when :quit then "still running after q, killed once the grace period ran out"
+      else "killed from the keyboard"
+      end
     end
 
     # The exact argv, exposed so a spec can assert the boundary flags without
@@ -357,19 +320,22 @@ module Agentilda
     #
     # @param agent [Agentilda::Agent]
     # @param subject [Agentilda::Subject]
+    # @param round [Integer] which attempt on this plan this is
+    # @param successor [String, nil] who the agent names on its `next:` line
     # @return [Array<String>]
-    def invocation(agent, subject, root: @root, control: nil)
+    def invocation(agent, subject, root: @root, control: nil, round: 1, successor: nil)
       # `--include-partial-messages` is what the token meter runs on. Without
       # it the stream reports a settled input count and a placeholder output
       # count — 2 for a four-thousand-token answer — and a spinner counting
       # what came back would read zero all run. See {Transcript#meter}.
-      argv = ["claude", "-p", prompt_for(agent, subject, root, control:), "--add-dir", root,
-        "--output-format", "stream-json", "--verbose", "--include-partial-messages"]
+      argv = ["claude", "-p", prompt_for(agent, subject, root, control:, round:, successor:), "--add-dir", root,
+        "--output-format", "stream-json", "--verbose", "--include-partial-messages", "--brief"]
       denied = denied_for(agent)
       argv += ["--disallowedTools", denied.join(",")] unless denied.empty?
       argv += ["--allowedTools", agent.allowed_tools.join(",")] unless agent.allowed_tools.empty?
       model = @model || agent.model
       argv += ["--model", model] if model
+      argv += ["--effort", agent.effort] if agent.effort
       argv
     end
 
@@ -411,8 +377,10 @@ module Agentilda
 
     # @param agent [Agentilda::Agent]
     # @param subject [Agentilda::Subject]
+    # @param round [Integer]
+    # @param successor [String, nil]
     # @return [String]
-    def prompt_for(agent, subject, root = @root, control: nil)
+    def prompt_for(agent, subject, root = @root, control: nil, round: 1, successor: nil)
       <<~PROMPT
         #{agent.prompt}
 
@@ -426,7 +394,7 @@ module Agentilda
         Repository root: #{root}
 
         #{"The folder's name is not currently justified: #{subject.violation}" if subject.violation}
-        #{operator_instructions}#{budget_section}#{time_budget_section(agent)}#{control_section(control)}
+        #{operator_instructions}#{ledger_section(agent, round:, successor:)}#{budget_section}#{time_budget_section(agent)}#{control_section(control)}
         ## Boundary — enforced, not requested
 
         You may read anything, and write source, tests and the plan's own
@@ -446,19 +414,56 @@ module Agentilda
       PROMPT
     end
 
-    # The budget crossed, or the grace period after `q` spent — checked as
-    # each chunk of output arrives, which is as often as an agent can be
-    # observed at all. An agent producing nothing is the timeout's problem.
+    # The one paragraph every agent gets, identically, about the ledger. It
+    # lives here rather than in seven definition files so the wording cannot
+    # drift between agents, and so the names, the round and the successor are
+    # the harness's facts rather than the agent's guesses.
+    #
+    # @param agent [Agentilda::Agent]
+    # @param round [Integer]
+    # @param successor [String, nil]
+    # @return [String]
+    def ledger_section(agent, round:, successor:)
+      documents = agent.ledger.map { |f| "`#{f}`" }.join(", then ")
+      handoff = successor ? "\n    > [<now>] [ next: #{successor} ]" : ""
+      <<~SECTION
+
+        ## The ledger - write this at the start and at the end
+
+        You sign the document you are working in: #{documents}. Get `<now>` from
+        `date "+%Y-%m-%d %I:%M:%S %p %Z"`. Before you do any work, append:
+
+            > [!NOTE]
+            >
+            > [<now>] [ agent: #{agent.name}   status: Started, round #{round} ]
+
+        When you finish, append:
+
+            > [!NOTE]
+            >
+            > [<now>] [ agent: #{agent.name}   status: Completed, round #{round} ]#{handoff}
+
+        Write `Completed` only if your assignment is genuinely done. Otherwise write
+        `Almost completed`, `Interrupted` or `Blocked` in its place and NO `next:` line.
+        The harness renames the plan folder and starts the next agent from these
+        lines; you never rename the folder yourself. A short note in parentheses
+        after the round is welcome, e.g. `Completed, round 1 (approved)`.
+      SECTION
+    end
+
+    # The token budget crossed, or the grace period after `q` spent. Both go
+    # through the handle so the kill is the same kill a keypress makes.
     #
     # @param transcript [Agentilda::Transcript]
+    # @param handle [Agentilda::Executor::Handle]
     # @return [void]
-    # @raise [Agentilda::Executor::Aborted]
-    def abort_if_over(transcript)
+    def abort_if_over(transcript, handle)
       spent = transcript.up + transcript.down
       if @max_tokens&.positive? && spent > @max_tokens
-        raise Aborted, "token budget of #{@max_tokens} exceeded (↑#{transcript.up} ↓#{transcript.down})"
+        handle.kill!(grace: 0, reason: :budget)
+      elsif Control.overdue?
+        handle.kill!(grace: 0, reason: :quit)
       end
-      raise Aborted, "still running #{Control::GRACE}s after q" if Control.overdue?
     end
 
     # The section `run --max-tokens` adds. Stating the number is what lets
@@ -477,12 +482,12 @@ module Agentilda
         "out. Anything unwritten at the cap is lost.\n"
     end
 
-    # The clock this invocation actually runs against, stated in the prompt so
-    # an agent can pace itself instead of discovering the ceiling by dying on
-    # it with half a file written. The number is whatever {#timeout_for} will
-    # enforce, so the prompt and the timer can never disagree — an agent whose
-    # prose names its own figure goes stale the first time someone passes
-    # `--timeout`, and stale is worse than silent.
+    # The section describing the advisory clock this invocation runs against,
+    # stated in the prompt so an agent can pace itself. The number is
+    # whatever {#timeout_for} will actually enforce, so the prompt and the
+    # clock can never disagree — an agent whose prose names its own figure
+    # goes stale the first time someone passes `--timeout`, and stale is
+    # worse than silent.
     #
     # @param agent [Agentilda::Agent]
     # @return [String]
@@ -491,16 +496,13 @@ module Agentilda
       return "" unless seconds&.positive?
 
       minutes = (seconds / 60.0).round
-      "\n## Time budget — #{seconds} seconds, enforced\n\n" \
-        "You have about #{minutes} minute#{"s" unless minutes == 1} of wall clock, and " \
-        "nothing warns you as you approach it. At #{seconds} seconds this invocation is " \
-        "abandoned and the round is reported as failed, leaving the plan unadvanced and " \
-        "the folder in whatever state your last write left it. A timeout is not a neutral " \
-        "event.\n\n" \
-        "So work in an order that survives being cut off. Write each result to disk as you " \
-        "reach it rather than composing everything and saving at the end, and prefer a " \
-        "smaller finished piece to a larger half-finished one. Anything unwritten at the " \
-        "cap is lost.#{concurrency_advice(agent)}\n"
+      "\n## Time budget - #{seconds} seconds\n\n" \
+        "You have about #{minutes} minute#{"s" unless minutes == 1} of wall clock. The control " \
+        "file below tells you how it is going: `WARN: 10 minutes left`, `WARN: 5 minutes left`, " \
+        "`WRAP_UP: 1 minute left, write to disk now`, then `STOP`. Sixty seconds after STOP " \
+        "the process is killed, and anything unwritten is lost. Write each result to disk as " \
+        "you reach it, and write your closing ledger line before anything else once you see " \
+        "WRAP_UP.#{concurrency_advice(agent)}\n"
     end
 
     # Only worth saying to an agent that can actually do it. Telling an agent
@@ -517,8 +519,8 @@ module Agentilda
         "part's wall clock, and the series costs the sum of all of them."
     end
 
-    # The section a control file adds, present only when someone is at the
-    # keyboard to write into it.
+    # The section a control file adds. Present on every invocation, because
+    # the advisory clock writes into it whether or not anyone is watching.
     #
     # @param control [String, nil]
     # @return [String]
@@ -528,9 +530,9 @@ module Agentilda
       "\n## Control file — poll it between steps\n\n" \
         "    #{control}\n\n" \
         "Read this file before each significant step. Empty means carry on. " \
-        "A line saying WRAP_UP means finish the essential remainder as fast " \
-        "as possible. STOP means write what you have to disk, note where you " \
-        "stopped in the plan folder's markdown, and end your turn now.\n"
+        "A line starting WARN: tells you how much time is left. WRAP_UP: means " \
+        "finish the essential remainder now. STOP means write what you have, " \
+        "write your ledger line, and end your turn.\n"
     end
 
     # The section `run --prompt` adds, labelled as coming from the person who

@@ -135,7 +135,7 @@ RSpec.describe Agentilda::CLI::Unblock, :tree do
     it "puts the machine-readable line on STDOUT and nothing else there" do
       out, = run("001")
 
-      expect(out.lines.map(&:chomp)).to eq(["001.00\tblocked\t2 open\tnot attempted\tdry run — would invoke lando-broker"])
+      expect(out.lines.map(&:chomp)).to eq(["001.00\tblocked\t2 open\tnot attempted\tdry run - would invoke lando-broker"])
     end
 
     it "exits zero, because a preview is not a failure" do

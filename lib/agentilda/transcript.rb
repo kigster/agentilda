@@ -47,8 +47,11 @@ module Agentilda
     # @!attribute [r] pid
     #   @return [Integer, nil] the `claude` process, once the harness has
     #     found it — nil until then, and for callers that never look
-    Progress = Data.define(:activity, :up, :down, :subagents, :pid) do
-      def initialize(pid: nil, **rest) = super
+    # @!attribute [r] message
+    #   @return [String, nil] the last thing the agent chose to say directly,
+    #     via `SendUserMessage`, or nil if it never sent one
+    Progress = Data.define(:activity, :up, :down, :subagents, :pid, :message) do
+      def initialize(pid: nil, message: nil, **rest) = super
     end
 
     # The one kind of line the trace does not keep.
@@ -72,7 +75,8 @@ module Agentilda
       "MultiEdit" => "editing", "NotebookEdit" => "editing",
       "Bash" => "running", "Grep" => "searching for", "Glob" => "looking for",
       "Task" => "delegating", "TodoWrite" => "planning",
-      "WebFetch" => "fetching", "WebSearch" => "searching the web for"
+      "WebFetch" => "fetching", "WebSearch" => "searching the web for",
+      "SendUserMessage" => "saying"
     }.freeze
 
     # The input key worth naming, per tool, in the order we would rather say it.
@@ -92,6 +96,7 @@ module Agentilda
       @buffer = +""
       @plain = []
       @activity = nil
+      @message = nil
       @result = nil
       @error = nil
       @trace_path = trace
@@ -136,7 +141,7 @@ module Agentilda
     end
 
     # @return [Agentilda::Transcript::Progress] a snapshot, safe to keep
-    def progress = Progress.new(activity: @activity, up:, down:, subagents: @spawned, pid: @pid)
+    def progress = Progress.new(activity: @activity, up:, down:, subagents: @spawned, pid: @pid, message: @message)
 
     # @return [Integer] how many tool calls have gone past, which is the one
     #   honest measure of how much work an agent that says "done" actually did
@@ -147,6 +152,9 @@ module Agentilda
 
     # @return [String, nil] the last thing the agent was seen doing
     attr_reader :activity
+
+    # @return [String, nil] the last thing the agent sent via `SendUserMessage`
+    attr_reader :message
 
     # @return [String, nil] the final text, from the `result` event
     attr_reader :result
@@ -228,11 +236,30 @@ module Agentilda
     def handle(event)
       case event["type"]
       when "assistant"
+        capture_message(event)
         @tools += tool_calls(event)
         announce(phrase_for(event))
       when "stream_event" then meter(event)
       when "system" then delegation(event)
       when "result" then record_result(event)
+      end
+    end
+
+    # `--brief` gives the agent SendUserMessage, and what it sends is the
+    # one line on the screen the agent itself chose. It outranks the tool
+    # phrase until the agent sends another.
+    #
+    # @param event [Hash]
+    # @return [void]
+    def capture_message(event)
+      blocks = event.dig("message", "content")
+      return unless blocks.is_a?(Array)
+
+      blocks.each do |block|
+        next unless block.is_a?(Hash) && block["type"] == "tool_use" && block["name"] == "SendUserMessage"
+
+        text = block.dig("input", "message").to_s.strip
+        @message = clip(text) unless text.empty?
       end
     end
 

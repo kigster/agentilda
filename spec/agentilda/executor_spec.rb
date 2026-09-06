@@ -1,18 +1,40 @@
 # frozen_string_literal: true
 
 RSpec.describe Agentilda::Executor, :tree do
-  subject(:executor) { described_class.new(root:, command:) }
+  subject(:executor) { described_class.new(root:, spawn:) }
 
   let(:root) { File.dirname(plans_root) }
-  let(:command) { instance_double(TTY::Command, run: nil) }
   let(:agents) { Agentilda::Agents.new }
   let(:agent) { agents.find("yoda-writer") }
+
+  # The seam. Nothing here starts a process; the fake plays back a stream.
+  let(:stream) { [] }
+  let(:exit_status) { instance_double(Process::Status, success?: true) }
+  let(:fake_child) do
+    child = instance_double(Agentilda::Child, pid: 4242, alive?: false, kill: nil, wait: exit_status)
+    allow(child).to receive(:each_chunk) { |&block| stream.each { |chunk| block.call(chunk) } }
+    child
+  end
+  let(:spawn) { ->(_argv, chdir: nil) { fake_child } }
 
   let!(:built) do
     plans { |t| t.plan "000.00", :new, "a-feature", files: {"spec.md" => spec_body} }
   end
 
   let(:subject_plan) { Agentilda::Tree.new(dir: plans_root).subjects.first }
+
+  # Every invocation keeps a trace and registers a control file. Both belong
+  # in a directory the example owns, not in the machine's real trace dir.
+  around do |example|
+    Dir.mktmpdir("executor-traces") do |dir|
+      @traces = dir
+      example.run
+    end
+  end
+
+  before { stub_const("Agentilda::Executor::TRACE_DIR", @traces) }
+
+  after { Agentilda::Control.reset! }
 
   describe "#invocation" do
     let(:argv) { executor.invocation(agent, subject_plan) }
@@ -40,7 +62,7 @@ RSpec.describe Agentilda::Executor, :tree do
     end
 
     it "appends operator instructions when the run supplied them" do
-      steered = described_class.new(root:, command:, instructions: "Prefer the parser refactor")
+      steered = described_class.new(root:, spawn:, instructions: "Prefer the parser refactor")
         .invocation(agent, subject_plan)
 
       expect(steered[2]).to include("Operator instructions", "Prefer the parser refactor")
@@ -51,25 +73,118 @@ RSpec.describe Agentilda::Executor, :tree do
     end
 
     it "runs the model the agent's frontmatter declares" do
-      expect(argv.each_cons(2).to_a).to include(["--model", "fable"])
+      expect(argv.each_cons(2).to_a).to include(["--model", "sonnet"])
     end
 
     # The same precedence every flag here follows: typed beats declared.
     it "lets --model override the agent's own declaration" do
-      overridden = described_class.new(root:, command:, model: "opus").invocation(agent, subject_plan)
+      overridden = described_class.new(root:, spawn:, model: "opus").invocation(agent, subject_plan)
 
       expect(overridden.each_cons(2).to_a).to include(["--model", "opus"])
-      expect(overridden.join(" ")).not_to include("fable")
+      expect(overridden.join(" ")).not_to include("sonnet")
     end
 
     it "states the token budget in the prompt when one is set" do
-      metered = described_class.new(root:, command:, max_tokens: 50_000).invocation(agent, subject_plan)
+      metered = described_class.new(root:, spawn:, max_tokens: 50_000).invocation(agent, subject_plan)
 
       expect(metered[2]).to include("Token budget — 50000 tokens, enforced")
     end
 
     it "mentions no budget and no control file when neither exists" do
       expect(argv[2]).not_to include("Token budget", "Control file")
+    end
+  end
+
+  describe "the clock" do
+    it "takes the tighter of the agent's own budget and --timeout" do
+      leah = agents.find("leah-researcher") # 1200 in frontmatter
+      aggregate_failures do
+        expect(described_class.new(root:, spawn:, timeout: 900).timeout_for(leah)).to eq(900)
+        expect(described_class.new(root:, spawn:, timeout: 1800).timeout_for(leah)).to eq(1200)
+      end
+    end
+
+    it "lets an agent's own clock stand when nobody passed --timeout" do
+      leah = agents.find("leah-researcher") # 1200 in frontmatter
+      expect(described_class.new(root:, spawn:).timeout_for(leah)).to eq(1200)
+    end
+
+    it "falls back to the default only for an agent that declares no clock of its own" do
+      clockless = agent.with(timeout: nil)
+      expect(described_class.new(root:, spawn:).timeout_for(clockless)).to eq(described_class::DEFAULT_TIMEOUT)
+    end
+
+    it "does not hand a timeout to the process; the clock is advisory" do
+      argv = executor.invocation(agent, subject_plan)
+      expect(argv.join(" ")).not_to include("timeout")
+    end
+  end
+
+  describe "the argv" do
+    it "starts every agent with --brief so it can talk back" do
+      expect(executor.invocation(agent, subject_plan)).to include("--brief")
+    end
+
+    it "passes the agent's effort when it declares one" do
+      expect(executor.invocation(agent, subject_plan).each_cons(2).to_a).to include(["--effort", "xhigh"])
+    end
+
+    it "passes no effort for an agent that declares none" do
+      argv = executor.invocation(agents.find("lando-broker"), subject_plan)
+      expect(argv).not_to include("--effort")
+    end
+  end
+
+  describe "the ledger section" do
+    let(:prompt) { executor.invocation(agent, subject_plan, round: 2, successor: "palpatine-planner")[2] }
+
+    it "tells the agent the exact lines to write, with its own name, round and successor" do
+      aggregate_failures do
+        expect(prompt).to include("agent: yoda-writer   status: Started, round 2 ]")
+        expect(prompt).to include("agent: yoda-writer   status: Completed, round 2 ]")
+        expect(prompt).to include("[ next: palpatine-planner ]")
+        expect(prompt).to include("spec.md")
+      end
+    end
+
+    it "names the date command that produces the timestamp" do
+      expect(prompt).to include('date "+%Y-%m-%d %I:%M:%S %p %Z"')
+    end
+
+    it "explains the warnings the control file will carry" do
+      expect(prompt).to include("WARN:", "WRAP_UP:", "STOP")
+    end
+  end
+
+  describe "#call with a handle" do
+    let(:handle) { described_class::Handle.new }
+
+    it "exposes the child and the clock to the caller while the agent runs" do
+      seen = nil
+      allow(fake_child).to receive(:each_chunk) { seen = [handle.pid, handle.remaining.class] }
+      executor.call(agent, subject_plan, handle:)
+      expect(seen).to eq([4242, Integer])
+    end
+
+    it "reports a key kill as such, and does not count it as success" do
+      allow(fake_child).to receive(:each_chunk) { handle.kill!(grace: 0) }
+      allow(fake_child).to receive(:alive?).and_return(true)
+      result = executor.call(agent, subject_plan, handle:)
+      aggregate_failures do
+        expect(result.killed).to eq(:key)
+        expect(result.ok).to be(false)
+        expect(fake_child).to have_received(:kill).with("KILL")
+      end
+    end
+
+    it "writes STOP before it kills" do
+      control_text = nil
+      allow(fake_child).to receive(:each_chunk) {
+        handle.kill!(grace: 0)
+        control_text = File.read(handle.control)
+      }
+      executor.call(agent, subject_plan, handle:)
+      expect(control_text.strip).to eq("STOP")
     end
   end
 
@@ -85,94 +200,8 @@ RSpec.describe Agentilda::Executor, :tree do
   end
 
   def denied(agent)
-    described_class.new(root:, command:).invocation(agent, subject_plan)
+    described_class.new(root:, spawn:).invocation(agent, subject_plan)
       .each_cons(2).find { |flag, _| flag == "--disallowedTools" }&.last.to_s.split(",")
-  end
-
-  # TTY::Command never exposes the pid it spawned, so the executor reads the
-  # process table for a `claude` child of its own process, claiming each so
-  # two parallel invocations never put one pid on two spinner lines. The pid
-  # decorates the UI only; nothing signals or kills through it.
-  describe "#timeout_for" do
-    it "prefers the agent's own clock over the run-wide default" do
-      slow = agent.with(timeout: 1800)
-
-      expect(executor.timeout_for(slow)).to eq(1800)
-    end
-
-    it "falls back to the run-wide default for an agent that declares none" do
-      expect(executor.timeout_for(agent)).to eq(900)
-    end
-  end
-
-  describe ".claim_child" do
-    let(:listing) do
-      <<~PS
-        36123  #{Process.pid} /usr/local/bin/claude -p long prompt here
-        36124  #{Process.pid} /usr/local/bin/claude -p another prompt
-        36125  99999 /usr/local/bin/claude -p somebody else's child
-        36126  #{Process.pid} vim notes.md
-      PS
-    end
-
-    after do
-      described_class.release_child(36_123)
-      described_class.release_child(36_124)
-    end
-
-    it "finds a claude child of this process, and never a stranger's or vim" do
-      expect(described_class.claim_child(listing:)).to eq(36_123)
-    end
-
-    it "never hands the same child to two callers" do
-      first = described_class.claim_child(listing:)
-      second = described_class.claim_child(listing:)
-      third = described_class.claim_child(listing:)
-
-      expect([first, second]).to eq([36_123, 36_124])
-      expect(third).to be_nil
-    end
-
-    it "release_child makes a finished pid claimable again" do
-      described_class.claim_child(listing:)
-      described_class.release_child(36_123)
-
-      expect(described_class.claim_child(listing:)).to eq(36_123)
-    end
-  end
-
-  # A run whose agents all failed printed ten copies of the same escaped prompt
-  # and never said why. The reason was in the parts of the error this now reads.
-  describe ".failure_reason" do
-    def exit_error(status:, stdout: "Nothing written", stderr: "Nothing written")
-      TTY::Command::ExitError.new("claude -p …", instance_double(TTY::Command::Result,
-        exit_status: status, out: stdout, err: stderr))
-    end
-
-    it "leads with what the agent said, not with the command that said it" do
-      error = exit_error(status: 1, stdout: "Failed to authenticate. API Error: 401 API key is invalid.")
-
-      expect(described_class.failure_reason(error)).to eq("exited 1: Failed to authenticate. API Error: 401 API key is invalid.")
-    end
-
-    # `claude` reports its own failure on stdout and warns on stderr, and in the
-    # 401 case only stderr named the cause. Dropping either loses half the answer.
-    it "keeps both streams, because they carry different halves of the reason" do
-      error = exit_error(status: 1, stdout: "401 API key is invalid.",
-        stderr: "ANTHROPIC_API_KEY takes precedence over your claude.ai login")
-
-      expect(described_class.failure_reason(error)).to eq("exited 1: 401 API key is invalid. | ANTHROPIC_API_KEY takes precedence over your claude.ai login")
-    end
-
-    it "says so plainly when the agent exited without explaining itself" do
-      expect(described_class.failure_reason(exit_error(status: 7))).to eq("exited 7 and said nothing")
-    end
-
-    it "keeps the reason to one report line" do
-      error = exit_error(status: 1, stdout: "x" * 500)
-
-      expect(described_class.failure_reason(error).length).to be <= described_class::REASON_LIMIT + 20
-    end
   end
 
   describe ".foreign_credentials" do
@@ -233,13 +262,13 @@ RSpec.describe Agentilda::Executor, :tree do
     end
 
     it "tells the agent what it has been granted, not only what it has lost" do
-      argv = described_class.new(root:, command:).invocation(agent_with(may: ["gh pr review"]), subject_plan)
+      argv = described_class.new(root:, spawn:).invocation(agent_with(may: ["gh pr review"]), subject_plan)
 
       expect(argv.join(" ")).to include("You may run these, which most agents may not", "gh pr review")
     end
 
     it "says nothing about grants to an agent that has none" do
-      argv = described_class.new(root:, command:).invocation(agent_with, subject_plan)
+      argv = described_class.new(root:, spawn:).invocation(agent_with, subject_plan)
 
       expect(argv.join(" ")).not_to include("which most agents may not")
     end
@@ -261,23 +290,9 @@ RSpec.describe Agentilda::Executor, :tree do
   # invocation and a hung one look identical. Asked for the streaming format it
   # reports each tool call as it makes it, and this is what reads them.
   describe "streaming what the agent is doing" do
-    subject(:streaming) { described_class.new(root:, command: streamer, trace_dir: @traces) }
+    subject(:streaming) { described_class.new(root:, spawn:, trace_dir: @traces) }
 
     let(:seen) { [] }
-    let(:chunks) { [] }
-
-    let(:streamer) do
-      instance_double(TTY::Command).tap do |double|
-        allow(double).to receive(:run) { |*, **, &block| chunks.each { |chunk| block&.call(chunk, nil) } }
-      end
-    end
-
-    around do |example|
-      Dir.mktmpdir("executor-traces") do |dir|
-        @traces = dir
-        example.run
-      end
-    end
 
     def event(hash) = "#{JSON.generate(hash)}\n"
 
@@ -290,7 +305,7 @@ RSpec.describe Agentilda::Executor, :tree do
     # A tool name is a noun and says nothing on its own. The spinner has room
     # for a phrase, so it gets one.
     it "hands each tool call to whoever is drawing the progress, as something being done" do
-      chunks << tool("Read", {file_path: "/repo/spec.md"})
+      stream << tool("Read", {file_path: "/repo/spec.md"})
       streaming.call(agent, subject_plan) { |progress| seen << progress.activity }
 
       expect(seen).to eq(["reading spec.md"])
@@ -304,7 +319,7 @@ RSpec.describe Agentilda::Executor, :tree do
     end
 
     it "reports what the invocation spent, not only whether it worked" do
-      chunks << event(type: "stream_event",
+      stream << event(type: "stream_event",
         event: {type: "message_delta", usage: {input_tokens: 2, cache_creation_input_tokens: 100,
                                                cache_read_input_tokens: 900, output_tokens: 40}})
 
@@ -312,42 +327,50 @@ RSpec.describe Agentilda::Executor, :tree do
     end
 
     # The prompt states the budget so the agent can finish inside it; this is
-    # the half that makes the statement true. The raise happens inside the
-    # streaming block, which is what makes TTY::Command kill the child.
+    # the half that makes the statement true. The kill goes through the same
+    # handle a keypress uses, so the child is signalled, not merely abandoned.
     describe "the token budget, enforced" do
-      subject(:metered) { described_class.new(root:, command: streamer, trace_dir: @traces, max_tokens: 100) }
+      subject(:metered) { described_class.new(root:, spawn:, trace_dir: @traces, max_tokens: 100) }
 
       it "aborts the invocation once the meter crosses the budget" do
-        chunks << event(type: "stream_event",
+        allow(fake_child).to receive(:alive?).and_return(true)
+        stream << event(type: "stream_event",
           event: {type: "message_delta", usage: {input_tokens: 90, output_tokens: 40}})
 
         result = metered.call(agent, subject_plan)
 
-        expect(result.ok).to be(false)
-        expect(result.note).to include("token budget of 100 exceeded", "↑90 ↓40")
+        aggregate_failures do
+          expect(result).to have_attributes(ok: false, killed: :budget, up: 90, down: 40)
+          expect(result.note).to include("token budget of 100 exceeded")
+          expect(fake_child).to have_received(:kill).with("KILL")
+        end
       end
 
       it "lets an invocation inside the budget finish untouched" do
-        chunks << event(type: "stream_event",
+        stream << event(type: "stream_event",
           event: {type: "message_delta", usage: {input_tokens: 50, output_tokens: 40}})
-        chunks << event(type: "result", is_error: false, result: "done")
+        stream << event(type: "result", is_error: false, result: "done")
 
         expect(metered.call(agent, subject_plan).ok).to be(true)
       end
     end
 
     # The keyboard's side of the bargain lives in {Control}; this is the
-    # executor's: a control file per invocation when someone is at the keys,
-    # released after, and a hard stop once q's grace period is spent.
-    describe "the control file, when the run is interactive" do
-      subject(:interactive) { described_class.new(root:, command: streamer, trace_dir: @traces, interactive: true) }
-
-      after { Agentilda::Control.reset! }
+    # executor's: a control file per invocation, named in the prompt, released
+    # after, and a hard stop once q's grace period is spent. Every invocation
+    # gets one, because the clock writes into it whether or not anyone is at
+    # the keys.
+    describe "the control file" do
+      let(:prompts) { [] }
+      let(:spawn) do
+        ->(argv, chdir: nil) {
+          prompts << argv[2]
+          fake_child
+        }
+      end
 
       it "registers one per invocation, names it in the prompt, and releases it after" do
-        prompts = []
-        allow(streamer).to receive(:run) { |*argv, **| prompts << argv[2] }
-        interactive.call(agent, subject_plan)
+        streaming.call(agent, subject_plan)
 
         expect(prompts.first).to include("Control file", "control-000.00-yoda-writer")
         expect(Dir.children(@traces).grep(/^control-/)).to be_empty
@@ -355,58 +378,56 @@ RSpec.describe Agentilda::Executor, :tree do
 
       it "aborts whatever is still running once the grace period after q is spent" do
         allow(Agentilda::Control).to receive(:overdue?).and_return(true)
-        chunks << event(type: "stream_event",
+        allow(fake_child).to receive(:alive?).and_return(true)
+        stream << event(type: "stream_event",
           event: {type: "message_delta", usage: {input_tokens: 1, output_tokens: 1}})
 
-        result = interactive.call(agent, subject_plan)
+        result = streaming.call(agent, subject_plan)
 
-        expect(result.ok).to be(false)
-        expect(result.note).to include("still running", "after q")
+        aggregate_failures do
+          expect(result).to have_attributes(ok: false, killed: :quit)
+          expect(result.note).to include("after q")
+          expect(fake_child).to have_received(:kill).with("KILL")
+        end
       end
     end
 
     # A run that burned two hundred thousand tokens before timing out is a
     # different fact from one that failed to authenticate and spent nothing.
     it "reports what a failed invocation spent too" do
-      chunks << event(type: "stream_event",
+      stream << event(type: "stream_event",
         event: {type: "message_delta", usage: {input_tokens: 500, output_tokens: 7}})
-      chunks << event(type: "result", is_error: true, result: "it went wrong")
+      stream << event(type: "result", is_error: true, result: "it went wrong")
 
       expect(streaming.call(agent, subject_plan)).to have_attributes(ok: false, up: 500, down: 7)
     end
 
     it "counts the sub-agents an agent spawned" do
-      chunks << event(type: "system", subtype: "task_started", task_id: "t1", tool_use_id: "toolu_1")
-      chunks << event(type: "system", subtype: "task_notification", task_id: "t1",
+      stream << event(type: "system", subtype: "task_started", task_id: "t1", tool_use_id: "toolu_1")
+      stream << event(type: "system", subtype: "task_notification", task_id: "t1",
         usage: {total_tokens: 34_116})
 
       expect(streaming.call(agent, subject_plan)).to have_attributes(subagents: 1, delegated: 34_116)
     end
 
     it "runs perfectly well with nothing to report to" do
-      chunks << tool("Read", {})
+      stream << tool("Read", {})
 
       expect(streaming.call(agent, subject_plan).ok).to be(true)
     end
 
     it "says how much work the agent did, rather than only that it finished" do
-      chunks.push(tool("Read", {}), tool("Edit", {}))
+      stream.push(tool("Read", {}), tool("Edit", {}))
 
-      expect(streaming.call(agent, subject_plan).note).to eq("completed · 2 tool calls")
+      expect(streaming.call(agent, subject_plan).note).to eq("completed - 2 tool calls")
     end
 
     it "keeps the raw stream, so a run that went wrong can be read back" do
-      chunks << event(type: "result", subtype: "success", result: "Folded B3.")
+      stream << event(type: "result", subtype: "success", result: "Folded B3.")
       streaming.call(agent, subject_plan)
 
       trace = Dir.children(@traces).grep(/\.ndjson\z/).first
       expect(File.read(File.join(@traces, trace))).to include("Folded B3.")
-    end
-
-    it "names the trace in the report when the run failed, since that is when it is wanted" do
-      allow(streamer).to receive(:run).and_raise(TTY::Command::TimeoutExceeded)
-
-      expect(streaming.call(agent, subject_plan).note).to include(".ndjson")
     end
 
     # Two agents run at once under `run -j`, and more than one agentilda
@@ -414,43 +435,33 @@ RSpec.describe Agentilda::Executor, :tree do
     it "gives each invocation its own trace rather than one they share" do
       2.times { streaming.call(agent, subject_plan) }
 
-      expect(Dir.children(@traces).size).to eq(2)
+      expect(Dir.children(@traces).grep(/\.ndjson\z/).size).to eq(2)
     end
 
     # `claude` reports failure two ways, and the readable one wins. A crash
     # that got far enough emits a `result` event; one that died on startup
     # printed prose on stdout; one that printed nothing at all leaves only
-    # the exit error to quote. Each used to be reported as the least readable
+    # the exit status to quote. Each used to be reported as the least readable
     # of the three: the shell-escaped prompt, ten times per round.
     describe "when claude exits non-zero" do
-      def exit_error
-        TTY::Command::ExitError.new("claude -p …", instance_double(TTY::Command::Result,
-          exit_status: 1, out: "boom on stdout", err: "Nothing written"))
-      end
-
-      before do
-        allow(streamer).to receive(:run) do |*, **, &block|
-          chunks.each { |chunk| block&.call(chunk, nil) }
-          raise exit_error
-        end
-      end
+      let(:exit_status) { instance_double(Process::Status, success?: false, exitstatus: 1) }
 
       it "prefers the stream's own result event over anything else" do
-        chunks << event(type: "result", is_error: true, result: "model refused the tool")
+        stream << event(type: "result", is_error: true, result: "model refused the tool")
 
         expect(streaming.call(agent, subject_plan)).to have_attributes(
-          ok: false, note: a_string_including("claude failed: model refused the tool")
+          ok: false, note: a_string_including("claude exited 1: model refused the tool")
         )
       end
 
       it "falls back to what claude printed before dying, when no event arrived" do
-        chunks << "Failed to authenticate. 401 API key is invalid.\n"
+        stream << "Failed to authenticate. 401 API key is invalid.\n"
 
-        expect(streaming.call(agent, subject_plan).note).to include("failed: Failed to authenticate. 401 API key is invalid.")
+        expect(streaming.call(agent, subject_plan).note).to include("exited 1: Failed to authenticate. 401 API key is invalid.")
       end
 
-      it "quotes the exit error last, for a failure that printed nothing at all" do
-        expect(streaming.call(agent, subject_plan).note).to include("exited 1: boom on stdout")
+      it "says so plainly when the agent exited without explaining itself" do
+        expect(streaming.call(agent, subject_plan).note).to include("exited 1: said nothing")
       end
 
       it "still names the trace, since a failure is when it is wanted" do
@@ -463,21 +474,9 @@ RSpec.describe Agentilda::Executor, :tree do
   # guarantee — an agent that committed anyway is reported as a failure, not
   # trusted because it said "completed".
   describe "the after-check on HEAD" do
-    subject(:streaming) { described_class.new(root:, command: streamer, trace_dir: @traces) }
+    subject(:streaming) { described_class.new(root:, spawn:, trace_dir: @traces) }
 
-    let(:chunks) { [%({"type":"result","subtype":"success","result":"done"}\n)] }
-    let(:streamer) do
-      instance_double(TTY::Command).tap do |double|
-        allow(double).to receive(:run) { |*, **, &block| chunks.each { |chunk| block&.call(chunk, nil) } }
-      end
-    end
-
-    around do |example|
-      Dir.mktmpdir("executor-traces") do |dir|
-        @traces = dir
-        example.run
-      end
-    end
+    let(:stream) { [%({"type":"result","subtype":"success","result":"done"}\n)] }
 
     before do
       system("git", "-C", root, "init", "-q", "--initial-branch=main", out: File::NULL, err: File::NULL)
@@ -492,8 +491,7 @@ RSpec.describe Agentilda::Executor, :tree do
     end
 
     it "reports an invocation that committed, however successful it claims to be" do
-      allow(streamer).to receive(:run) do |*, **, &block|
-        chunks.each { |chunk| block&.call(chunk, nil) }
+      allow(fake_child).to receive(:each_chunk) do
         File.write(File.join(root, "sneaky.txt"), "x")
         system("git", "-C", root, "add", "-A", out: File::NULL, err: File::NULL)
         system("git", "-C", root, "commit", "-qm", "agent commit", out: File::NULL, err: File::NULL)
@@ -512,13 +510,13 @@ RSpec.describe Agentilda::Executor, :tree do
     def prompt_for(who) = executor.invocation(who, subject_plan).join(" ")
 
     it "names the seconds the run will actually enforce" do
-      expect(prompt_for(agent)).to include("900 seconds, enforced")
+      expect(prompt_for(agent)).to include("Time budget - #{executor.timeout_for(agent)} seconds")
     end
 
-    it "states the agent's own clock when it declares one, not the default" do
-      slow = agent.with(timeout: 1800)
+    it "states the agent's own clock when it is the tighter one, not the default" do
+      quick = agent.with(timeout: 120)
 
-      expect(prompt_for(slow)).to include("1800 seconds, enforced").and include("about 30 minutes")
+      expect(prompt_for(quick)).to include("Time budget - 120 seconds").and include("about 2 minutes")
     end
 
     it "tells an agent that can fan out to spend its budget concurrently" do

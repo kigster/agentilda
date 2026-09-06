@@ -151,6 +151,15 @@ RSpec.describe Agentilda::Transcript do
     end
   end
 
+  describe "what the agent says to the harness" do
+    it "keeps the last SendUserMessage as the progress message" do
+      seen = []
+      transcript = described_class.new { |p| seen << p.message }
+      transcript.push(%({"type":"assistant","message":{"content":[{"type":"tool_use","name":"SendUserMessage","input":{"message":"halfway through the schema"}}]}}\n))
+      expect(seen.last).to eq("halfway through the schema")
+    end
+  end
+
   # `claude` reports the failures that matter most as prose, never as an event:
   # the 401 that cost a whole round three minutes an agent printed on stdout
   # and emitted nothing at all.
