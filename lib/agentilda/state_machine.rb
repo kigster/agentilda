@@ -54,7 +54,7 @@ module Agentilda
     # absence of documents rather than the presence of any.
     PREFERENCE = %i[
       discarded rolled_back shit deferred blocked product_blocked
-      deployed approved rejected in_review ready_for_review building planned
+      deployed approved rejected in_review ready_for_review building_ui building planned
       researched new
       retroactive
     ].freeze
@@ -66,18 +66,20 @@ module Agentilda
     # ⭕️ and 🅱️ both mean "a human must decide before this moves"; *which*
     # human is recorded nowhere but the emoji.
     #
-    # 🟡 🟢 👀 🔴 all look identical on disk — a `plan.md` and some open pull
-    # requests. Whether someone is still building, CI is green and a reviewer
-    # is wanted, a reviewer is reading it, or a reviewer asked for changes is
-    # not written down anywhere a program could read. So `resync` never moves
-    # between them; they advance by events alone.
+    # 🟡 🎨 🟢 👀 🔴 all look identical on disk — a `plan.md` and some open
+    # pull requests. Whether the back end is still being built, the interface
+    # is, CI is green and a reviewer is wanted, a reviewer is reading it, or a
+    # reviewer asked for changes is not written down anywhere a program could
+    # read. So `resync` never moves between them; they advance by events
+    # alone. 🎨 left out of this list was renamed back to 🟡 by every resync,
+    # and the hand-off to the front-end half never happened.
     #
     # Order matters: the first member is the *weakest claim* in the family, and
     # it is where a folder arriving from outside lands. Contents that fit the
     # family justify only its floor, never its ceiling.
     FAMILIES = [
       %i[blocked product_blocked],
-      %i[building ready_for_review in_review rejected]
+      %i[building building_ui ready_for_review in_review rejected]
     ].freeze
 
     # States the agent loop leaves alone: work that is finished (✅ 😎), work
