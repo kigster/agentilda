@@ -31,15 +31,16 @@ RSpec.describe Agentilda::Runner, :tree do
         end
       end
 
-      # 001.00 already has spec.md and plan.md when the round starts, so
-      # `palpatine-planner` takes it once — and Building no longer waits on a
-      # pull request to exist, so the very next round finds it already there
-      # and hands it straight to `luke-backend`.
-      it "offers each plan to the agent that handles its state" do
+      # 001.00 already has spec.md and plan.md when the round starts, and
+      # Building waits on no pull request, so its contents justify 🟡 before
+      # anyone has run. The round reconciles the name first and hands it
+      # straight to the building pair; `palpatine-planner` never sees a plan
+      # whose plan.md is already written.
+      it "offers each plan to the agents that handle the state its contents justify" do
         runner.call
 
         expect(calls.uniq).to contain_exactly(["leah-researcher", "000.00"],
-          ["yoda-writer", "000.01"], ["palpatine-planner", "001.00"], ["luke-backend", "001.00"])
+          ["yoda-writer", "000.01"], ["luke-backend", "001.00"], ["rey-frontend", "001.00"])
       end
 
       # The relay's whole point. Both used to declare `handles: [new]`, agents
@@ -84,6 +85,58 @@ RSpec.describe Agentilda::Runner, :tree do
         runner.call
 
         expect(runner.blocked.map { |s| s.feature.ordinal.to_s }).to eq(["002.00"])
+      end
+    end
+
+    # The bug this kills: a round read every folder's name before the resync
+    # had made the name honest, so a ⚪️ folder that already held a researched
+    # spec.md and a plan.md went to `leah-researcher` for a whole round, twenty
+    # minutes of research the spec already carried, before anything renamed
+    # it. Killing the run before that round ended left the name as it was,
+    # and the next run started leah again.
+    context "when a folder's name lags behind its contents" do
+      let!(:built) do
+        plans do |t|
+          t.plan "001.00", :new, "already-planned",
+            files: {"spec.md" => "#{spec_body}\n## Research\n\nWhat was found.\n", "plan.md" => "# P"}
+        end
+      end
+
+      it "reconciles the name before assigning, so the plan goes to the agents its contents justify" do
+        runner.call
+
+        aggregate_failures do
+          expect(calls.map(&:first)).not_to include("leah-researcher")
+          expect(calls.first(2)).to contain_exactly(["luke-backend", "001.00"], ["rey-frontend", "001.00"])
+        end
+      end
+
+      # The prompt names the plan folder by path and states its emoji, so an
+      # agent handed the folder under its stale name would be told it is
+      # working a ⚪️ plan while building it.
+      it "hands each agent the folder already renamed" do
+        seen = []
+        watcher = described_class.new(tree:, agents:, max_rounds: 1,
+          executor: ->(agent, subject, **) {
+            seen << [subject.status.key, File.basename(subject.feature.path)]
+            record(agent, subject)
+          })
+        watcher.call
+
+        expect(seen).to all(eq([:building, "001.00-🟡--already-planned"]))
+      end
+
+      # A preview that names the wrong agent is worse than no preview. The
+      # dry run may not rename anything, so it reads the state the resync
+      # would have applied and dispatches on that.
+      it "previews the same agents on a dry run, while renaming nothing" do
+        preview = described_class.new(tree:, executor:, agents:, max_rounds: 1, dry_run: true)
+        preview.call
+
+        aggregate_failures do
+          expect(calls.map(&:first)).to contain_exactly("luke-backend", "rey-frontend")
+          expect(Dir.children(plans_root)).to eq(["001.00-⚪️--already-planned"])
+        end
       end
     end
 
@@ -212,6 +265,24 @@ RSpec.describe Agentilda::Runner, :tree do
         writer.call
 
         expect(writer.rounds.first.attempts.first).to be_advanced
+      end
+
+      # A {Subject} memoizes what it reads. The round's opening resync reads
+      # every spec.md to place the folder, and reading the same subjects
+      # again after the agents had written into those files saw the bodies
+      # from before the round: the rename was skipped and the chain's own
+      # fresh read then reported `researched -> new`, an advance backwards.
+      it "reads what the agent wrote into an existing file, not what it memoized before the round" do
+        researcher = described_class.new(tree:, agents:, max_rounds: 1, executor: lambda { |_a, subject, **|
+          File.write(File.join(subject.feature.path, "spec.md"), "#{spec_body}\n## Research\n\nFound.\n")
+          [true, "wrote the chapter"]
+        })
+        researcher.call
+
+        aggregate_failures do
+          expect(researcher.rounds.first.attempts.map { |a| [a.from, a.to] }).to eq([[:new, :researched]])
+          expect(tree.reload.subjects.map { |s| s.status.key }).to eq([:researched])
+        end
       end
 
       it "records no advance when the agent only says it succeeded" do

@@ -310,7 +310,7 @@ Worktrees an agent left untouched are pruned. Dirty ones are kept — they are t
 
 The loop ends at a **fixed point** — a round in which no plan changed state — after two consecutive dry rounds, or at the `--rounds` ceiling. `settled?` reports when every plan is done or deliberately parked.
 
-Progress is read from disk, never from what an agent claims: after each attempt the runner re-runs `resync dirs` and re-reads the folder name, so an agent that reports success but wrote nothing shows as `no change`.
+Progress is read from disk, never from what an agent claims. The runner runs `resync dirs` before it assigns a round, so a folder whose name lags its contents (a run killed before its closing resync, a plan.md written by hand) goes to the agent its contents call for, under the name that agent's prompt will read. It runs `resync dirs` again once every agent in the round has finished and re-reads the folder name, so an agent that reports success but wrote nothing shows as `no change`.
 
 **Blocked plans are never assigned to anyone.** ⭕️ and 🅱️ mean a human decides; an agent that could move them would make the states meaningless. They are reported at the end with a pointer to their `blocked.md`.
 
