@@ -2,9 +2,9 @@
 set shell := ["bash", "-c"]
 
 version := `grep VERSION lib/agentilda/version.rb | awk '{print $3}' | tr -d '"' | tr -d '\n'`
-repo    := 'git@github.com:kigster/agentilda.git'
+repo := 'git@github.com:kigster/agentilda.git'
 
-rbenv   := 'eval "$(rbenv init - bash 2>/dev/null || true)"; bundle exec '
+rbenv := 'eval "$(rbenv init - bash 2>/dev/null || true)"; bundle exec '
 
 # 1Password secret reference for the RubyGems TOTP, and the full path to `op`
 # because a recipe does not inherit an interactive shell's PATH.
@@ -14,12 +14,12 @@ rbenv   := 'eval "$(rbenv init - bash 2>/dev/null || true)"; bundle exec '
 # registered and only one holds the open-source-repos vault, so without
 # OP_ACCOUNT the read can resolve against the wrong one, return nothing,
 # and publish silently falls back to prompting mid-release.
-op       := '/opt/homebrew/bin/op'
-otp_ref  := 'op://open-source-repos/ruby-gems/one-time password?attribute=otp'
+op := '/opt/homebrew/bin/op'
+otp_ref := 'op://open-source-repos/ruby-gems/one-time password?attribute=otp'
 
 gem_name := 'agentilda'
 gem_file := 'pkg/' + gem_name + '-' + version + '.gem'
-gem_url  := 'https://rubygems.org/gems/' + gem_name
+gem_url := 'https://rubygems.org/gems/' + gem_name
 
 [no-exit-message]
 recipes:
@@ -36,19 +36,19 @@ lint:
     {{ rbenv }} standardrb
 
 # Fix style with standardrb, then format the markdown
-format *args:
+format:
     {{ rbenv }} standardrb --fix
     /usr/bin/find . -name '*.md' -exec mdformat --wrap no {} \; -print
 
 # Run all the tests
-test *args: 
-    export ENVIRONMENT=test; {{ rbenv }} rspec {{args}}
+test *args:
+    export ENVIRONMENT=test; {{ rbenv }} rspec {{ args }}
 
 # Run tests with coverage
 test-coverage *args:
     export ENVIRONMENT=test; export COVERAGE=true; {{ rbenv }} rspec {{ args }}
 
-ci: lint test-coverage 
+ci: lint test-coverage
 
 alias check-all := ci
 
@@ -66,11 +66,11 @@ version:
     @echo "{{ version }}"
 
 # Clobber
-clobber: 
+clobber:
     {{ rbenv }} rake clobber
 
 # Generate documentation
-doc: 
+doc:
     #!/usr/bin/env bash
     {{ rbenv }} rake doc
 
@@ -103,10 +103,10 @@ publish otp="": build
     [[ -n "${otp}" ]] || otp=$({{ op }} read "{{ otp_ref }}" 2>/dev/null || true)
 
     if [[ -n "${otp}" ]]; then
-      gem push "{{ gem_file }}" --otp "${otp}"
+        {{ rbenv }} gem push "{{ gem_file }}" --otp "${otp}"
     else
-      echo "rubygems: no OTP available — gem push will prompt if 2FA is required."
-      gem push "{{ gem_file }}"
+        echo "rubygems: no OTP available — gem push will prompt if 2FA is required."
+        {{ rbenv }} gem push "{{ gem_file }}" --no-document
     fi
 
     # Only reachable when the push succeeded: `set -e` aborts the recipe on a
