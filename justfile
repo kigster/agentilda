@@ -40,6 +40,9 @@ format:
     {{ rbenv }} standardrb --fix
     /usr/bin/find . -name '*.md' -exec mdformat --wrap no {} \; -print
 
+update-workflow:
+    bundle exec tilda docs -o docs/WORKFLOW.md
+
 # Run all the tests
 test *args:
     export ENVIRONMENT=test; {{ rbenv }} rspec {{ args }}
