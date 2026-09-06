@@ -332,9 +332,10 @@ RSpec.describe Agentilda::Runner, :tree do
       end
       let(:publisher) { instance_double(Agentilda::Publisher, publish: publication) }
 
-      # Stands in for `luke-backend` finishing its last work unit: the
-      # rename is the agent's own act, done before the harness ever asks
-      # whether the checkout is dirty.
+      # Stands in for whichever of the pair finishes last: the rename is the
+      # agent's own act, done before the harness ever asks whether the
+      # checkout is dirty. The other half finds the folder already renamed
+      # and its own rename a no-op.
       let(:executor) do
         ->(_agent, subject, **) {
           subject.rename_to(Agentilda::STATUS_BY_KEY.fetch(:ready_for_review))
@@ -342,11 +343,12 @@ RSpec.describe Agentilda::Runner, :tree do
         }
       end
 
+      # 🟡 is where the pair works: `luke-backend` and `rey-frontend` both
+      # handle it and both advance to ready_for_review, so either one's
+      # rename is what triggers publishing.
       let!(:built) do
         plans do |t|
-          # 🎨, not 🟡: publishing is triggered by an agent whose advances_to is
-          # ready_for_review, and since building split in two that is rey-frontend.
-          t.plan "004.00", :building_ui, "needs-a-reviewer", files: {"spec.md" => spec_body, "plan.md" => "# P"}
+          t.plan "004.00", :building, "needs-a-reviewer", files: {"spec.md" => spec_body, "plan.md" => "# P"}
         end
       end
 
@@ -354,6 +356,16 @@ RSpec.describe Agentilda::Runner, :tree do
         runner.call
 
         expect(tree.reload.find(ordinal).status.key).to eq(:ready_for_review)
+      end
+
+      # Both halves of the pair share one checkout and one branch. Settling
+      # each half's attempt separately opened the pull request twice: the
+      # second `gh pr create` failed against the first, and the round
+      # reported a refusal on a plan that had just been published.
+      it "opens one pull request for the pair, not one per half" do
+        runner.call
+
+        expect(publisher).to have_received(:publish).once
       end
 
       it "records the opened pull request in the plan's own pull-requests.md" do
@@ -404,7 +416,7 @@ RSpec.describe Agentilda::Runner, :tree do
       context "when the plan already recorded earlier pull requests" do
         let!(:built) do
           plans do |t|
-            t.plan "004.00", :building_ui, "needs-a-reviewer",
+            t.plan "004.00", :building, "needs-a-reviewer",
               files: {"spec.md" => spec_body, "plan.md" => "# P"},
               prs: [t.open(3, "The earlier half")]
           end

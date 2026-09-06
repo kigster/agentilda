@@ -413,11 +413,14 @@ module Agentilda
     #
     # @param task [Agentilda::Runner::Task]
     # @param attempt [Agentilda::Runner::Attempt]
+    # @param published [Array<Agentilda::Ordinal>] plans this round has
+    #   already opened a pull request for; appended to here
     # @return [Agentilda::Runner::Attempt]
-    def finish(task, attempt)
+    def finish(task, attempt, published)
       return attempt unless attempt.ok
 
-      current = tree.find(task.subject.feature.ordinal)
+      ordinal = task.subject.feature.ordinal
+      current = tree.find(ordinal)
       to = current&.status&.key || attempt.from
       settled = attempt.with(to:)
       # The agent that ran last is the attempt's, which under chaining is not
@@ -425,6 +428,14 @@ module Agentilda
       finisher = @agents.find(attempt.agent) || task.agent
       return settled unless finisher.advances_to == :ready_for_review && to == :ready_for_review
 
+      # Both halves of a pair settle here one after the other, sharing one
+      # checkout and one branch. The first to arrive opens the pull request.
+      # Letting the second open it again asked GitHub for a second pull
+      # request on a branch that already had one, and the round reported a
+      # refusal on a plan it had just published.
+      return settled if published.include?(ordinal)
+
+      published << ordinal
       publication = publish(task, current)
       note = if publication&.published?
         "#{settled.note}; opened #{publication.url}"
