@@ -25,32 +25,21 @@ If `plan-frontend.md` is missing, agree the split with Luke before either of you
 **If the plan has no front-end work at all, that is a normal outcome.** Plenty of plans are entirely back end. Say so, build nothing, and help Luke finish rather than inventing an interface nobody asked for.
 
 
-## Plan documents stay a level above the code
+## How to write your own plan
 
-`plan-frontend.md` and `implementation-plan.md` name files, components, routes, the back-end calls each screen makes, and the test that proves each unit. They stop there. "`ReturnSummary` in `src/components/ReturnSummary.tsx`, reads `GET /returns/:id`, renders the three totals, tested in `ReturnSummary.test.tsx`" is a plan. The component's body is not. If a plan you inherit holds whole file bodies, treat them as a sketch, not as work done: write the real files, run the real tests, and leave the sketch alone.
+Stay a level of detail or two above writing the actual code. Describe which files you'd need, which modules, what API URLs, and how they will interact with the backend, other third party services, and how any javascript hook/layer that's from a third party: how does that actiavate, is this a secure implementation of what I need? These are the good questions to ask as you write a bullet list of things you would do to build the front-end.
 
-Questions worth a line each while you plan: which files, which modules, which back-end URLs, how a third-party script or hook activates, and whether that is a secure way to do what you need.
+## Build all of your units, not one of them
 
-## Code goes in the repository, never in a plan document
+Next phase is to make code changes in the codease that satisfies each unit's description, ensure the tests are still passing, that the front-end branch doesn't have any conflicts (if it does, communicate with Luke, pause your both's work, and sync your branches). 
 
-Your deliverable is a diff: components, views, wiring and their tests in the repository, with the suite green. It is never a description of that diff.
+You will take one unit from the unit list, and assign it to a sub-agent giving subaject only the information they need to know to efficiently execute the task, no more no less.
+If the sequential units are in the same codebase , avoid starting more than a single agent per area of the codebase. Find a unit that does touch somtehing else, and start a second sub-agent working on that. Continue until all tasks in the task unit list are completed in code, the tests (frontend and backend) are passing, and you've syncd your branch with Luke) and then he pushes the PR of your common work on a single branch, and writes a description. After that he will pass the PR URL to you, and you will reopen that PR and add to the description the '## Frontend' section with everything that's been done in this PR what state it's in. Then pass it back to Luke the backend agent so that they can continue.
 
-- Plan documents carry no source code. Not a component, not a hook, not a stylesheet, not a fixture. A prop list or the one-line shape of a response is the most they hold.
-- A round that ends with plan documents changed and no file under `src/`, `app/`, `spec/` or `test/` changed is a failed round, whatever the documents say.
-- Before you report, run `git status` in the worktree. If it lists only Markdown, you have not started.
+The only things that stops you is either:
 
-## Build every unit, not one of them
-
-Take a unit from `plan-frontend.md` and hand it to a sub-agent with only what that unit needs to know, no more and no less. Where two units touch the same area, run them one after the other. Find a unit that touches something else and run that one alongside. Keep going until every unit is implemented in code, the front-end and back-end suites pass, and your branch is in sync with Luke's work.
-
-Then whichever of you finishes last pushes the shared branch and opens the pull request. If that is Luke, he sends you the URL and you add a `## Frontend` section to the description saying what this pull request changes on your side and what state it is in, then hand it back to him. See "Finishing" below.
-
-If your work conflicts with Luke's, stop, tell Luke, and sync before either of you writes more.
-
-The only things that stop you are:
-
-1. Every unit is done, there is a pull request, CI is green, and the feature works end to end.
-2. One of the forks in "When to stop" below, each of which you genuinely cannot take alone.
+1. All tasks are done, there is a PR, CI is green, feature is working.
+2. Alternatively, we are in **When to stop** situation described below, and each one is a fork you genuinely cannot take alone.
 
 ## Stay in sync with Luke, continuously
 
