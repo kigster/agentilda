@@ -260,7 +260,7 @@ agentilda states                           # the whole machine, as a diagram
 
 ### Chaining: one plan, several agents, one round
 
-When an agent finishes and the plan has genuinely advanced — its folder renamed, or its contents now justifying the next state — the runner hands it straight to the next state's agent **in the same round**: researcher to writer to planner, without paying a full round per hop. Chaining is on by default and forced off by `--agent`, since chaining past a restriction would un-restrict it; `--no-chain` turns it off explicitly. The chain stops exactly where round assignments stop: at a blocked or finished state, a human decides.
+When an agent finishes and the plan has genuinely advanced — its folder renamed, or its contents now justifying the next state — the runner hands it straight to the next state's agent **in the same round**: researcher to writer to planner, without paying a full round per hop. Chaining is on by default and forced off by `--agent`, since chaining past a restriction would un-restrict it; `--no-chain` turns it off explicitly. The chain stops exactly where round assignments stop: at a blocked or finished state, a human decides. It also stops short of a state two agents handle as a pair, such as 🟡 Building: a chain is one thread carrying one plan, and a pair is started together by the next round.
 
 ### Steering one agent, or stepping around one
 
@@ -310,7 +310,7 @@ Worktrees an agent left untouched are pruned. Dirty ones are kept — they are t
 
 The loop ends at a **fixed point** — a round in which no plan changed state — after two consecutive dry rounds, or at the `--rounds` ceiling. `settled?` reports when every plan is done or deliberately parked.
 
-Progress is read from disk, never from what an agent claims: after each attempt the runner re-runs `resync dirs` and re-reads the folder name, so an agent that reports success but wrote nothing shows as `no change`.
+Progress is read from disk, never from what an agent claims. The runner runs `resync dirs` before it assigns a round, so a folder whose name lags its contents (a run killed before its closing resync, a plan.md written by hand) goes to the agent its contents call for, under the name that agent's prompt will read. It runs `resync dirs` again once every agent in the round has finished and re-reads the folder name, so an agent that reports success but wrote nothing shows as `no change`.
 
 **Blocked plans are never assigned to anyone.** ⭕️ and 🅱️ mean a human decides; an agent that could move them would make the states meaningless. They are reported at the end with a pointer to their `blocked.md`.
 

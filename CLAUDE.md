@@ -125,7 +125,7 @@ flowchart LR
   R -->|no plan changed state| DONE[Fixed point, stop]
 ```
 
-`Runner#call` stops at a fixed point, a round in which no plan changed state, or when nothing is left that an agent may touch. Blocked plans (⭕️ and 🅱️) are stepped around, never assigned. `--isolation worktree` gives each plan its own checkout and runs `jobs` agents at once; `--isolation shared` is one tree, serial, and needs no git. Each round does exactly one serial resync on the main tree.
+`Runner#call` stops at a fixed point, a round in which no plan changed state, or when nothing is left that an agent may touch. Blocked plans (⭕️ and 🅱️) are stepped around, never assigned. `--isolation worktree` gives each plan its own checkout and runs `jobs` agents at once; `--isolation shared` is one tree, serial, and needs no git. Each round runs `resync dirs` twice on the main tree, serially: once before agents are assigned, so a folder whose name lags its contents goes to the right agent under the right name, and once after every agent has been joined, so what the round reports is what is on disk. A chain hands a plan to one agent at a time and stops short of a state two agents handle as a pair; the next round starts the pair together.
 
 ### The autonomy boundary
 
