@@ -31,15 +31,16 @@ RSpec.describe Agentilda::Runner, :tree do
         end
       end
 
-      # 001.00 already has spec.md and plan.md when the round starts, so
-      # `palpatine-planner` takes it once — and Building no longer waits on a
-      # pull request to exist, so the very next round finds it already there
-      # and hands it straight to `luke-backend`.
-      it "offers each plan to the agent that handles its state" do
+      # 001.00 already has spec.md and plan.md when the round starts, and
+      # Building waits on no pull request, so its contents justify 🟡 before
+      # anyone has run. The round reconciles the name first and hands it
+      # straight to the building pair; `palpatine-planner` never sees a plan
+      # whose plan.md is already written.
+      it "offers each plan to the agents that handle the state its contents justify" do
         runner.call
 
         expect(calls.uniq).to contain_exactly(["leah-researcher", "000.00"],
-          ["yoda-writer", "000.01"], ["palpatine-planner", "001.00"], ["luke-backend", "001.00"])
+          ["yoda-writer", "000.01"], ["luke-backend", "001.00"], ["rey-frontend", "001.00"])
       end
 
       # The relay's whole point. Both used to declare `handles: [new]`, agents
@@ -87,6 +88,58 @@ RSpec.describe Agentilda::Runner, :tree do
       end
     end
 
+    # The bug this kills: a round read every folder's name before the resync
+    # had made the name honest, so a ⚪️ folder that already held a researched
+    # spec.md and a plan.md went to `leah-researcher` for a whole round, twenty
+    # minutes of research the spec already carried, before anything renamed
+    # it. Killing the run before that round ended left the name as it was,
+    # and the next run started leah again.
+    context "when a folder's name lags behind its contents" do
+      let!(:built) do
+        plans do |t|
+          t.plan "001.00", :new, "already-planned",
+            files: {"spec.md" => "#{spec_body}\n## Research\n\nWhat was found.\n", "plan.md" => "# P"}
+        end
+      end
+
+      it "reconciles the name before assigning, so the plan goes to the agents its contents justify" do
+        runner.call
+
+        aggregate_failures do
+          expect(calls.map(&:first)).not_to include("leah-researcher")
+          expect(calls.first(2)).to contain_exactly(["luke-backend", "001.00"], ["rey-frontend", "001.00"])
+        end
+      end
+
+      # The prompt names the plan folder by path and states its emoji, so an
+      # agent handed the folder under its stale name would be told it is
+      # working a ⚪️ plan while building it.
+      it "hands each agent the folder already renamed" do
+        seen = []
+        watcher = described_class.new(tree:, agents:, max_rounds: 1,
+          executor: ->(agent, subject, **) {
+            seen << [subject.status.key, File.basename(subject.feature.path)]
+            record(agent, subject)
+          })
+        watcher.call
+
+        expect(seen).to all(eq([:building, "001.00-🟡--already-planned"]))
+      end
+
+      # A preview that names the wrong agent is worse than no preview. The
+      # dry run may not rename anything, so it reads the state the resync
+      # would have applied and dispatches on that.
+      it "previews the same agents on a dry run, while renaming nothing" do
+        preview = described_class.new(tree:, executor:, agents:, max_rounds: 1, dry_run: true)
+        preview.call
+
+        aggregate_failures do
+          expect(calls.map(&:first)).to contain_exactly("luke-backend", "rey-frontend")
+          expect(Dir.children(plans_root)).to eq(["001.00-⚪️--already-planned"])
+        end
+      end
+    end
+
     describe "chaining" do
       subject(:runner) { described_class.new(tree:, executor:, agents:, max_rounds: 5, chain: true) }
 
@@ -120,6 +173,23 @@ RSpec.describe Agentilda::Runner, :tree do
           .to eq(%w[leah-researcher yoda-writer palpatine-planner])
         expect(runner.rounds.first.attempts.map(&:agent).first(3))
           .to eq(%w[leah-researcher yoda-writer palpatine-planner])
+      end
+
+      # A chain is one thread carrying one plan, so it can hand the plan to
+      # one agent. `luke-backend` and `rey-frontend` handle 🟡 as a pair, and
+      # each prompt promises the other is working the same tree in the same
+      # round. Handing the chain to whichever of them is defined first
+      # started luke alone, waiting on a partner the round never dispatched.
+      # A pair is a round's to start, together, once the resync has renamed
+      # the folder.
+      it "stops the chain short of a paired state, so the next round starts the pair together" do
+        runner.call
+
+        aggregate_failures do
+          expect(runner.rounds.first.attempts.map(&:agent))
+            .to eq(%w[leah-researcher yoda-writer palpatine-planner])
+          expect(runner.rounds[1].attempts.map(&:agent)).to contain_exactly("luke-backend", "rey-frontend")
+        end
       end
 
       it "records each hop's transition on its own attempt" do
@@ -195,6 +265,24 @@ RSpec.describe Agentilda::Runner, :tree do
         writer.call
 
         expect(writer.rounds.first.attempts.first).to be_advanced
+      end
+
+      # A {Subject} memoizes what it reads. The round's opening resync reads
+      # every spec.md to place the folder, and reading the same subjects
+      # again after the agents had written into those files saw the bodies
+      # from before the round: the rename was skipped and the chain's own
+      # fresh read then reported `researched -> new`, an advance backwards.
+      it "reads what the agent wrote into an existing file, not what it memoized before the round" do
+        researcher = described_class.new(tree:, agents:, max_rounds: 1, executor: lambda { |_a, subject, **|
+          File.write(File.join(subject.feature.path, "spec.md"), "#{spec_body}\n## Research\n\nFound.\n")
+          [true, "wrote the chapter"]
+        })
+        researcher.call
+
+        aggregate_failures do
+          expect(researcher.rounds.first.attempts.map { |a| [a.from, a.to] }).to eq([[:new, :researched]])
+          expect(tree.reload.subjects.map { |s| s.status.key }).to eq([:researched])
+        end
       end
 
       it "records no advance when the agent only says it succeeded" do
@@ -315,9 +403,10 @@ RSpec.describe Agentilda::Runner, :tree do
       end
       let(:publisher) { instance_double(Agentilda::Publisher, publish: publication) }
 
-      # Stands in for `luke-backend` finishing its last work unit: the
-      # rename is the agent's own act, done before the harness ever asks
-      # whether the checkout is dirty.
+      # Stands in for whichever of the pair finishes last: the rename is the
+      # agent's own act, done before the harness ever asks whether the
+      # checkout is dirty. The other half finds the folder already renamed
+      # and its own rename a no-op.
       let(:executor) do
         ->(_agent, subject, **) {
           subject.rename_to(Agentilda::STATUS_BY_KEY.fetch(:ready_for_review))
@@ -325,11 +414,12 @@ RSpec.describe Agentilda::Runner, :tree do
         }
       end
 
+      # 🟡 is where the pair works: `luke-backend` and `rey-frontend` both
+      # handle it and both advance to ready_for_review, so either one's
+      # rename is what triggers publishing.
       let!(:built) do
         plans do |t|
-          # 🎨, not 🟡: publishing is triggered by an agent whose advances_to is
-          # ready_for_review, and since building split in two that is rey-frontend.
-          t.plan "004.00", :building_ui, "needs-a-reviewer", files: {"spec.md" => spec_body, "plan.md" => "# P"}
+          t.plan "004.00", :building, "needs-a-reviewer", files: {"spec.md" => spec_body, "plan.md" => "# P"}
         end
       end
 
@@ -337,6 +427,16 @@ RSpec.describe Agentilda::Runner, :tree do
         runner.call
 
         expect(tree.reload.find(ordinal).status.key).to eq(:ready_for_review)
+      end
+
+      # Both halves of the pair share one checkout and one branch. Settling
+      # each half's attempt separately opened the pull request twice: the
+      # second `gh pr create` failed against the first, and the round
+      # reported a refusal on a plan that had just been published.
+      it "opens one pull request for the pair, not one per half" do
+        runner.call
+
+        expect(publisher).to have_received(:publish).once
       end
 
       it "records the opened pull request in the plan's own pull-requests.md" do
@@ -387,7 +487,7 @@ RSpec.describe Agentilda::Runner, :tree do
       context "when the plan already recorded earlier pull requests" do
         let!(:built) do
           plans do |t|
-            t.plan "004.00", :building_ui, "needs-a-reviewer",
+            t.plan "004.00", :building, "needs-a-reviewer",
               files: {"spec.md" => spec_body, "plan.md" => "# P"},
               prs: [t.open(3, "The earlier half")]
           end

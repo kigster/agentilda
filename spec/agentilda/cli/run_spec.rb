@@ -196,7 +196,7 @@ RSpec.describe Agentilda::CLI::Run, :tree do
     it "refuses an agent that handles no in-scope plan's state, naming who does" do
       _out, err, status = run(agent: "leah-researcher")
 
-      expect(unwrapped(err)).to include("leah-researcher handles", "🟡 Building", "luke-backend takes it")
+      expect(unwrapped(err)).to include("leah-researcher handles", "🟡 Building", "luke-backend and rey-frontend take it")
       expect(status).to eq(65)
     end
   end
@@ -333,15 +333,18 @@ RSpec.describe Agentilda::CLI::Run, :tree do
     end
 
     it "shows a plan that actually moved as from -> to" do
-      # A ⭐️ folder whose plan.md already exists best-fits 🟡, so the round's
-      # own serial resync advances it — which is the property under test: the
-      # harness reads the disk after the round rather than trusting what the
-      # agent claimed to have done.
-      plans { |t| t.plan("002.00", :planned, "moves", files: {"spec.md" => spec_body, "plan.md" => "# Plan"}) }
-      with_executor
+      # The agent writes the chapter 🔎 requires and renames nothing; the
+      # round's closing resync advances the folder. That is the property
+      # under test: the harness reads the disk after the round rather than
+      # trusting what the agent claimed to have done.
+      plans { |t| t.plan("002.00", :new, "moves", files: {"spec.md" => spec_body}) }
+      with_executor do |subject|
+        File.write(File.join(subject.feature.path, "spec.md"), "#{spec_body}\n## Research\n\nFound.\n")
+        [true, "researched"]
+      end
       out, err, = run(commit: true)
 
-      expect(out).to include("planned -> building")
+      expect(out).to include("new -> researched")
       expect(unwrapped(err)).to include("1 advanced")
     end
 

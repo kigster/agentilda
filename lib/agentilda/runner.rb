@@ -203,7 +203,13 @@ module Agentilda
     # @param number [Integer]
     # @return [Agentilda::Runner::Round]
     def run_round(number)
-      tree.reload
+      # Names are made honest BEFORE they are read, not only after the agents
+      # have run. A name lags its contents whenever a run was killed before
+      # its closing resync, or a person wrote plan.md by hand. Read as it
+      # stood, a ⚪️ folder already holding a researched spec.md and a plan.md
+      # went to `leah-researcher` for a whole round, and every re-run started
+      # her again, because nothing renamed the folder until she finished.
+      reconcile
       tasks = assignments.map { |agent, subject| prepare(agent, subject, number) }
       return Round.new(number:, attempts: []) if tasks.empty?
 
@@ -213,27 +219,43 @@ module Agentilda
         attempt(task, &progress)
       end
 
-      # One serial pass over the *main* tree, run once per round rather than
-      # once per task. `Executor#prompt_for` always names a plan folder by its
-      # main-tree path — that is where `spec.md`/`plan.md`/a rename actually
-      # land, under every isolation mode — and running `Resync::Dirs` from
-      # `jobs` threads at once on the one tree they all share would be exactly
-      # the hazard a worktree exists to prevent for code, just aimed at
-      # `.plans` instead. Doing it here, after `UI.concurrently` has already
-      # joined every thread, costs nothing: nobody is still writing.
-      #
-      # It renames only what a real round may have moved: a dry run invoked
-      # no agent, and "dry run" that renames a folder anyway is a preview
-      # that already happened.
-      Resync::Dirs.new(tree:).call(commit: !@dry_run)
+      # And again once every thread has been joined, so {#finish} reads what
+      # the agents actually left behind rather than what they claimed.
+      reconcile
 
+      published = []
       attempts = tasks.zip(results).flat_map do |task, r|
         next [failed(r)] unless r.is_a?(Array)
 
         *hops, last = r
-        hops + [finish(task, last)]
+        hops + [finish(task, last, published)]
       end
       Round.new(number:, attempts:)
+    end
+
+    # One serial pass of `resync dirs` over the *main* tree, run once per
+    # round boundary rather than once per task. `Executor#prompt_for` always
+    # names a plan folder by its main-tree path, which is where `spec.md`,
+    # `plan.md` and a rename actually land under every isolation mode, and
+    # running `Resync::Dirs` from `jobs` threads at once on the one tree they
+    # all share would be exactly the hazard a worktree exists to prevent for
+    # code, just aimed at `.plans` instead. Between rounds nobody is writing,
+    # so a serial pass costs nothing.
+    #
+    # It renames only what a real round may have moved: a dry run invokes no
+    # agent, and a "dry run" that renames a folder anyway is a preview that
+    # already happened. {#assignments} reads the same target the rename
+    # would have applied, so the preview still names the right agents.
+    #
+    # The reload comes first, every time. A {Subject} memoizes what it reads,
+    # and the pass before the round has already read every spec.md to place
+    # its folder; the pass after it must see what the agents wrote into those
+    # same files, not the bodies from before they ran.
+    #
+    # @return [Array<Agentilda::Resync::Dirs::Change>] what moved, or would have
+    def reconcile
+      tree.reload
+      Resync::Dirs.new(tree:).call(commit: !@dry_run)
     end
 
     # Each line's countdown starts from that agent's own clock. The executor
@@ -299,9 +321,13 @@ module Agentilda
     # @return [Array<Array(Agentilda::Agent, Agentilda::Subject)>]
     def assignments
       in_scope.flat_map do |subject|
-        next [] if StateMachine::SETTLED.include?(subject.status.key)
+        # After {#reconcile} this is the folder's name. On a dry run, which
+        # renames nothing, it is what the name would have become, so the
+        # preview names the agents a real run would start.
+        state = Resync::Dirs.target(subject)
+        next [] if StateMachine::SETTLED.include?(state.key)
 
-        @agents.for_status(subject.status).map { |agent| [agent, subject] }
+        @agents.for_status(state).map { |agent| [agent, subject] }
       end
     end
 
@@ -353,11 +379,16 @@ module Agentilda
         fit = further_of(current)
         break if fit.nil? || fit.key == from || StateMachine::SETTLED.include?(fit.key)
 
-        succ = @agents.for_status(fit).first
-        break if succ.nil?
+        # A chain is one thread carrying one plan, so it can hand the plan to
+        # one agent. Two agents on a state are a pair that builds one tree in
+        # one round, and starting only the first of them left it waiting on a
+        # partner nobody had dispatched. A pair is the next round's to start,
+        # together, once the resync has renamed the folder.
+        successors = @agents.for_status(fit)
+        break unless successors.size == 1
 
         attempts[-1] = attempts[-1].with(to: fit.key)
-        agent = succ
+        agent = successors.first
         from = fit.key
         subject = current
       end
@@ -408,11 +439,14 @@ module Agentilda
     #
     # @param task [Agentilda::Runner::Task]
     # @param attempt [Agentilda::Runner::Attempt]
+    # @param published [Array<Agentilda::Ordinal>] plans this round has
+    #   already opened a pull request for; appended to here
     # @return [Agentilda::Runner::Attempt]
-    def finish(task, attempt)
+    def finish(task, attempt, published)
       return attempt unless attempt.ok
 
-      current = tree.find(task.subject.feature.ordinal)
+      ordinal = task.subject.feature.ordinal
+      current = tree.find(ordinal)
       to = current&.status&.key || attempt.from
       settled = attempt.with(to:)
       # The agent that ran last is the attempt's, which under chaining is not
@@ -420,6 +454,14 @@ module Agentilda
       finisher = @agents.find(attempt.agent) || task.agent
       return settled unless finisher.advances_to == :ready_for_review && to == :ready_for_review
 
+      # Both halves of a pair settle here one after the other, sharing one
+      # checkout and one branch. The first to arrive opens the pull request.
+      # Letting the second open it again asked GitHub for a second pull
+      # request on a branch that already had one, and the round reported a
+      # refusal on a plan it had just published.
+      return settled if published.include?(ordinal)
+
+      published << ordinal
       publication = publish(task, current)
       note = if publication&.published?
         "#{settled.note}; opened #{publication.url}"

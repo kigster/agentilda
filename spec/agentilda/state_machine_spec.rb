@@ -277,10 +277,26 @@ RSpec.describe Agentilda::StateMachine do
 
     it "never reclassifies within the review phase, which disk contents cannot tell apart" do
       aggregate_failures do
-        %i[building ready_for_review in_review rejected].each do |key|
+        %i[building building_ui ready_for_review in_review rejected].each do |key|
           expect(described_class.new(built(key, prs: ["Open 🟡"])).best_fit.key).to eq(key)
         end
       end
+    end
+
+    # 🎨 looks exactly like 🟡 on disk: spec.md, plan.md, and no pull request
+    # yet. Left out of the family, every resync renamed a folder an
+    # implementer had just moved to 🎨 straight back to 🟡, and the hand-off
+    # to the front-end half never happened.
+    it "never reclassifies Building UI back to Building, which its contents cannot distinguish" do
+      machine = machine_for(:building_ui, files: {"spec.md" => "x", "plan.md" => "y"})
+
+      expect(machine.best_fit.key).to eq(:building_ui)
+    end
+
+    # A state missing from the preference order can never be chosen on
+    # purpose, only fall out as the first fit; that is how 🎨 went missing.
+    it "ranks every state, so none is reachable only by accident" do
+      expect(Agentilda::STATUSES.map(&:key) - described_class::PREFERENCE).to be_empty
     end
 
     # Arriving from outside the family, the contents prove only its floor.

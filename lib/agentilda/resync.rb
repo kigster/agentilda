@@ -57,6 +57,25 @@ module Agentilda
       # @return [Array<Agentilda::Resync::Dirs::Change>]
       def plan = tree.subjects.filter_map { |subject| change_for(subject) }
 
+      # The state a folder is named for once it has been reconciled: what
+      # its contents justify, or, when nothing fits, what it already claims.
+      #
+      # `best_fit` answers "which state do these contents justify", and falls
+      # back to the state already claimed when nothing fits, so a folder with
+      # an unreadable set of contents still gets its number padded rather than
+      # being skipped for a reason that has nothing to do with its number.
+      #
+      # Invariants are minimum requirements, so a ⚪️ folder that has grown a
+      # `plan.md` still satisfies ⚪️ and is 🟡 anyway.
+      #
+      # {Runner} dispatches on this rather than on the raw name, so that a dry
+      # run, which renames nothing, still previews the agents a real run
+      # would start.
+      #
+      # @param subject [Agentilda::Subject]
+      # @return [Agentilda::Status]
+      def self.target(subject) = subject.best_fit || subject.status
+
       # @param commit [Boolean] actually rename
       # @return [Array<Agentilda::Resync::Dirs::Change>] what was proposed
       def call(commit: false)
@@ -71,20 +90,13 @@ module Agentilda
       private
 
       # A folder moves when the name it has is not the name it should have.
-      #
-      # `best_fit` answers "which state do these contents justify", and falls
-      # back to the state already claimed when nothing fits — so a folder with
-      # an unreadable set of contents still gets its number padded rather than
-      # being skipped for a reason that has nothing to do with its number.
-      #
-      # Invariants are minimum requirements, so a ⚪️ folder that has grown a
-      # `plan.md` still satisfies ⚪️ and is ⭐️ anyway.
+      # {target} says what that name is.
       #
       # @param subject [Agentilda::Subject]
       # @return [Agentilda::Resync::Dirs::Change, nil]
       def change_for(subject)
         feature = subject.feature
-        fit = subject.best_fit || subject.status
+        fit = self.class.target(subject)
         dirname = feature.dirname_as(fit)
         return nil if dirname == feature.dirname
 
