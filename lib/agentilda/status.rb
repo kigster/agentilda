@@ -55,6 +55,12 @@ module Agentilda
   # would leave `yoda-writer` reading two files to write one.
   RESEARCH_CHAPTER = /^[ \t]{0,3}\#{2,3}[ \t]+Research\b/i
 
+  # What proves `plan.md` holds a plan rather than the blank file
+  # `yoda-writer` leaves for `palpatine-planner`: any section heading. The
+  # ledger notes are stripped first, so an agent's `Started` line does not
+  # count as a plan.
+  PLAN_HEADING = /^[ \t]{0,3}\#{1,3}[ \t]+\S/
+
   # Variation selectors make ⚪️ and ⚪ different strings that mean the same
   # thing to a human. Compare with them removed.
   #
@@ -148,9 +154,26 @@ module Agentilda
       }
     ),
     Status.new(
+      key: :ready_for_planning, emoji: "📋", label: "Ready for Planning", requires: %w[spec.md plan.md],
+      note: "the specification is finished; `plan.md` exists and is still blank, waiting for the planner",
+      invariant: lambda { |s|
+        body = Ledger.stripped(s.read("plan.md"))
+        "Ready for Planning, but `plan.md` already holds a plan" if body.match?(PLAN_HEADING)
+      }
+    ),
+    Status.new(
       key: :planned, emoji: "⭐️", label: "Planned", requires: %w[spec.md plan.md],
       note: "specified and planned; nobody has started building",
-      invariant: nil
+      invariant: lambda { |s|
+        body = Ledger.stripped(s.read("plan.md"))
+        next "Planned, but `plan.md` has no work units yet" unless body.match?(PLAN_HEADING)
+
+        # An open pull request means somebody did start. Without this
+        # clause a ✅ folder found with a new pull request would fall back
+        # to ⭐️, the family's floor, and claim nobody had touched it.
+        open = s.pull_requests.count(&:open?)
+        "Planned, but #{Agentilda.pull_request_count(open)} already open" if open.positive?
+      }
     ),
     # `pull-requests.md` is deliberately absent from `requires` on both of the
     # building states, though it names the file they are about. That file is
@@ -164,7 +187,10 @@ module Agentilda
     Status.new(
       key: :building, emoji: "🟡", label: "Building", requires: %w[spec.md plan.md],
       note: "the back end is under way: data, domain and the API the interface will call",
-      invariant: nil
+      invariant: lambda { |s|
+        body = Ledger.stripped(s.read("plan.md"))
+        "Building, but `plan.md` has no work units to build" unless body.match?(PLAN_HEADING)
+      }
     ),
     # Two building states rather than one, because the order is not a
     # preference: an interface is written against an API that already answers.
@@ -174,7 +200,10 @@ module Agentilda
     Status.new(
       key: :building_ui, emoji: "🎨", label: "Building UI", requires: %w[spec.md plan.md],
       note: "the back end holds; the interface is being built against it",
-      invariant: nil
+      invariant: lambda { |s|
+        body = Ledger.stripped(s.read("plan.md"))
+        "Building UI, but `plan.md` has no work units to build" unless body.match?(PLAN_HEADING)
+      }
     ),
     Status.new(
       key: :ready_for_review, emoji: "🟢", label: "Ready for Review", requires: %w[spec.md plan.md pull-requests.md],

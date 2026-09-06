@@ -23,7 +23,7 @@ RSpec.describe Agentilda::StateMachine do
 
   # A folder far enough along to have pull requests at all.
   def built(key, prs:, files: {})
-    folder(key, files: {"spec.md" => "x", "plan.md" => "y", "pull-requests.md" => "z"}.merge(files), prs:)
+    folder(key, files: {"spec.md" => "x", "plan.md" => "# y", "pull-requests.md" => "z"}.merge(files), prs:)
   end
 
   describe "the derived topology" do
@@ -76,7 +76,7 @@ RSpec.describe Agentilda::StateMachine do
         expect(Agentilda::STATUS_BY_KEY[:planned]
           .satisfied_by?(folder(:planned, files: {"spec.md" => "x"}))).to be(false)
         expect(Agentilda::STATUS_BY_KEY[:planned]
-          .satisfied_by?(folder(:planned, files: {"spec.md" => "x", "plan.md" => "y"}))).to be(true)
+          .satisfied_by?(folder(:planned, files: {"spec.md" => "x", "plan.md" => "# y"}))).to be(true)
       end
     end
 
@@ -137,9 +137,16 @@ RSpec.describe Agentilda::StateMachine do
 
   describe "#allowed" do
     it "offers the next spine state once its guard is satisfied" do
-      machine = machine_for(:new, files: {"spec.md" => "x", "plan.md" => "y"})
+      machine = machine_for(:new, files: {"spec.md" => "x", "plan.md" => "# y"})
 
       expect(machine.allowed).to include(:planned)
+    end
+
+    it "offers only 📋 while plan.md is still blank" do
+      machine = machine_for(:new, files: {"spec.md" => "x", "plan.md" => ""})
+
+      expect(machine.allowed).to include(:ready_for_planning)
+      expect(machine.allowed).not_to include(:planned)
     end
 
     it "withholds it while the guard fails" do
@@ -216,7 +223,7 @@ RSpec.describe Agentilda::StateMachine do
   describe "#spine_next" do
     it "walks spec → plan → build → review → merge → ship" do
       expected = {
-        retroactive: :planned, new: :researched, researched: :planned,
+        retroactive: :planned, new: :researched, researched: :ready_for_planning, ready_for_planning: :planned,
         planned: :building, building: :building_ui, building_ui: :ready_for_review,
         ready_for_review: :in_review, in_review: :approved, approved: :deployed,
         rejected: :building_ui, rolled_back: :ready_for_review, shit: :planned,
@@ -236,24 +243,26 @@ RSpec.describe Agentilda::StateMachine do
       expect(machine.best_fit.key).to eq(:approved)
     end
 
-    it "reaches Building on spec.md and plan.md alone — no pull request has to exist yet" do
-      machine = machine_for(:planned, files: {"spec.md" => "x", "plan.md" => "y"})
+    # ⭐️ and 🟡 are told apart only by the agent that renamed the folder
+    # when it started, so a resync must leave a ⭐️ folder where it is.
+    it "leaves a Planned folder at Planned; only an agent starting moves it to Building" do
+      machine = machine_for(:planned, files: {"spec.md" => "x", "plan.md" => "# y"})
 
-      expect(machine.best_fit.key).to eq(:building)
+      expect(machine.best_fit.key).to eq(:planned)
     end
 
     # If Building required a pull request to be entered, nothing could ever
     # justify entering it. A pull request is opened once, when the second
     # implementer advances the plan out of 🎨, and neither implementer gets
     # a turn without the folder already being in a building state.
-    it "does not require a pull request to arrive at Building" do
-      machine = machine_for(:building, files: {"spec.md" => "x", "plan.md" => "y"})
+    it "does not require a pull request to stay at Building" do
+      machine = machine_for(:building, files: {"spec.md" => "x", "plan.md" => "# y"})
 
       expect(machine.best_fit.key).to eq(:building)
     end
 
     it "prefers a block over spine progress, because a block is the louder fact" do
-      machine = machine_for(:building, files: {"spec.md" => "x", "plan.md" => "y", "blocked.md" => "B1"})
+      machine = machine_for(:building, files: {"spec.md" => "x", "plan.md" => "# y", "blocked.md" => "B1"})
 
       expect(machine.best_fit.key).to eq(:blocked)
     end
@@ -277,7 +286,7 @@ RSpec.describe Agentilda::StateMachine do
 
     it "never reclassifies within the review phase, which disk contents cannot tell apart" do
       aggregate_failures do
-        %i[building ready_for_review in_review rejected].each do |key|
+        %i[planned building building_ui ready_for_review in_review rejected].each do |key|
           expect(described_class.new(built(key, prs: ["Open 🟡"])).best_fit.key).to eq(key)
         end
       end
@@ -308,6 +317,61 @@ RSpec.describe Agentilda::StateMachine do
           expect(Agentilda.status(word)).to be_nil, "expected #{word.inspect} not to resolve"
         end
       end
+    end
+  end
+
+  describe "📋 Ready for Planning" do
+    it "sits on the spine between researched and planned" do
+      expect(described_class::SPINE[:researched]).to eq(:ready_for_planning)
+      expect(described_class::SPINE[:ready_for_planning]).to eq(:planned)
+    end
+
+    it "is justified by a spec and a plan.md that holds no plan yet", :tree do
+      path = plans { |t|
+        t.plan "020.00", :researched, "qualified", files: {
+          "spec.md" => "#{spec_body}\n## Research\n\nFound.\n", "plan.md" => ""
+        }
+      }
+      subject = Agentilda::Tree.new(dir: path).subjects.first
+      expect(subject.best_fit.key).to eq(:ready_for_planning)
+    end
+
+    it "does not let a blank plan.md pass for ⭐️ Planned", :tree do
+      path = plans { |t| t.plan "020.00", :planned, "qualified", files: {"spec.md" => spec_body, "plan.md" => ""} }
+      subject = Agentilda::Tree.new(dir: path).subjects.first
+      expect(subject.violation).to include("plan.md", "no work units")
+    end
+
+    it "treats a plan.md holding only a ledger note as still blank", :tree do
+      note = Agentilda::Ledger.block("> [2026-09-04 11:29:20 AM PDT] [ agent: palpatine-planner   status: Started, round 1 ]")
+      path = plans { |t| t.plan "020.00", :ready_for_planning, "q", files: {"spec.md" => spec_body, "plan.md" => note} }
+      subject = Agentilda::Tree.new(dir: path).subjects.first
+      expect(subject.best_fit.key).to eq(:ready_for_planning)
+    end
+
+    it "becomes ⭐️ once plan.md has a heading", :tree do
+      path = plans { |t| t.plan "020.00", :ready_for_planning, "q", files: {"spec.md" => spec_body, "plan.md" => "# Plan\n\n## Unit 1\n"} }
+      subject = Agentilda::Tree.new(dir: path).subjects.first
+      expect(subject.best_fit.key).to eq(:planned)
+    end
+
+    # The 020.00 transcript: yoda finished, the folder was renamed forward,
+    # and the resync renamed it straight back because nothing could enter
+    # ⭐️ without a plan.md that only palpatine writes. With 📋 between them
+    # the resync leaves yoda's work standing.
+    it "keeps a folder yoda finished at 📋 through a resync", :tree do
+      path = plans { |t|
+        t.plan "020.00", :ready_for_planning, "qualified-at", files: {
+          "spec.md" => "#{spec_body}\n## Research\n\nFound.\n\n## Goal\n\nShip.\n", "plan.md" => ""
+        }
+      }
+      tree = Agentilda::Tree.new(dir: path)
+      Agentilda::Resync::Dirs.new(tree:).call(commit: true)
+      expect(tree.reload.subjects.first.status.key).to eq(:ready_for_planning)
+    end
+
+    it "lets the pair submit straight from 🟡 and from 🔴" do
+      expect(described_class.inbound[:ready_for_review]).to include(:building, :rejected, :building_ui)
     end
   end
 end
