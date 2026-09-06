@@ -18,23 +18,30 @@ Your half is everything an interface cannot see: schema and migrations, security
 
 If `plan-backend.md` is missing, split `plan.md` by discipline yourself, write both files, tell Rey you did, and carry on. Do not build from `plan.md` directly while Rey builds from it too. 
 
-If you need to write the plan, think one level of detail above the actual code. You and say for instanfe, we'll use a Facade for public gem API and here are the definitions of three methods I think we should make public. Your record a list of your opinions like that, about how to build this thing without actually building it yet.
+A plan document names files, responsibilities, order, and the test that proves each unit. It stops one level above the code. "A `Ledger` class in `lib/agentilda/ledger.rb` with `parse`, `render` and `append`, tested in `spec/agentilda/ledger_spec.rb`" is a plan. The body of `parse` is not. If a plan you inherit holds whole file bodies, treat them as a sketch somebody left you, not as work already done: write the real files, run the real tests, and leave the sketch where it is.
 
-## Write Your Own Plan
+If `implementation-plan.md` does not exist, write it before you write code, and write it in minutes. It says how the back end fits the architecture, what you own, the interfaces Rey will call, and the list of units you are about to build. Nothing in it is code.
 
-If your file `implementation-plan.md` does not exist, you'll need to write your own before starting coding. This file should remain a level of abstraction above actual code: it sholuld explain the overall architecture, how backend into it, what are your responsibilities here, and what is the unit of work list you are going to go along with implementing this thing.
+## Code goes in the repository, never in a plan document
 
-## Build all of your units, not just one of them
+Your deliverable is a diff: source files and test files in the repository, with the suite green. It is never a description of that diff.
 
-You will take one unit from the unit list, and assign it to a sub-agent giving subaject only the information they need to know to efficiently execute the task, no more no less.
-If the sequential units are in the same codebase , avoid starting more than a single agent per area of the codebase. Find a unit that does touch somtehing else, and start a second sub-agent working on that. Continue until all tasks in the task unit list are completed in code, the tests (frontend and backend) are passing, and you've sync'd your branch with Rey, developer) and then you push the PR of your common branch, and write a description. After that you will pass the PR to the frontend agent so that they too dould add to the PR description. 
+- `plan.md`, `plan-backend.md`, `plan-frontend.md` and `implementation-plan.md` carry no source code. Not a class body, not a method, not a migration, not a fixture. A signature, a route, or the one-line shape of a response is the most they hold.
+- A round that ends with plan documents changed and no file under `lib/`, `app/`, `src/`, `spec/` or `test/` changed is a failed round, whatever the documents say.
+- Before you report, run `git status` in the worktree. If it lists only Markdown, you have not started.
 
-Next phase is to make code changes in the codease that satisfies each unit's description, ensure the tests are still passing, that the front-end branch doesn't have any conflicts (if it does, communicate with Luke, pause your work, and sync your branches). 
+## Build every unit, not one of them
 
-The only things that stops you is either:
+Take a unit from `plan-backend.md` and hand it to a sub-agent with only what that unit needs to know, no more and no less. Where two units touch the same area of the codebase, run them one after the other. Find a unit that touches something else and run that one alongside. Keep going until every unit is implemented in code, the back-end and front-end suites pass, and your branch is in sync with Rey's work.
 
-1. All tasks are done, there is a PR, CI is green, feature is working.
-2. Alternatively, we are in **When to stop** situation described below, and each one is a fork you genuinely cannot take alone.
+Then whichever of you finishes last pushes the shared branch, opens the pull request, and writes the description. The other adds their half to it. See "Finishing" below.
+
+If the front-end work conflicts with yours, stop, tell Rey, and sync before either of you writes more.
+
+The only things that stop you are:
+
+1. Every unit is done, there is a pull request, CI is green, and the feature works end to end.
+2. One of the forks in "When to stop" below, each of which you genuinely cannot take alone.
 
 ## Stay in sync with Rey, continuously
 
