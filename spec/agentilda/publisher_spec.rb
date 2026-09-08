@@ -53,7 +53,7 @@ RSpec.describe Agentilda::Publisher, :tree do
 
   describe "the title the rest of the system has to accept" do
     it "is recognised by resync prs as already prefixed, so it is never doubled" do
-      expect(Agentilda::Resync::Prs::PREFIXED).to match(publisher.title_for(plan))
+      expect(Agentilda::Resync::Prs::NUMBERED).to match(publisher.title_for(plan))
     end
 
     it "resolves back to the plan it came from" do

@@ -134,29 +134,53 @@ module Agentilda
       end
     end
 
-    # `resync prs` — puts an `[NNN.MM]` prefix on every pull request title that
-    # lacks one, and `[DEV.00]` on the ones that implement no plan.
+    # `resync prs` — files every pull request under the plan it implements.
     #
-    # The resolution order is the branch name first, then the diff, and only
-    # when the diff touches exactly one plan. Anything else is reported for a
-    # human and never edited: `pull-requests.md` is generated from these
-    # titles, and a wrong number files work under a plan that did not do it,
-    # leaving the plan that did looking untouched.
+    # The prefix on a title is the join key between a pull request and a plan:
+    # `pull-requests.md` is generated from it, and a wrong number files work
+    # under a plan that did not do it while the plan that did looks untouched.
+    # So every step here prefers *no answer* to a guessed one, and the only
+    # answers applied are the ones that cleared a bar.
+    #
+    # Two passes. The first is arithmetic and free: the branch name, then the
+    # share of changed lines under one plan folder, then the developer-work
+    # patterns. The second is a judgment: what survives goes to
+    # {Resolver} — `jabba-resolver`, one `claude` process per pull request —
+    # and its verdict is read against three thresholds. A confident verdict
+    # files the pull request. A weak one places it *beside* its nearest plan
+    # in time, as a `.MM` sibling. No verdict at all opens a new plan at the
+    # end of the stack. Both of the last two mint a folder.
+    #
+    # Every prefix this tool ever wrote was written by an algorithm, not a
+    # person, so a numbered title is skipped only as a courtesy to the cost
+    # of re-judging it: `--force` strips every prefix and runs the lot.
     class Prs
-      # The marker this tool used to write, now replaced. A title wearing it is
-      # rewritten in place: the assertion it makes — "this belongs to no
-      # specification" — is still true and still somebody's deliberate call,
-      # so it is restamped rather than re-resolved.
-      STALE = /\A\[#{Regexp.escape(Agentilda::STALE_NO_PLAN_PREFIX)}\]\s*/
+      # Share of changed lines that must fall under one plan folder for the
+      # diff alone to file a pull request there.
+      FOLDER_SHARE = 0.8
 
-      # Titles that already carry a prefix — a plan number, the no-plan marker,
-      # or the legacy `[XXX]`.
-      PREFIXED = /\A\[(?:\d{3}(?:\.\d{2})?|#{Agentilda::NO_PLAN_PREFIX}|XXX)\](?:\([A-Z]\))?\s/
+      # Confidence at or above which a verdict files the pull request.
+      ASSIGN = 0.8
+
+      # Confidence at or above which a verdict earns a timeline placement
+      # beside the plan it named; below it the pull request is a straggler.
+      TIMELINE = 0.5
+
+      # A title already filed under a plan.
+      NUMBERED = /\A\[(\d{3}(?:\.\d{2})?)\](?:\([A-Z]\))?\s*/
+
+      # A title wearing a marker this tool wrote without looking: the no-plan
+      # marker in either spelling, the open-question marker, and the legacy
+      # `[XXX]`. Every one of them is re-judged.
+      MARKER = /\A\[(?:#{Agentilda::NO_PLAN_PREFIX}|#{Regexp.escape(Agentilda::STALE_NO_PLAN_PREFIX)}|#{Agentilda::NONE_PREFIX}|XXX)\](?:\([A-Z]\))?\s*/i
+
+      # Any prefix at all, for stripping.
+      ANY_PREFIX = /\A\[[^\]]+\](?:\([A-Z]\))?\s*/
 
       # Finds a plan number in a branch name: `kig/018.01-verify`, `002-slug`.
       BRANCH_PATTERN = %r{(?:\A|[/\-_])(\d{3}(?:\.\d{2})?)(?:\z|[-_])}
 
-      # A proposed retitle.
+      # A proposed retitle, or the reason there is none.
       #
       # @!attribute [r] number
       #   @return [Integer] the pull request
@@ -168,38 +192,49 @@ module Agentilda
       #   @return [Agentilda::Ordinal, nil]
       # @!attribute [r] reason
       #   @return [String] how it was resolved, or why it was not
-      # @!attribute [r] ambiguous
-      #   @return [Boolean] a human must decide; never edited
-      # @!attribute [r] assumed
-      #   @return [Boolean] "no plan" was inferred, not asserted by the author
-      Change = Data.define(:number, :title, :new_title, :ordinal, :reason, :ambiguous, :assumed, :adopted) do
-        # @return [Boolean]
-        def ambiguous? = ambiguous
+      # @!attribute [r] kind
+      #   @return [Symbol] :branch, :folder, :dev, :judged, :timeline,
+      #     :straggler, :unchanged or :flagged
+      # @!attribute [r] verdict
+      #   @return [Agentilda::Resolver::Verdict, nil] when the model was asked
+      # @!attribute [r] adopted
+      #   @return [Boolean] whether a plan folder was minted for this one
+      Change = Data.define(:number, :title, :new_title, :ordinal, :reason, :kind, :verdict, :adopted) do
+        def initialize(new_title: nil, ordinal: nil, verdict: nil, adopted: false, **rest) = super
 
-        # @return [Boolean]
-        def assumed? = assumed
+        # @return [Boolean] a human must decide; never edited
+        def ambiguous? = kind == :flagged
+
+        # @return [Boolean] the title already says what the pipeline says
+        def unchanged? = kind == :unchanged
 
         # @return [Boolean] whether a plan folder was minted for this one
         def adopted? = adopted
 
+        # @return [Boolean] the model was consulted
+        def judged? = !verdict.nil?
+
         # @return [Boolean] safe to apply without a human looking
-        def applicable? = !ambiguous && !new_title.nil?
+        def applicable? = !ambiguous? && !unchanged? && !new_title.nil?
       end
 
       # @param tree [Agentilda::Tree]
-      # @param github [Agentilda::GitHub]
-      # @param adopt [Boolean] give a plan folder to every pull request that
-      #   resolves to none, rather than flagging it and moving on
-      # @param root [String, nil] repository root, for reading branches
-      def initialize(tree:, github: GitHub.new, adopt: true, root: nil)
+      # @param github [Agentilda::GitHub, Agentilda::FakeGitHub]
+      # @param resolver [Agentilda::Resolver, nil] the judge; built on demand
+      # @param adopt [Boolean] mint folders for placements and stragglers,
+      #   rather than flagging them for a human
+      # @param force [Boolean] re-judge numbered titles too
+      # @param state [String] which pull requests to fetch
+      # @param root [String, nil] repository root
+      def initialize(tree:, github: GitHub.new, resolver: nil, adopt: true, force: false, state: "all", root: nil)
         @tree = tree
         @github = github
+        @resolver = resolver
         @adopt = adopt
-        @root = root
+        @force = force
+        @state = state
+        @root = root || File.dirname(tree.dir)
       end
-
-      # @return [Boolean]
-      def adopt? = @adopt
 
       # @return [Agentilda::Tree]
       attr_reader :tree
@@ -207,93 +242,104 @@ module Agentilda
       # @return [Agentilda::GitHub]
       attr_reader :github
 
-      # What would change, without changing anything.
+      # @return [Boolean]
+      def adopt? = @adopt
+
+      # @return [Boolean]
+      def force? = @force
+
+      # @return [Agentilda::Resolver]
+      def resolver = @resolver ||= Resolver.new(tree:, root: @root)
+
+      # @return [Agentilda::Adoption]
+      def adoption = @adoption ||= Adoption.new(tree:)
+
+      # Everything the run proposes, without changing anything. The model is
+      # still consulted — a dry run is the same run with the writes withheld.
       #
       # @return [Array<Agentilda::Resync::Prs::Change>]
-      def plan
-        restamps + resolve(candidates).then { |changes| adopt? ? with_adoptions(changes) : changes }
-      end
+      def plan = call(commit: false)
 
-      # @return [Array<Agentilda::Resync::Prs::Change>]
-      def restamps = stale.map { |pull| restamped(pull) }
-
-      # @param commit [Boolean] actually retitle, and mint the folders
+      # @param commit [Boolean] retitle, mint folders and rewrite
+      #   `pull-requests.md`
       # @return [Array<Agentilda::Resync::Prs::Change>] what was proposed
       def call(commit: false)
-        changes = resolve(candidates)
-        return restamps + (adopt? ? with_adoptions(changes) : changes) unless commit
+        changes = resolve_all
+        changes = with_adoptions(changes, create: commit)
+        return changes unless commit
 
-        changes = with_adoptions(changes, create: true) if adopt?
-        changes = restamps + changes
         applicable = changes.select(&:applicable?)
         UI.stepping(applicable, "Retitling") { |c| github.retitle(number: c.number, title: c.new_title) }
+        rewrite_pull_requests(changes)
         changes
       end
 
-      # @return [Array<Agentilda::Adoption>] the adopter, memoized
-      def adoption = @adoption ||= Adoption.new(tree:, github:, root: @root)
+      # @return [Array<Hash>] every pull request fetched, memoized
+      def pulls = @pulls ||= github.pulls(state: @state)
+
+      # What the judged pull requests cost, in tokens and dollars.
+      #
+      # @return [Hash] `up:`, `down:`, `cost:`, `asked:`, `cached:`
+      def spent
+        verdicts = @verdicts.to_a
+        {
+          up: verdicts.sum(&:up), down: verdicts.sum(&:down), cost: verdicts.sum(&:cost),
+          asked: verdicts.count { |v| !v.cached? }, cached: verdicts.count(&:cached?)
+        }
+      end
 
       private
 
-      # @return [Array<Hash>] pull requests with no prefix yet
+      # @return [Array<Hash>] the pull requests this run may retitle
       def candidates
-        github.pulls.reject { |pr| pr[:title].to_s.match?(PREFIXED) || pr[:title].to_s.match?(STALE) }
+        @candidates ||= force? ? pulls : pulls.reject { |pr| pr[:title].to_s.match?(NUMBERED) }
       end
 
-      # @return [Array<Hash>] pull requests still wearing the old marker
-      def stale = github.pulls.select { |pr| pr[:title].to_s.match?(STALE) }
-
-      # @param pull [Hash]
-      # @return [Agentilda::Resync::Prs::Change]
-      def restamped(pull)
-        Change.new(number: pull[:number], title: pull[:title], ordinal: nil, ambiguous: false,
-          new_title: pull[:title].sub(STALE, "[#{Agentilda::NO_PLAN_PREFIX}] "),
-          reason: "the no-plan marker is now [#{Agentilda::NO_PLAN_PREFIX}]",
-          assumed: false, adopted: false)
-      end
-
-      # @param pulls [Array<Hash>]
-      # @return [Array<Agentilda::Resync::Prs::Change>]
-      def resolve(pulls) = pulls.map { |pr| change_for(pr) }
-
-      # Replace every flagged change with one that points at a plan folder the
-      # pull request now owns. The unresolvable ones were unresolvable because
-      # no plan described them — so the answer is a plan, not a shrug.
+      # Pass one for everyone, pass two for the remainder, then the reading
+      # of each verdict against the titles pass one and the confident verdicts
+      # have already settled — so a plan assigned in this run counts toward
+      # its own span on the timeline.
       #
-      # @param changes [Array<Agentilda::Resync::Prs::Change>]
-      # @param create [Boolean] mint the folders, rather than only saying so
       # @return [Array<Agentilda::Resync::Prs::Change>]
-      def with_adoptions(changes, create: false)
-        orphans = changes.select(&:ambiguous?)
-        return changes if orphans.empty?
+      def resolve_all
+        settled = candidates.to_h { |pull| [pull[:number], deterministic(pull)] }
+        pending = candidates.reject { |pull| settled[pull[:number]] }
+        @verdicts = pending.empty? ? [] : resolver.call(pending)
+        by_number = @verdicts.to_h { |v| [v.number, v] }
 
-        pulls = orphans.map { |c| pull_by_number.fetch(c.number) }
-        adoptees = create ? adoption.call(pulls) : adoption.plan(pulls)
-        by_number = adoptees.to_h { |a| [a.pull[:number], a] }
+        pending.each do |pull|
+          verdict = by_number.fetch(pull[:number])
+          settled[pull[:number]] = confident(pull, verdict)
+        end
 
-        changes.map { |c| (c.ambiguous? && by_number[c.number]) ? adopted(c, by_number[c.number]) : c }
+        timeline = Timeline.new(tree:, pulls: effective_pulls(settled))
+        pending.each do |pull|
+          next if settled[pull[:number]]
+
+          settled[pull[:number]] = weak(pull, by_number.fetch(pull[:number]), timeline)
+        end
+
+        candidates.map { |pull| settled.fetch(pull[:number]) }
       end
 
-      # @return [Hash{Integer => Hash}]
-      def pull_by_number = @pull_by_number ||= candidates.to_h { |pr| [pr[:number], pr] }
-
-      # @param change [Agentilda::Resync::Prs::Change]
-      # @param adoptee [Agentilda::Adoption::Adoptee]
-      # @return [Agentilda::Resync::Prs::Change]
-      def adopted(change, adoptee)
-        change.with(
-          ordinal: adoptee.ordinal,
-          new_title: "#{adoptee.ordinal.to_prefix} #{change.title}",
-          reason: "#{change.reason} — adopted into #{adoptee.dirname}",
-          ambiguous: false,
-          adopted: true
-        )
+      # Every pull request with the title it will carry after this run, for
+      # the timeline to read.
+      #
+      # @param settled [Hash{Integer => Change, nil}]
+      # @return [Array<Hash>]
+      def effective_pulls(settled)
+        pulls.map do |pull|
+          change = settled[pull[:number]]
+          change&.new_title ? pull.merge(title: change.new_title) : pull
+        end
       end
 
+      # Pass one: the branch, the diff, the developer-work patterns.
+      #
       # @param pull [Hash]
-      # @return [Agentilda::Resync::Prs::Change]
-      def change_for(pull)
-        from_branch(pull) || from_files(pull) || no_plan(pull)
+      # @return [Agentilda::Resync::Prs::Change, nil] nil when the model must decide
+      def deterministic(pull)
+        from_branch(pull) || from_folder(pull) || from_patterns(pull)
       end
 
       # 1. The branch name — the one moment the author certainly knew.
@@ -303,25 +349,51 @@ module Agentilda
       def from_branch(pull)
         match = BRANCH_PATTERN.match(pull[:branch].to_s) or return nil
         ordinal = Ordinal.parse(match[1])
+        return nil unless ordinal && tree.include?(ordinal)
 
-        unless tree.include?(ordinal)
-          return flag(pull, "branch names #{ordinal}, which has no folder in #{File.basename(tree.dir)}")
-        end
-
-        resolved(pull, ordinal, "branch #{pull[:branch]}")
+        filed(pull, ordinal, :branch, "branch #{pull[:branch]}")
       end
 
-      # 2. The diff, and only when it touches exactly one plan.
+      # 2. The diff, when enough of it sits under one plan folder. Lines,
+      # not files, so a one-line `CHANGELOG` touch does not outweigh a spec.
       #
       # @param pull [Hash]
       # @return [Agentilda::Resync::Prs::Change, nil]
-      def from_files(pull)
-        touched = Array(pull[:files]).filter_map { |path| ordinal_for_path(path) }.uniq
-        case touched.size
-        when 1 then resolved(pull, touched.first, "diff touches only #{touched.first}")
-        when 0 then nil
-        else flag(pull, "diff touches #{touched.join(", ")} and none is obviously primary")
+      def from_folder(pull)
+        weights = folder_weights(pull)
+        return nil if weights.empty?
+
+        total = weights.values.sum
+        return nil unless total.positive?
+
+        ordinal, lines = weights.max_by { |_, n| n }
+        share = lines.to_f / total
+        return nil if share < FOLDER_SHARE
+
+        filed(pull, ordinal, :folder, "#{(share * 100).round}% of the diff is under #{ordinal}")
+      end
+
+      # Changed lines by plan folder, with everything that is not a plan
+      # folder pooled under nil so the share has a denominator. Neutral
+      # paths — README, CHANGELOG — are left out of it. A diff with no line
+      # counts at all falls back to counting files.
+      #
+      # @param pull [Hash]
+      # @return [Hash{Agentilda::Ordinal, nil => Integer}]
+      def folder_weights(pull)
+        changes = Array(pull[:changes])
+        changes = Array(pull[:files]).map { |path| {path:, additions: 1, deletions: 0} } if changes.empty?
+        weights = Hash.new(0)
+        changes.each do |change|
+          ordinal = ordinal_for_path(change[:path])
+          next if ordinal.nil? && change[:path].to_s.match?(DevWork::NEUTRAL)
+
+          lines = change[:additions].to_i + change[:deletions].to_i
+          weights[ordinal] += lines.zero? ? 1 : lines
         end
+        return {} unless weights.keys.any?
+
+        weights
       end
 
       # @param path [String] a path from the diff
@@ -336,32 +408,171 @@ module Agentilda
         ordinal if ordinal && tree.include?(ordinal)
       end
 
-      # @param pull [Hash]
-      # @param ordinal [Agentilda::Ordinal]
-      # @param why [String]
-      # @return [Agentilda::Resync::Prs::Change]
-      def resolved(pull, ordinal, why)
-        Change.new(number: pull[:number], title: pull[:title], ordinal:, reason: why,
-          new_title: "#{ordinal.to_prefix} #{pull[:title]}", ambiguous: false, assumed: false, adopted: false)
-      end
-
-      # Nothing resolved, so this is developer work — but that is an assertion
-      # about intent, so it is marked as assumed rather than stated as fact.
+      # 3. Work that says what it is: a dependency bump, a CI change.
       #
       # @param pull [Hash]
+      # @return [Agentilda::Resync::Prs::Change, nil]
+      def from_patterns(pull)
+        return nil unless DevWork.developer?(bare(pull[:title]), pull[:files])
+
+        developer(pull, :dev, "developer work by its title or the paths it touches")
+      end
+
+      # A verdict that settles the question on its own: developer work, or a
+      # plan named at or above {ASSIGN}.
+      #
+      # @param pull [Hash]
+      # @param verdict [Agentilda::Resolver::Verdict]
+      # @return [Agentilda::Resync::Prs::Change, nil]
+      def confident(pull, verdict)
+        return nil unless verdict.valid?
+        return developer(pull, :dev, "#{Resolver::AGENT_NAME}: #{verdict.reason}", verdict:) if verdict.dev?
+        return nil if verdict.plan.nil? || verdict.confidence < ASSIGN
+
+        filed(pull, verdict.plan, :judged, "#{Resolver::AGENT_NAME} #{pct(verdict)}: #{verdict.reason}", verdict:)
+      end
+
+      # A verdict that did not settle it: a placement beside the nearest plan
+      # in time, or a straggler at the end of the stack. Both need a folder,
+      # so both are returned flagged here and turned into adoptions after.
+      #
+      # @param pull [Hash]
+      # @param verdict [Agentilda::Resolver::Verdict]
+      # @param timeline [Agentilda::Timeline]
       # @return [Agentilda::Resync::Prs::Change]
-      def no_plan(pull)
-        Change.new(number: pull[:number], title: pull[:title], ordinal: nil,
-          new_title: "[#{Agentilda::NO_PLAN_PREFIX}] #{pull[:title]}",
-          reason: "no plan resolved from the branch or the diff", ambiguous: false, assumed: true, adopted: false)
+      def weak(pull, verdict, timeline)
+        unless verdict.valid?
+          return placement(pull, nil, "no verdict — #{verdict.error}", verdict:)
+        end
+        if verdict.plan && verdict.confidence >= TIMELINE
+          major = timeline.place(pull) || verdict.plan.major
+          return placement(pull, major, "#{Resolver::AGENT_NAME} #{pct(verdict)} for #{verdict.plan}, placed by time after #{format("%03d", major)}", verdict:)
+        end
+
+        placement(pull, nil, "#{Resolver::AGENT_NAME} #{pct(verdict)}: #{verdict.reason}", verdict:)
+      end
+
+      # Mint (or, on a dry run, only name) a folder for every placement and
+      # straggler, and rewrite their changes to point at it.
+      #
+      # @param changes [Array<Agentilda::Resync::Prs::Change>]
+      # @param create [Boolean]
+      # @return [Array<Agentilda::Resync::Prs::Change>]
+      def with_adoptions(changes, create: false)
+        pending = changes.select { |c| c.kind == :timeline || c.kind == :straggler }
+        return changes if pending.empty?
+
+        unless adopt?
+          return changes.map { |c| pending.include?(c) ? c.with(kind: :flagged, new_title: nil, reason: "#{c.reason} (no folder minted under --no-adopt)") : c }
+        end
+
+        by_number = pulls.to_h { |pr| [pr[:number], pr] }
+        placements = pending.map { |c| [by_number.fetch(c.number), (c.kind == :timeline) ? c.ordinal&.major : nil] }
+        adoptees = create ? adoption.call(placements) : adoption.plan(placements)
+        minted = adoptees.to_h { |a| [a.pull[:number], a] }
+
+        changes.map do |c|
+          adoptee = minted[c.number]
+          next c unless pending.include?(c)
+          next c.with(kind: :flagged, new_title: nil, reason: "#{c.reason} — no slot free") unless adoptee
+
+          c.with(ordinal: adoptee.ordinal, new_title: retitled(c.title, adoptee.ordinal.to_prefix),
+            reason: "#{c.reason} — #{create ? "adopted into" : "would adopt into"} #{adoptee.dirname}", adopted: true)
+        end
+      end
+
+      # Every plan that gained or lost a pull request gets its table rebuilt
+      # from every title that carries its prefix, prose below the table kept.
+      #
+      # Rebuilt from what GitHub returned, which is not always everything:
+      # `--state open` fetches no merged pull request, and the fetch has a
+      # limit. A row already in the table whose number this run never saw is
+      # therefore kept, not dropped — the table matches GitHub for every
+      # pull request GitHub was asked about, and forgets none it was not.
+      #
+      # @param changes [Array<Agentilda::Resync::Prs::Change>]
+      # @return [void]
+      def rewrite_pull_requests(changes)
+        applied = changes.select(&:applicable?).to_h { |c| [c.number, c.new_title] }
+        return if applied.empty?
+
+        titled = pulls.map { |pr| applied.key?(pr[:number]) ? pr.merge(title: applied[pr[:number]]) : pr }
+        seen = titled.map { |pr| pr[:number].to_s }
+        touched = changes.filter_map(&:ordinal).uniq
+        touched |= pulls.filter_map { |pr| applied.key?(pr[:number]) && pr[:title][NUMBERED, 1] }.map { |n| Ordinal.parse(n) }
+        tree.reload
+
+        touched.each do |ordinal|
+          subject = tree.find(ordinal) or next
+          path = File.join(subject.feature.path, PullRequests::FILENAME)
+          rows = titled.select { |pr| filed_under?(pr[:title], ordinal) }.map { |pr|
+            {number: pr[:number], title: pr[:title], url: pr[:url], state: pr[:state], body: pr[:body].to_s}
+          }
+          rows += subject.pull_requests.reject { |pr| seen.include?(pr.number.to_s) }.map { |pr|
+            {number: pr.number, title: pr.title, url: pr.url, state: pr.state, body: ""}
+          }
+          PullRequests.upsert(path, rows.sort_by { |pr| pr[:number].to_i })
+        end
+      end
+
+      # @param title [String]
+      # @param ordinal [Agentilda::Ordinal]
+      # @return [Boolean] whether the title carries this plan's prefix
+      def filed_under?(title, ordinal)
+        number = title.to_s[NUMBERED, 1] or return false
+
+        Ordinal.parse(number) == ordinal
+      end
+
+      # @param verdict [Agentilda::Resolver::Verdict]
+      # @return [String]
+      def pct(verdict) = "#{(verdict.confidence * 100).round}%"
+
+      # @param title [String]
+      # @return [String] the title with any prefix removed
+      def bare(title) = title.to_s.sub(ANY_PREFIX, "")
+
+      # @param title [String]
+      # @param prefix [String]
+      # @return [String]
+      def retitled(title, prefix) = "#{prefix} #{bare(title)}"
+
+      # @param pull [Hash]
+      # @param ordinal [Agentilda::Ordinal]
+      # @param kind [Symbol]
+      # @param why [String]
+      # @param verdict [Agentilda::Resolver::Verdict, nil]
+      # @return [Agentilda::Resync::Prs::Change]
+      def filed(pull, ordinal, kind, why, verdict: nil)
+        change_for(pull, retitled(pull[:title], ordinal.to_prefix), kind, why, ordinal:, verdict:)
       end
 
       # @param pull [Hash]
+      # @param kind [Symbol]
       # @param why [String]
+      # @param verdict [Agentilda::Resolver::Verdict, nil]
       # @return [Agentilda::Resync::Prs::Change]
-      def flag(pull, why)
-        Change.new(number: pull[:number], title: pull[:title], new_title: nil, ordinal: nil,
-          reason: why, ambiguous: true, assumed: false, adopted: false)
+      def developer(pull, kind, why, verdict: nil)
+        change_for(pull, retitled(pull[:title], "[#{Agentilda::NO_PLAN_PREFIX}]"), kind, why, verdict:)
+      end
+
+      # A title that comes out the same as it went in is not a change.
+      #
+      # @return [Agentilda::Resync::Prs::Change]
+      def change_for(pull, new_title, kind, why, ordinal: nil, verdict: nil)
+        kind = :unchanged if new_title == pull[:title].to_s
+        Change.new(number: pull[:number], title: pull[:title], new_title:, ordinal:, reason: why, kind:, verdict:)
+      end
+
+      # @param pull [Hash]
+      # @param major [Integer, nil] the plan to land after; nil for a straggler
+      # @param why [String]
+      # @param verdict [Agentilda::Resolver::Verdict, nil]
+      # @return [Agentilda::Resync::Prs::Change]
+      def placement(pull, major, why, verdict: nil)
+        Change.new(number: pull[:number], title: pull[:title], reason: why, verdict:,
+          kind: major ? :timeline : :straggler,
+          ordinal: major ? Ordinal.new(major:, minor: 0) : nil)
       end
     end
   end

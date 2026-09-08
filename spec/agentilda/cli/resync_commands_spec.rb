@@ -69,13 +69,26 @@ RSpec.describe "agentilda resync", :tree do
   describe Agentilda::CLI::Resync::Prs do
     subject(:command) { described_class.new }
 
-    let(:github) { instance_double(Agentilda::GitHub) }
+    let(:github) { instance_double(Agentilda::GitHub, slug: "example-repo", retitle: nil) }
+    let(:resolver) { instance_double(Agentilda::Resolver) }
+    let(:verdicts) { {} }
 
-    before { allow(Agentilda::GitHub).to receive(:new).and_return(github) }
+    before do
+      allow(Agentilda::GitHub).to receive(:new).and_return(github)
+      allow(Agentilda::Resolver).to receive(:new).and_return(resolver)
+      allow(resolver).to receive(:call) { |pending|
+        pending.map { |pull|
+          verdicts.fetch(pull[:number]) {
+            Agentilda::Resolver::Verdict.new(number: pull[:number], confidence: 0.1, reason: "nothing fits", up: 900, down: 30, cost: 0.002)
+          }
+        }
+      }
+    end
 
-    def pull(number, title, branch: "", files: [])
-      {number:, title:, url: "https://github.com/example/repo/pull/#{number}",
-       branch:, files:, state: "Open 🟡", open: true}
+    def pull(number, title, branch: "", files: [], body: "")
+      {number:, title:, url: "https://github.com/example/repo/pull/#{number}", branch:, files:, body:,
+       changes: files.map { |path| {path:, additions: 1, deletions: 0} }, state: "Open 🟡", open: true,
+       created_at: Time.utc(2026, 8, number), merged_at: nil, head_sha: "sha#{number}"}
     end
 
     it "says every title already carries a prefix when they all do" do
@@ -99,47 +112,74 @@ RSpec.describe "agentilda resync", :tree do
         out, = run(command, adopt: false)
 
         expect(out).to include("7\t[001.00] Add the DSL\tbranch kig/001.00-tax-rule-dsl")
-        expect(out).to include("9\t[dev] Bump CI cache")
+        expect(out).to include("9\t-\t")
+        expect(github).not_to have_received(:retitle)
       end
 
-      # `[dev]` on a title nothing resolved is an assertion about intent that
-      # only the author can make, so the tool must say it is assuming.
-      it "warns that the no-plan prefix is an assumption, not a fact" do
+      it "reports what the judge cost, even on a dry run" do
         _out, err, = run(command, adopt: false)
 
-        expect(unwrapped(err)).to include("would get [dev] because no plan resolved", "2 retitles pending")
+        expect(unwrapped(err)).to include("jabba-resolver judged 1 pull request (0 from cache): 900 tokens in, 30 out, $0.0020")
       end
 
       it "retitles through the seam under --commit and reports the count" do
-        allow(github).to receive(:retitle)
         _out, err, = run(command, adopt: false, commit: true)
 
         expect(github).to have_received(:retitle).with(number: 7, title: "[001.00] Add the DSL")
-        expect(unwrapped(err)).to include("Retitled 2 pull requests")
+        expect(unwrapped(err)).to include("Retitled 1 pull request")
+      end
+
+      it "passes the typed model and job count to the resolver" do
+        run(command, adopt: false, model: "sonnet", jobs: 3)
+
+        expect(Agentilda::Resolver).to have_received(:new).with(hash_including(model: "sonnet", jobs: 3,
+          cache_dir: File.join(Agentilda::Resolver::CACHE_ROOT, "example-repo", "verdicts")))
       end
     end
 
-    context "with a pull request nothing can resolve safely" do
+    context "with a pull request nothing can resolve" do
       before do
         plans { |t| t.plan("001.00", :new, "tax-rule-dsl", files: {"spec.md" => spec_body}) }
-        # The branch names a plan the tree does not hold, which is exactly the
-        # case where writing any number would file work under the wrong plan.
-        allow(github).to receive(:pulls).and_return([pull(4, "Mystery work", branch: "kig/099.00-mystery")])
+        allow(github).to receive(:pulls).and_return([pull(4, "Mystery work", branch: "kig/099.00-mystery", body: "It does things.")])
       end
 
       it "flags it for a human under --no-adopt rather than editing it" do
         out, err, = run(command, adopt: false)
 
-        expect(out).to include("4\t-\tbranch names 099.00")
+        expect(out).to include("4\t-\tjabba-resolver 10%: nothing fits")
         expect(unwrapped(err)).to include("SKIPPED")
       end
 
-      # With adoption on, the answer to "no plan describes this" is a plan.
-      it "proposes a retroactive folder for it by default" do
+      it "proposes a new plan at the end of the stack by default" do
         out, err, = run(command)
 
-        expect(out).to include("adopted into")
-        expect(unwrapped(err)).to include("Would create 1 plan folder", "agentilda run --commit")
+        expect(out).to include("4\t[002.00] Mystery work\t", "would adopt into 002.00")
+        expect(unwrapped(err)).to include("Would create 1 plan folder", "(new plan)")
+        expect(Dir.children(plans_root)).not_to include(a_string_starting_with("002.00"))
+      end
+
+      it "mints the folder with the description under --commit" do
+        run(command, commit: true)
+
+        expect(File.read(File.join(plans_root, "002.00-🕰️--mystery-work", "spec.md"))).to include("It does things.")
+      end
+    end
+
+    context "with a folder of markdown files standing in for GitHub" do
+      let(:prs) { Dir.mktmpdir("prs") }
+
+      before do
+        plans { |t| t.plan("001.00", :new, "tax-rule-dsl", files: {"spec.md" => spec_body}) }
+        File.write(File.join(prs, "5.md"), "---\nnumber: 5\ntitle: Add the DSL\nbranch: kig/001.00-dsl\nstate: open\n---\nBody.\n")
+      end
+
+      after { FileUtils.rm_rf(prs) }
+
+      it "never calls gh, and writes the retitle back into the file" do
+        run(command, commit: true, fake_github_path: prs)
+
+        expect(Agentilda::GitHub).not_to have_received(:new)
+        expect(File.read(File.join(prs, "5.md"))).to include('title: "[001.00] Add the DSL"')
       end
     end
 
@@ -149,6 +189,47 @@ RSpec.describe "agentilda resync", :tree do
 
       expect(unwrapped(err)).to include("could not list pull requests")
       expect(status).to eq(69)
+    end
+  end
+
+  describe Agentilda::CLI::Resync::All do
+    subject(:command) { described_class.new }
+
+    let(:dirs) { instance_double(Agentilda::CLI::Resync::Dirs) }
+    let(:prs) { instance_double(Agentilda::CLI::Resync::Prs) }
+    let(:calls) { [] }
+
+    before do
+      plans { |t| t.plan("001.00", :new, "fine", files: {"spec.md" => spec_body}) }
+      allow(Agentilda::CLI::Resync::Dirs).to receive(:new).and_return(dirs)
+      allow(Agentilda::CLI::Resync::Prs).to receive(:new).and_return(prs)
+      allow(dirs).to receive(:call) { |**o| calls << [:dirs, o] }
+      allow(prs).to receive(:call) { |**o| calls << [:prs, o] }
+    end
+
+    it "runs dirs, then prs, then dirs again, forwarding each flag to the child that takes it" do
+      run(command, commit: true, force: true, state: "open")
+
+      aggregate_failures do
+        expect(calls.map(&:first)).to eq(%i[dirs prs dirs])
+        expect(calls[0].last).to eq(dir: plans_root, commit: true)
+        expect(calls[1].last).to include(dir: plans_root, commit: true, force: true, state: "open")
+        expect(calls[1].last).not_to include(:nope)
+      end
+    end
+
+    it "stops when the first dirs refuses, and says so" do
+      allow(dirs).to receive(:call) {
+        calls << [:dirs, {}]
+        exit 65
+      }
+      _out, err, status = run(command)
+
+      aggregate_failures do
+        expect(status).to eq(65)
+        expect(calls.map(&:first)).to eq([:dirs])
+        expect(unwrapped(err)).to include("resync dirs failed", "not run")
+      end
     end
   end
 end

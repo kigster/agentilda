@@ -11,6 +11,7 @@ require_relative "cli/index/index"
 require_relative "cli/list_plans/list_plans"
 require_relative "cli/resync/subcommands/dirs"
 require_relative "cli/resync/subcommands/prs"
+require_relative "cli/resync/resync"
 require_relative "cli/linear/linear"
 require_relative "cli/linear/subcommands/projects"
 require_relative "cli/linear/subcommands/import"
@@ -64,7 +65,7 @@ module Agentilda
     # worse answer than the thing they wanted.
     register "describe", Agents::Describe
 
-    register "resync" do |prefix|
+    register "resync", Resync::All do |prefix|
       prefix.register "dirs", Resync::Dirs
       prefix.register "prs", Resync::Prs
     end
