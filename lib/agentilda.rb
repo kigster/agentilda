@@ -128,11 +128,13 @@ end
   description
   feature
   github
+  fake_github
   tree
   creator
   brief
   adoption
   resolver
+  timeline
   resync
   reporter
   tally
