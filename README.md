@@ -410,3 +410,9 @@ just docs         # regenerate the conventions from the state machine
 ______________________________________________________________________
 
 © 2026 Konstantin Gredeskoul
+
+## Evals
+
+`example-project/` is a fictional product whose `.plans/` and `.prs/` exercise every path of `agentilda resync`, with the right answers committed beside them as `plans.csv`, `prs.csv` and `prs-force.csv`. `just eval` copies it somewhere disposable, runs the whole command against the copy with the real judge, scores what moved against the answers — 100 when every row matches, 0 when none does — and records the run as a Braintrust experiment. `just eval --dry` scores without logging. It needs `BRAINTRUST_API_KEY` in the environment and a `claude` login the shell can reach, and it spends tokens every time, which is why it never runs in CI.
+
+The suite runs the same fixture with the judge stubbed from `verdicts.yml` and requires a score of 100, so the answers are known to be consistent with the pipeline before the model is measured against them.

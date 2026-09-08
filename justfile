@@ -53,6 +53,16 @@ test-coverage *args:
 
 ci: lint test-coverage
 
+# Score resync against example-project and record the run in Braintrust
+eval *args:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    command -v claude >/dev/null || { echo "claude CLI not found on PATH" >&2; exit 69; }
+    if [[ "$*" != *--dry* && -z "${BRAINTRUST_API_KEY:-}" ]]; then
+      echo "BRAINTRUST_API_KEY is not set; decrypt .env.encrypted or pass --dry" >&2; exit 78
+    fi
+    {{ rbenv }} ruby evals/resync_eval.rb {{ args }}
+
 alias check-all := ci
 
 clean:

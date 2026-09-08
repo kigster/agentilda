@@ -4,6 +4,7 @@ PATH
     agentilda (1.1.0)
       aasm
       concurrent-ruby
+      csv
       dry-cli
       dry-cli-autocomplete
       dry-inflector
@@ -30,9 +31,15 @@ GEM
       concurrent-ruby (~> 1.0)
     ast (2.4.3)
     bigdecimal (4.1.2)
+    braintrust (0.4.1)
+      logger (>= 1.0)
+      openssl (>= 3.3.1, < 5.0)
+      opentelemetry-exporter-otlp (~> 0.28)
+      opentelemetry-sdk (~> 1.3)
     colored2 (4.0.3)
     concurrent-ruby (1.3.8)
     coverage-badge (0.1.1)
+    csv (3.3.6)
     diff-lcs (1.6.2)
     dry-cli (1.4.1)
     dry-cli-autocomplete (0.1.3)
@@ -50,6 +57,14 @@ GEM
     erb (6.0.7)
     fuzzy-string-match (1.0.1)
       RubyInline (>= 3.8.6)
+    google-protobuf (4.36.1)
+      bigdecimal
+      rake (~> 13.3)
+    google-protobuf (4.36.1-arm64-darwin)
+      bigdecimal
+      rake (~> 13.3)
+    googleapis-common-protos-types (1.23.0)
+      google-protobuf (~> 4.26)
     hana (1.3.7)
     io-console (0.9.2)
     irb (1.18.0)
@@ -66,6 +81,28 @@ GEM
     language_server-protocol (3.17.0.6)
     lint_roller (1.1.0)
     logger (1.7.0)
+    openssl (4.0.2)
+    opentelemetry-api (1.11.0)
+      logger
+    opentelemetry-common (0.25.1)
+      opentelemetry-api (~> 1.0)
+    opentelemetry-exporter-otlp (0.35.1)
+      google-protobuf (>= 3.18)
+      googleapis-common-protos-types (~> 1.3)
+      opentelemetry-api (~> 1.1)
+      opentelemetry-common (~> 0.20)
+      opentelemetry-sdk (~> 1.10)
+      opentelemetry-semantic_conventions
+    opentelemetry-registry (0.6.3)
+      opentelemetry-api (~> 1.1)
+    opentelemetry-sdk (1.13.0)
+      logger
+      opentelemetry-api (~> 1.1)
+      opentelemetry-common (~> 0.20)
+      opentelemetry-registry (~> 0.2)
+      opentelemetry-semantic_conventions
+    opentelemetry-semantic_conventions (1.44.0)
+      opentelemetry-api (~> 1.0)
     parallel (2.1.0)
     parser (3.3.12.0)
       ast (~> 2.4.1)
@@ -175,6 +212,7 @@ PLATFORMS
 
 DEPENDENCIES
   agentilda!
+  braintrust
   colored2
   coverage-badge
   irb
@@ -194,10 +232,12 @@ CHECKSUMS
   agentilda (1.1.0)
   ast (2.4.3) sha256=954615157c1d6a382bc27d690d973195e79db7f55e9765ac7c481c60bdb4d383
   bigdecimal (4.1.2) sha256=53d217666027eab4280346fba98e7d5b66baaae1b9c3c1c0ffe89d48188a3fbd
+  braintrust (0.4.1) sha256=2ecb65f450263dc84325f785854e20b6714b894af04ac00094dea7f8187d5768
   bundler (4.0.19) sha256=b48056e4c77fb3853cc47775b5447ede44aaa4f53c32f168014ab4fe86587d47
   colored2 (4.0.3) sha256=63e1038183976287efc43034f5cca17fb180b4deef207da8ba78d051cbce2b37
   concurrent-ruby (1.3.8) sha256=b2f1be836e968ccc78ccfce277ea79c72a88633f22306782c16ff23fb415d1e1
   coverage-badge (0.1.1) sha256=f4ada4edadfa98cd99a50ab49f04ffc1af926e9f00513a063b774bd683eda131
+  csv (3.3.6) sha256=aba61e7e507a66f03d45cb1f3c4b6359861c3504038b422962875dce099e4456
   diff-lcs (1.6.2) sha256=9ae0d2cba7d4df3075fe8cd8602a8604993efc0dfa934cff568969efb1909962
   dry-cli (1.4.1) sha256=b8015bb76c708aa8705a36faf694973e75eeeffca39b89c8e172dc6f66a7d874
   dry-cli-autocomplete (0.1.3) sha256=14f76447bda0000c71739b585c827dc0a0a763e30a68a8b4b2dff91f640768e4
@@ -206,6 +246,9 @@ CHECKSUMS
   dry-monads (1.10.0) sha256=68c90d77617c6ce88d60704fc3b233907e6320974152fe75ad947f968006ca39
   erb (6.0.7) sha256=c5ca6dc25b0ef974a44dc8f59fe847577122483b1968a38dec305c60bf91ee92
   fuzzy-string-match (1.0.1) sha256=0740e515b3d1f7a40bd7f058a67a63682a9f4d98e4a95a9eb670aa562a047549
+  google-protobuf (4.36.1) sha256=893ac9d66b36b6ea50da5418f856bc7c2d2072099a578aeefc2d7757dcab6a77
+  google-protobuf (4.36.1-arm64-darwin) sha256=4d82184f4582dfa123f9793cd7a73beca9b0d3f0d3717948c4120b6cc0d50f2d
+  googleapis-common-protos-types (1.23.0) sha256=992e740a523794d9fc5f29a504465d8fc737aaa16c930fe7228e3346860faf0a
   hana (1.3.7) sha256=5425db42d651fea08859811c29d20446f16af196308162894db208cac5ce9b0d
   io-console (0.9.2) sha256=efa74f891dd03c0939a931dfc6e74c2813d904763d456ea9762b0525e748db08
   irb (1.18.0) sha256=de9454a0703a54704b9811a5ef31a60c86949fbf4013fcf244fabc7c775248e3
@@ -214,6 +257,13 @@ CHECKSUMS
   language_server-protocol (3.17.0.6) sha256=5ef2c0c138f8267e1bc631d3328347d354f96724b0af22f2c79516120443b7f0
   lint_roller (1.1.0) sha256=2c0c845b632a7d172cb849cc90c1bce937a28c5c8ccccb50dfd46a485003cc87
   logger (1.7.0) sha256=196edec7cc44b66cfb40f9755ce11b392f21f7967696af15d274dde7edff0203
+  openssl (4.0.2) sha256=1037ad2868ae58df9ad917891c0c0f9815a1172f6846d4bcdd508e4c2ee747c2
+  opentelemetry-api (1.11.0) sha256=218c840170fa473974756668b32b6989570de07c7d3864627960209f189247e2
+  opentelemetry-common (0.25.1) sha256=38fe87c751e4e13fcd47a8290b4ad67bbedf76c4ed89aeced5ea5c620e66bfb1
+  opentelemetry-exporter-otlp (0.35.1) sha256=575c2f5d59246909aa3c655a0ee22a94fc01b218cfe8bc1c75c03d5e786ac436
+  opentelemetry-registry (0.6.3) sha256=568fa8eaea94394f29f4fce3f0339ab10c3bf6d6c8beed6b3cfee6fd37fcc608
+  opentelemetry-sdk (1.13.0) sha256=eea4ab625eb901ecfe1083049862d4853fd16d94029f3cdd16526c81332f0fff
+  opentelemetry-semantic_conventions (1.44.0) sha256=b09b8793422f13b01c08f7a6f29b5f511f47f37bcdb57c0513465a0464168513
   parallel (2.1.0) sha256=b35258865c2e31134c5ecb708beaaf6772adf9d5efae28e93e99260877b09356
   parser (3.3.12.0) sha256=21a6d7f755d5a24dfbdc6e6b772e4e879a52e7631a88bc5a3a134606052c9828
   pastel (0.8.0) sha256=481da9fb7d2f6e6b1a08faf11fa10363172dc40fd47848f096ae21209f805a75

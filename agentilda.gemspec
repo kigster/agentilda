@@ -40,6 +40,7 @@ Gem::Specification.new do |spec|
 
   spec.add_dependency "aasm"
   spec.add_dependency "concurrent-ruby"
+  spec.add_dependency "csv"
   spec.add_dependency "dry-cli"
   spec.add_dependency "dry-cli-autocomplete"
   spec.add_dependency "dry-inflector"

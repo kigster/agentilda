@@ -136,6 +136,7 @@ end
   resolver
   timeline
   resync
+  evals
   reporter
   tally
   board

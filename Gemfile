@@ -24,3 +24,7 @@ group :test do
   gem "rspec_junit_formatter" # JUnit XML for CircleCI store_test_results
   gem "simplecov"
 end
+
+group :evals do
+  gem "braintrust" # evals/resync_eval.rb logs experiments with it; the gem never loads it
+end
