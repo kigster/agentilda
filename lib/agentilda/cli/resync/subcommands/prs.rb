@@ -18,7 +18,6 @@ module Agentilda
           desc: "Strip every existing prefix, numbered ones included, and re-judge the lot"
         option :fake_github_path, aliases: ["--fake-github-path"],
           desc: "Read pull requests from a folder of markdown files instead of `gh`, and write retitles back into them"
-        option :model, desc: "Model for jabba-resolver, overriding its frontmatter"
         option :jobs, type: :integer, aliases: ["-j"],
           desc: "How many judgments run at once (default: cores minus two)"
 
@@ -66,7 +65,7 @@ module Agentilda
           root = File.dirname(tree.dir)
           resolver = Agentilda::Resolver.new(tree:, root:, model: options[:model],
             jobs: options[:jobs] || UI.default_jobs,
-            cache_dir: File.join(Agentilda::Resolver::CACHE_ROOT, github.slug, "verdicts"))
+            cache_dir: options.fetch(:cache, true) ? File.join(Agentilda::Resolver::CACHE_ROOT, github.slug, "verdicts") : nil)
           Agentilda::Resync::Prs.new(tree:, github:, resolver:, root:,
             adopt: options.fetch(:adopt, true), force: options.fetch(:force, false),
             state: options.fetch(:state, "all"))

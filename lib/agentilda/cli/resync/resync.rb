@@ -25,6 +25,7 @@ module Agentilda
           desc: "A folder of markdown files standing in for GitHub"
         option :model, desc: "Model for jabba-resolver, overriding its frontmatter"
         option :jobs, type: :integer, aliases: ["-j"], desc: "How many judgments run at once"
+        option :cache, type: :boolean, default: true, desc: "Reuse cached verdicts; --no-cache asks afresh"
 
         example [
           "                # preview all three steps",
@@ -34,7 +35,7 @@ module Agentilda
         # Flags each child understands. Anything else typed here is refused
         # by dry-cli before this runs.
         DIRS_OPTIONS = %i[dir quiet commit].freeze
-        PRS_OPTIONS = %i[dir quiet commit state adopt force fake_github_path model jobs].freeze
+        PRS_OPTIONS = %i[dir quiet commit state adopt force fake_github_path model jobs cache].freeze
 
         # @param options [Hash]
         # @return [void]
