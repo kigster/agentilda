@@ -1,0 +1,11 @@
+# Expected verdicts from jabba-resolver, by pull request number. Pull
+# requests absent here never reach the judge: the branch, the diff or the
+# developer-work patterns settle them first, or a numbered title skips them.
+9:  {plan: "006.00", confidence: 0.9, dev: false, reason: "Invoice PDFs are the billing spec's invoice generation."}
+10: {plan: "004.00", confidence: 0.92, dev: false, reason: "Gale warnings pushed to booked boats is the weather alerts spec."}
+11: {plan: "001.00", confidence: 0.85, dev: false, reason: "The tide chart is the tide table import spec's rendering."}
+12: {plan: null, confidence: 0.9, dev: true, reason: "Editor and linter settings implement no plan."}
+13: {plan: "006.00", confidence: 0.6, dev: false, reason: "Refunds straddle billing and booking; billing disclaims the refund policy."}
+14: {plan: null, confidence: 0.2, dev: false, reason: "No spec describes a staff logbook."}
+17: {plan: "007.00", confidence: 0.9, dev: false, reason: "Text-message confirmations are the SMS notifications spec."}
+18: {plan: "002.00", confidence: 0.85, dev: false, reason: "Imports bookings into the mooring booking system."}

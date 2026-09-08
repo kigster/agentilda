@@ -1,0 +1,13 @@
+number,before,after
+4,Add mooring booking form,[002.00] Add mooring booking form
+6,Refine the dashboard spec,[003.00] Refine the dashboard spec
+7,Bump rails from 8.1.1 to 8.1.2,[dev] Bump rails from 8.1.1 to 8.1.2
+9,Invoice PDF generation,[006.00] Invoice PDF generation
+10,[DEV.00] Weather alert push notifications,[004.00] Weather alert push notifications
+11,[none] Tide chart rendering tweaks,[001.00] Tide chart rendering tweaks
+12,Editor config and rubocop settings,[dev] Editor config and rubocop settings
+13,Harbour fee refunds,[006.01] Harbour fee refunds
+14,Keeper's logbook,[008.00] Keeper's logbook
+16,Offline tide cache,[005.00] Offline tide cache
+17,Add SMS notifications via Twilio,[007.00] Add SMS notifications via Twilio
+18,[XXX] Legacy bookings CSV import,[002.00] Legacy bookings CSV import
