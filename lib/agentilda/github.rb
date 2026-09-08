@@ -1,16 +1,23 @@
 # frozen_string_literal: true
 
 require "json"
+require "time"
 
 module Agentilda
   # The `gh` CLI, wrapped thinly.
   #
   # It is a seam rather than a convenience: every example in the suite injects
   # a double here, so nothing in the tests reaches the network or a real
-  # repository.
+  # repository. {FakeGitHub} stands in for it when a folder of markdown files
+  # is the repository, which is how the evals run.
   class GitHub
     # Fields asked of `gh pr list`.
-    FIELDS = %w[number title url headRefName files state isDraft mergedAt].freeze
+    #
+    # `files` carries a line count per path, which the plan-folder rule in
+    # `resync prs` weighs; `createdAt`, `mergedAt` and `headRefOid` place a
+    # pull request in time and key the resolver's cache; `body` is what the
+    # resolver judges from, fetched here once rather than per pull request.
+    FIELDS = %w[number title url headRefName files state isDraft createdAt mergedAt headRefOid body].freeze
 
     # @param command [TTY::Command] runner, injectable for tests
     # @param limit [Integer] how many pull requests to fetch
@@ -22,7 +29,9 @@ module Agentilda
     # Every pull request, normalised into plain hashes.
     #
     # @param state [String] "open", "closed", "merged" or "all"
-    # @return [Array<Hash>] `{number:, title:, url:, branch:, files:}`
+    # @return [Array<Hash>] `{number:, title:, url:, branch:, files:, changes:,
+    #   body:, state:, open:, created_at:, merged_at:, head_sha:}` — `files`
+    #   is the paths alone, `changes` the same paths with their line counts
     def pulls(state: "all")
       out = UI.spinning("Fetching pull requests from GitHub") {
         @command.run("gh", "pr", "list", "--state", state, "--limit", @limit.to_s,
@@ -36,19 +45,46 @@ module Agentilda
       # "bad output", sending you to look at the wrong thing entirely.
       raise Error, no_output_message if out.to_s.strip.empty?
 
-      JSON.parse(out).map do |pr|
-        {
-          number: pr["number"],
-          title: pr["title"].to_s,
-          url: pr["url"],
-          branch: pr["headRefName"].to_s,
-          files: Array(pr["files"]).map { |f| f["path"] }.compact,
-          state: self.class.state_label(pr),
-          open: pr["mergedAt"].nil? && pr["state"].to_s.upcase == "OPEN"
-        }
-      end
+      JSON.parse(out).map { |pr| self.class.normalize(pr) }
     rescue TTY::Command::ExitError, JSON::ParserError => e
       raise Error, "could not list pull requests via `gh`: #{e.message.lines.first.to_s.strip}"
+    end
+
+    # One decoded `gh` payload into the hash the rest of the tool reads.
+    #
+    # @param pr [Hash] as `gh pr list --json` returns it
+    # @return [Hash]
+    def self.normalize(pr)
+      changes = Array(pr["files"]).filter_map { |f|
+        next if f["path"].to_s.empty?
+
+        {path: f["path"].to_s, additions: f["additions"].to_i, deletions: f["deletions"].to_i}
+      }
+      {
+        number: pr["number"],
+        title: pr["title"].to_s,
+        url: pr["url"],
+        branch: pr["headRefName"].to_s,
+        files: changes.map { |c| c[:path] },
+        changes:,
+        body: pr["body"].to_s,
+        state: state_label(pr),
+        open: pr["mergedAt"].nil? && pr["state"].to_s.upcase == "OPEN",
+        created_at: time_or_nil(pr["createdAt"]),
+        merged_at: time_or_nil(pr["mergedAt"]),
+        head_sha: pr["headRefOid"].to_s
+      }
+    end
+
+    # @param value [String, Time, nil]
+    # @return [Time, nil]
+    def self.time_or_nil(value)
+      return value if value.is_a?(Time)
+      return nil if value.to_s.strip.empty?
+
+      Time.iso8601(value.to_s)
+    rescue ArgumentError
+      nil
     end
 
     # @return [String] the diagnosis for a silent `gh`
@@ -139,6 +175,17 @@ module Agentilda
       when "CLOSED" then "Closed 🔴"
       else "Unknown"
       end
+    end
+
+    # The owner and name of the repository `gh` is standing in, for keying a
+    # cache that must not mix two projects' verdicts.
+    #
+    # @return [String] e.g. "kigster-agentilda", or "local" outside GitHub
+    def slug
+      out = @command.run!("gh", "repo", "view", "--json", "nameWithOwner", "--jq", ".nameWithOwner").out.to_s.strip
+      out.empty? ? "local" : out.tr("/", "-")
+    rescue TTY::Command::ExitError
+      "local"
     end
 
     # Change a pull request's title.

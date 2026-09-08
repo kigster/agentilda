@@ -36,13 +36,16 @@ module Agentilda
   # @!attribute [r] starts_as
   #   @return [Symbol, nil] the state the harness renames the plan into the
   #     moment this agent is dispatched, where the topology permits it
+  # @!attribute [r] budget
+  #   @return [Float, nil] dollars one invocation may spend, passed to
+  #     `claude --max-budget-usd`; nil is uncapped
   # @!attribute [r] holds_at
   #   @return [Symbol, nil] the state the plan takes when this agent completes
   #     while its partner on the same plan is still running
   Agent = Data.define(:name, :description, :handles, :advances_to, :model,
     :allowed_tools, :may, :network, :timeout, :prompt, :path,
-    :ledger, :rounds, :effort, :starts_as, :holds_at) do
-    def initialize(ledger: [], rounds: 1, effort: nil, starts_as: nil, holds_at: nil, **rest) = super
+    :ledger, :rounds, :effort, :starts_as, :holds_at, :budget) do
+    def initialize(ledger: [], rounds: 1, effort: nil, starts_as: nil, holds_at: nil, budget: nil, **rest) = super
 
     # @return [Boolean] whether this agent changes anything on disk
     def read_only? = advances_to.nil?
@@ -161,7 +164,8 @@ module Agentilda
         rounds: meta["rounds"].to_i.clamp(1, Agent::MAX_ROUNDS),
         effort: meta["effort"]&.to_s,
         starts_as: symbol_or_nil(meta["starts_as"]),
-        holds_at: symbol_or_nil(meta["holds_at"])
+        holds_at: symbol_or_nil(meta["holds_at"]),
+        budget: meta["budget"]&.to_f&.then { |b| b.positive? ? b : nil }
       )
     end
 

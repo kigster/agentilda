@@ -19,7 +19,10 @@ RSpec.describe Agentilda::GitHub do
         "title" => "Send transactional mail through Resend",
         "url" => "https://github.com/example/repo/pull/92",
         "headRefName" => "kig/018.01-resend",
-        "files" => [{"path" => ".plans/018.01-🟡--deploy/plan.md"}, {"path" => "rails/Gemfile"}]
+        "files" => [{"path" => ".plans/018.01-🟡--deploy/plan.md", "additions" => 12, "deletions" => 2}, {"path" => "rails/Gemfile"}],
+        "createdAt" => "2026-08-01T10:00:00Z",
+        "headRefOid" => "0123456789abcdef",
+        "body" => "Sends the mail."
       }
     ])
   end
@@ -32,7 +35,7 @@ RSpec.describe Agentilda::GitHub do
 
       expect(command).to have_received(:run).with(
         "gh", "pr", "list", "--state", "all", "--limit", "200",
-        "--json", "number,title,url,headRefName,files,state,isDraft,mergedAt"
+        "--json", "number,title,url,headRefName,files,state,isDraft,createdAt,mergedAt,headRefOid,body"
       )
     end
 
@@ -44,16 +47,26 @@ RSpec.describe Agentilda::GitHub do
       )
     end
 
-    it "normalises headRefName to :branch and flattens files to paths" do
+    it "normalises headRefName to :branch, files to paths, and keeps the line counts beside them" do
       expect(github.pulls.first).to eq(
         number: 92,
         title: "Send transactional mail through Resend",
         url: "https://github.com/example/repo/pull/92",
         branch: "kig/018.01-resend",
         files: [".plans/018.01-🟡--deploy/plan.md", "rails/Gemfile"],
+        changes: [{path: ".plans/018.01-🟡--deploy/plan.md", additions: 12, deletions: 2},
+          {path: "rails/Gemfile", additions: 0, deletions: 0}],
+        body: "Sends the mail.",
         state: "Unknown",
-        open: false
+        open: false,
+        created_at: Time.utc(2026, 8, 1, 10),
+        merged_at: nil,
+        head_sha: "0123456789abcdef"
       )
+    end
+
+    it "reads an unparseable timestamp as none rather than raising" do
+      expect(described_class.normalize("number" => 1, "mergedAt" => "yesterday")[:merged_at]).to be_nil
     end
 
     context "when a pull request has no files attached" do
