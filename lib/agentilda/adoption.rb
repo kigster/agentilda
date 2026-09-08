@@ -3,31 +3,32 @@
 module Agentilda
   # Gives a plan folder to every pull request that has no plan to point at.
   #
-  # `resync prs` can resolve most pull requests from their branch or their
-  # diff. What it cannot resolve it used to flag for a human — "diff touches
-  # 021.00, 022.00, 024.00 and none is obviously primary" — and stop. That is
-  # honest but not useful: the work exists, it is unspecified, and leaving it
-  # unnumbered means it never appears in the index at all.
+  # `resync prs` files most pull requests under a plan that already exists.
+  # Two kinds cannot be filed that way, and both are given a folder rather
+  # than a shrug, because work that appears in no folder appears in no index:
   #
-  # So an orphan is adopted instead. It gets a retroactive plan of its own,
-  # numbered in the gap after the furthest plan it can see, holding the pull
-  # request that produced it.
+  #   - **Timeline placements.** The resolver named a plan but not confidently.
+  #     The pull request goes *beside* that plan as its next `.MM` sibling,
+  #     which is what the decimal has always meant — work in the gap after
+  #     NNN, documented afterwards.
+  #   - **Stragglers.** Nothing in the tree describes the work at all. The
+  #     pull request opens a new whole number at the end of the stack.
+  #
+  # A minted folder holds `pull-requests.md`, and `spec.md` and `plan.md`
+  # both carrying the pull request's own description. No agent is involved:
+  # the description is the only account of the work that exists, and copying
+  # it is faster and more honest than paraphrasing it.
   #
   # == Why the numbering is allocated serially
   #
   # The obvious parallel design — every worker reads the highest number and
-  # adds `.01` — is deterministic but not unique, and the collision is the
-  # common case rather than the rare one. Fifteen open pull requests branched
-  # off the same main all see the same highest number and all compute the same
-  # slot. Determinism is not the property that matters here; distinctness is.
-  #
-  # So the pipeline is **gather in parallel, allocate serially, apply in
-  # parallel**. The allocation is pure arithmetic over an array that is
-  # already in memory, so the serial section costs microseconds; the two
-  # expensive phases — reading each branch and writing each folder — keep the
-  # whole fan-out. And because the slots are handed out before any worker
-  # starts, no worker can want a number another worker holds: no locks, no
-  # retries, and the same input produces the same numbers every run.
+  # adds one — is deterministic but not unique, and the collision is the
+  # common case rather than the rare one. Fifteen stragglers all see the same
+  # highest number and all compute the same slot. Determinism is not the
+  # property that matters here; distinctness is. So slots are handed out in
+  # one serial pass over an array already in memory, and the folders are
+  # written in parallel afterwards, each worker owning a number nobody else
+  # can want.
   class Adoption
     # One pull request and the plan it is being given.
     #
@@ -35,11 +36,11 @@ module Agentilda
     #   @return [Hash] as returned by {GitHub#pulls}
     # @!attribute [r] ordinal
     #   @return [Agentilda::Ordinal] the slot it was allocated
-    # @!attribute [r] major
-    #   @return [Integer] the furthest plan its branch or diff could see
+    # @!attribute [r] kind
+    #   @return [Symbol] :timeline or :straggler
     # @!attribute [r] path
     #   @return [String, nil] the folder, once created
-    Adoptee = Data.define(:pull, :ordinal, :major, :path) do
+    Adoptee = Data.define(:pull, :ordinal, :kind, :path) do
       # @return [String] the folder name this pull request earns
       def dirname = Agentilda.plan_dirname(ordinal, STATUS_BY_KEY.fetch(:retroactive), slug)
 
@@ -48,47 +49,41 @@ module Agentilda
       # @return [String]
       def slug = Creator.slugify(pull[:title].to_s.sub(/\A\[[^\]]+\](?:\([A-Z]\))?\s*/, ""))
 
+      # @return [Boolean]
+      def straggler? = kind == :straggler
+
       # @return [String] a single auditable line
       def to_s = "##{pull[:number]} → #{dirname}"
     end
 
     # @param tree [Agentilda::Tree]
-    # @param github [Agentilda::GitHub]
-    # @param root [String] repository root, for reading branches
-    # @param jobs [Integer] workers for the two parallel phases
-    def initialize(tree:, github: GitHub.new, root: nil, jobs: UI.default_jobs)
+    # @param jobs [Integer] workers for writing the folders
+    def initialize(tree:, jobs: UI.default_jobs)
       @tree = tree
-      @github = github
-      @root = root || File.dirname(tree.dir)
       @jobs = jobs
     end
 
     # @return [Agentilda::Tree]
     attr_reader :tree
 
-    # @return [Agentilda::GitHub]
-    attr_reader :github
-
-    # @return [String]
-    attr_reader :root
-
     # @return [Integer]
     attr_reader :jobs
 
-    # Work out what each orphan would be given, without creating anything.
+    # Work out what each pull request would be given, without creating anything.
     #
-    # @param pulls [Array<Hash>] the orphans, from {Resync::Prs}
+    # @param placements [Array<Array(Hash, Integer, nil)>] each pull request
+    #   with the major it lands after, or nil for a straggler
     # @return [Array<Agentilda::Adoption::Adoptee>] in pull request order
-    def plan(pulls)
-      allocate(gather(pulls))
+    def plan(placements)
+      allocate(placements.sort_by { |pull, _| pull[:number].to_i })
     end
 
-    # Adopt every orphan: create its folder and record its pull request.
+    # Adopt every pull request: create its folder and write its documents.
     #
-    # @param pulls [Array<Hash>]
+    # @param placements [Array<Array(Hash, Integer, nil)>]
     # @return [Array<Agentilda::Adoption::Adoptee>] with `path` filled in
-    def call(pulls)
-      adoptees = plan(pulls)
+    def call(placements)
+      adoptees = plan(placements)
       return adoptees if adoptees.empty?
 
       created = Parallel.map(adoptees, in_threads: jobs) { |adoptee| adopt(adoptee) }
@@ -98,70 +93,34 @@ module Agentilda
 
     private
 
-    # Phase one, in parallel: ask each pull request's branch how far the
-    # sequence had got when the work started. Branches are not all rebased
-    # onto the same main, so this is per-branch rather than tree-wide, and it
-    # is a network-free `ls-tree` per pull request.
+    # Serial, and deliberately so: minors continue past every slot the tree
+    # holds under each major, majors continue past the furthest plan, and
+    # both advance in pull request order so the numbers follow the order the
+    # work was opened in.
     #
-    # @param pulls [Array<Hash>]
-    # @return [Array<Array(Hash, Integer)>] each pull with its major
-    def gather(pulls)
-      ordered = pulls.sort_by { |pull| pull[:number].to_i }
-
-      Parallel.map(ordered, in_threads: jobs) { |pull| [pull, major_for(pull)] }
-    end
-
-    # The furthest whole plan this pull request can see: on its own branch
-    # first, then whatever it touched, then the tree we are standing in. A
-    # pull request whose branch is long gone still has a diff.
-    #
-    # @param pull [Hash]
-    # @return [Integer]
-    def major_for(pull)
-      candidates = Agentilda.plans_on_ref(root, pull[:branch].to_s)
-      candidates = touched(pull) if candidates.empty?
-      candidates = tree.subjects.map { |s| s.feature.ordinal } if candidates.empty?
-
-      candidates.map(&:major).max.to_i
-    end
-
-    # @param pull [Hash]
-    # @return [Array<Agentilda::Ordinal>]
-    def touched(pull)
-      Array(pull[:files]).filter_map { |path|
-        parts = path.to_s.split("/")
-        index = parts.index(Agentilda::PLANS_DIR)
-        index && parts[index + 1] && Ordinal.from_dirname(parts[index + 1])
-      }.uniq
-    end
-
-    # Phase two, serial and deliberately so. Minors are handed out per major,
-    # continuing past every slot the tree already holds, in ascending pull
-    # request order — so the numbers follow the order the work was opened in,
-    # and two pull requests cannot be given the same one.
-    #
-    # @param gathered [Array<Array(Hash, Integer)>]
+    # @param placements [Array<Array(Hash, Integer, nil)>]
     # @return [Array<Agentilda::Adoption::Adoptee>]
-    def allocate(gathered)
-      taken = Hash.new { |h, major| h[major] = minors_taken(major) }
+    def allocate(placements)
+      taken = tree.ordinals.dup
 
-      gathered.filter_map do |pull, major|
-        minor = ((taken[major].max || 0) + 1)
-        next if minor > Ordinal::MAX_MINOR
-
-        taken[major] << minor
-        Adoptee.new(pull:, major:, ordinal: Ordinal.new(major:, minor:), path: nil)
+      placements.filter_map do |pull, major|
+        ordinal =
+          if major.nil?
+            Ordinal.next_major(taken)
+          else
+            begin
+              Ordinal.next_minor(taken, major:)
+            rescue Agentilda::Error
+              next
+            end
+          end
+        taken << ordinal
+        Adoptee.new(pull:, ordinal:, kind: major.nil? ? :straggler : :timeline, path: nil)
       end
     end
 
-    # @param major [Integer]
-    # @return [Array<Integer>] minors already used under this major
-    def minors_taken(major)
-      tree.subjects.map { |s| s.feature.ordinal }.select { |o| o.major == major }.map(&:minor)
-    end
-
-    # Phase three, in parallel: each worker owns a number nobody else can
-    # want, so it can create its folder without coordinating with anyone.
+    # Each worker owns a number nobody else can want, so it creates its
+    # folder without coordinating with anyone.
     #
     # @param adoptee [Agentilda::Adoption::Adoptee]
     # @return [Agentilda::Adoption::Adoptee]
@@ -169,24 +128,47 @@ module Agentilda
       path = File.join(tree.dir, adoptee.dirname)
       return adoptee if File.exist?(path)
 
+      pull = adoptee.pull
       FileUtils.mkdir_p(path)
-      File.write(File.join(path, PullRequests::FILENAME),
-        PullRequests.render([pull_request_for(adoptee)]))
+      File.write(File.join(path, PullRequests::FILENAME), PullRequests.render([row_for(pull)]))
+      %w[spec.md plan.md].each do |name|
+        File.write(File.join(path, name), document(name, pull))
+      end
 
       adoptee.with(path:)
     end
 
-    # The body is what a specification would be written from, so it is worth
-    # a second request. A failure here costs the description, not the folder.
-    #
-    # @param adoptee [Agentilda::Adoption::Adoptee]
-    # @return [Hash]
-    def pull_request_for(adoptee)
-      pull = adoptee.pull
-      github.pull_request(pull[:number].to_s)
-    rescue Agentilda::Error
+    # @param pull [Hash]
+    # @return [Hash] the row `pull-requests.md` renders
+    def row_for(pull)
       {number: pull[:number], title: pull[:title], url: pull[:url],
-       state: pull[:state] || "Unknown", body: ""}
+       state: pull[:state] || "Unknown", body: pull[:body].to_s}
+    end
+
+    # The pull request's own words, under a heading that says where they came
+    # from. Written to both documents so the folder is never half-explained.
+    #
+    # @param name [String] "spec.md" or "plan.md"
+    # @param pull [Hash]
+    # @return [String]
+    def document(name, pull)
+      title = pull[:title].to_s.sub(/\A\[[^\]]+\](?:\([A-Z]\))?\s*/, "")
+      body = pull[:body].to_s.strip
+      body = "_No description was written on the pull request._" if body.empty?
+      heading = (name == "spec.md") ? "Goal" : "Plan"
+
+      <<~MARKDOWN
+        # #{title}
+
+        > [!NOTE]
+        > Written by `agentilda resync prs` from pull request ##{pull[:number]},
+        > which implemented no plan in this tree. The text below is the pull
+        > request's own description, copied rather than paraphrased.
+
+        ## #{heading}
+
+        #{body}
+      MARKDOWN
     end
   end
 end
