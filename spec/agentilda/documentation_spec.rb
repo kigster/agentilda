@@ -63,11 +63,12 @@ RSpec.describe Agentilda::Documentation do
       expect(document).to match(/costs something/i)
     end
 
-    it "documents the no-plan prefix and that the tool never asserts it alone" do
+    it "documents the no-plan prefix and that the tool never writes it on a failed lookup" do
       aggregate_failures do
         expect(document).to include("[#{Agentilda::NO_PLAN_PREFIX}]")
-        expect(document).to include("assumed")
-        expect(document).to match(/refuses rather than guessing/i)
+        expect(document).to include("jabba-resolver")
+        expect(document).to match(/nothing is ever guessed/i)
+        expect(document).to match(/not marked `dev`/i)
       end
     end
 

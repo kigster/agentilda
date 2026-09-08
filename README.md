@@ -204,7 +204,8 @@ agentilda create --from notes/dsl.md   # named by the file's frontmatter title; 
 agentilda create --after 002 k1 sync   # 002.01-⬜️--k1-sync (retroactive)
 agentilda list-plans                   # the table; exits 1 if a name lies
 agentilda resync dirs                  # folder emoji vs folder contents
-agentilda resync prs                   # [NNN.MM] prefixes on PR titles
+agentilda resync prs                   # [NNN.MM] prefixes on PR titles, judged by jabba-resolver
+agentilda resync --commit              # dirs, then prs, then dirs again
 agentilda mail send --plan 003 --from luke-backend --to rey-frontend "…"   # leave a message for the other half
 agentilda mail read --plan 003 --for rey-frontend                          # what is waiting, numbered
 agentilda linear import --prefix TAX   # the plans, as Linear projects and issues
@@ -223,9 +224,22 @@ It will never reclassify between ⭕️ Blocked and 🅱️ Product Blocked. Tho
 
 ### `resync prs`
 
-Reads the branch name first, then the diff, and only when the diff touches exactly one plan. Anything ambiguous is **reported and never edited**, even with `--commit`. A pull request that resolves to no plan is proposed as `[dev]` and marked *assumed*, because asserting "this implements no specification" is the author's call, not the tool's. Where even that cannot be asserted the marker is `[none]`, which claims nothing and leaves the question open.
+Files every pull request under the plan it implements. Two passes:
 
-Requires `gh`. If `gh` prints nothing while exiting zero — the signature of an invalid `GH_TOKEN` shadowing a working keyring login — the tool says so rather than reporting an empty repository.
+1. **Arithmetic, free.** The branch name (`kig/018.01-verify` names `018.01`); then the diff, when at least 80% of its changed lines sit under one `.plans/NNN.MM/` folder; then the developer-work patterns (a dependency bump, a CI change), which give `[dev]`.
+1. **Judgment.** What survives goes to `jabba-resolver`, one `claude -p` process per pull request with the whole plan index in its prompt, answering through `--json-schema` with a plan, a confidence, a reason and a developer-work flag. A confident verdict (0.8 and up) files the pull request. A weak one (0.5 to 0.8) places it **beside** the plan it named, as the next `NNN.MM` sibling at the point in time its merge says it happened. No plan at all opens a new number at the end of the stack. Both of the last two mint a folder whose `spec.md` and `plan.md` carry the pull request's own description.
+
+Titles already wearing `[dev]`, `[DEV.00]`, `[none]` or `[XXX]` are re-judged: every one of those was written by this tool without looking. A numbered title is left alone unless `--force`, which strips every prefix and runs the lot — there is no seniority between the old algorithm's answer and the new one.
+
+**A dry run consults the model.** It runs every step, caches the verdicts under `~/.cache/agentilda/<repo>/verdicts/`, prints the full proposed outcome with the tokens and dollars spent, and changes nothing. The `--commit` that follows reads the cache and asks nothing new. `--no-adopt` flags what would have minted a folder instead of minting it.
+
+`--fake-github-path DIR` reads pull requests from `DIR/<number>.md` files — frontmatter for the facts, the body for the description — and writes retitles back into them. That is how the evals run.
+
+Requires `gh`, and a `claude` login the shell can reach. If `gh` prints nothing while exiting zero — the signature of an invalid `GH_TOKEN` shadowing a working keyring login — the tool says so rather than reporting an empty repository; `claude` failing the same way is reported as a verdict that never arrived, and the pull request is filed as a straggler rather than guessed at.
+
+### `resync`
+
+The bare command runs `dirs`, then `prs`, then `dirs` again, and takes the union of both subcommands' flags. The second `dirs` exists because `prs` rewrites `pull-requests.md`, and a folder's state is derived from the files it holds. If the first `dirs` refuses, nothing else runs.
 
 ### `linear import`
 

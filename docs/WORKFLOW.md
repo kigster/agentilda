@@ -265,7 +265,7 @@ A pull request that implements a plan says so in its title:
 
 `pull-requests.md` is generated from these titles, so the prefix is the join key between a pull request and a plan, not decoration. Name branches `<user>/NNN.MM-slug` and the number carries itself from branch creation through to a merged, squashed pull request with nobody having to remember it.
 
-`agentilda resync prs` fills in missing prefixes. It reads the branch name first and falls back to the diff only when that touches exactly one plan folder. **It refuses rather than guessing.** A wrong number does not announce itself: it files the work under a plan that did not do it, and leaves the plan that did looking untouched.
+`agentilda resync prs` fills in missing prefixes. It reads the branch name first, then the diff when most of its changed lines sit under one plan folder, and only then asks `jabba-resolver` — a model reading the pull request against every plan's spec — for a verdict with a confidence. A confident verdict files the pull request; a weak one places it beside the plan it named, as a `.MM` sibling at the point in time it merged; none at all opens a new plan at the end of the stack. **Nothing is ever guessed.** A wrong number does not announce itself: it files the work under a plan that did not do it, and leaves the plan that did looking untouched.
 
 ### `[dev]` when there is no plan
 
@@ -277,7 +277,7 @@ Not every pull request implements a feature. Dependency bumps, CI configuration,
 
 `dev` means **"this deliberately belongs to no specification"**, and it exists so that "no plan" is *asserted* rather than merely absent. A title with no prefix is ambiguous between "no plan applies" and "nobody looked".
 
-`resync prs` will propose it, but marks every such title as **assumed** and never applies one without you seeing it. Emitting it silently on a failed lookup would launder "I could not tell" into "there is definitely none", which is the same lie as guessing a number, told in the other direction.
+`resync prs` writes it only when the title or the paths say so — a dependency bump, a CI change — or when `jabba-resolver` says so having read the pull request. A pull request nothing can place is not marked `dev`: it gets a plan folder of its own. Emitting `dev` on a failed lookup would launder "I could not tell" into "there is definitely none", which is the same lie as guessing a number, told in the other direction.
 
 ### What does not deserve a retroactive plan
 
