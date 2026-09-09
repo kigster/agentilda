@@ -30,8 +30,8 @@ RSpec.describe Agentilda::Index, :tree do
     end
 
     # The whole reason this is generated rather than written.
-    it "percent-encodes the emoji in a folder name, which a raw href breaks on" do
-      expect(document).to include('href="001.00-%E2%9A%AA%EF%B8%8F--initial-spec/spec.md"')
+    it "percent-encodes the emoji, spaces and arrow in a folder name, which a raw href breaks on" do
+      expect(document).to include('href="001.00-%E2%9A%AA%EF%B8%8F%20%E2%86%92%20initial-spec/spec.md"')
     end
 
     it "links every pull request a plan records" do

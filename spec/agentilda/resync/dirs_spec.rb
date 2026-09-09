@@ -37,7 +37,7 @@ RSpec.describe Agentilda::Resync::Dirs, :tree do
       it "skips it however wrong its name is" do
         changes = described_class.new(tree: Agentilda::Tree.new(dir: plans_root), except: ["001.00"]).plan
 
-        expect(changes.map(&:dirname)).to eq(["002.00-⚪️--second"])
+        expect(changes.map(&:dirname)).to eq(["002.00-⚪️ → second"])
       end
     end
 
@@ -53,7 +53,7 @@ RSpec.describe Agentilda::Resync::Dirs, :tree do
       end
 
       it "keeps the number and the slug, changing only the emoji" do
-        expect(File.basename(changes.first.target)).to eq("001.00-⭐️--initial-spec")
+        expect(File.basename(changes.first.target)).to eq("001.00-⭐️ → initial-spec")
       end
     end
 
@@ -67,8 +67,8 @@ RSpec.describe Agentilda::Resync::Dirs, :tree do
         end
       end
 
-      it "pads the number, leaving the emoji and the slug alone" do
-        expect(File.basename(changes.first.target)).to eq("018.00-⚪️--verify-returns")
+      it "pads the number and migrates the separator, leaving the emoji and the slug alone" do
+        expect(File.basename(changes.first.target)).to eq("018.00-⚪️ → verify-returns")
       end
 
       it "does not pretend the state changed" do
@@ -82,7 +82,7 @@ RSpec.describe Agentilda::Resync::Dirs, :tree do
       it "renames it on --commit" do
         resync.call(commit: true)
 
-        expect(names).to eq(["018.00-⚪️--verify-returns"])
+        expect(names).to eq(["018.00-⚪️ → verify-returns"])
       end
     end
 
@@ -94,12 +94,13 @@ RSpec.describe Agentilda::Resync::Dirs, :tree do
       end
 
       it "pads both halves" do
-        expect(File.basename(changes.first.target)).to eq("018.01-⚪️--schedule-k1")
+        expect(File.basename(changes.first.target)).to eq("018.01-⚪️ → schedule-k1")
       end
     end
 
-    # Both defects at once. The state change is the more consequential fact,
-    # so that is what the reason names.
+    # Both defects at once, repaired as two renames in order: the spelling
+    # first, under the status the folder still claims, and only then the
+    # status the contents justify — one auditable report line per fact.
     context "when a folder is both unpadded and wearing the wrong emoji" do
       let!(:tree) do
         plans do |t|
@@ -107,12 +108,46 @@ RSpec.describe Agentilda::Resync::Dirs, :tree do
         end
       end
 
-      it "repairs the number and the emoji in one move" do
-        expect(File.basename(changes.first.target)).to eq("007.00-⭐️--tenancy")
+      it "migrates the spelling first, then the status" do
+        expect(changes.map { |c| File.basename(c.target) })
+          .to eq(["007.00-⚪️ → tenancy", "007.00-⭐️ → tenancy"])
       end
 
-      it "reports the state change rather than the padding" do
-        expect(changes.first.reason).to include("contents now justify")
+      it "chains the status rename off the spelling rename, not the original path" do
+        expect(changes.last.source).to eq(changes.first.target)
+      end
+
+      it "gives each step its own reason" do
+        expect(changes.first.reason).to eq("007 is not padded to 007.00")
+        expect(changes.last.reason).to include("contents now justify")
+      end
+
+      it "lands on the final name when committed, with no orphan in between" do
+        resync.call(commit: true)
+
+        expect(names).to eq(["007.00-⭐️ → tenancy"])
+      end
+    end
+
+    # The migration path for a tree written entirely in the `--`-era
+    # spelling: the status is right, so the spelling rename is the only one.
+    context "when a folder's only defect is the old double-dash separator" do
+      let!(:tree) do
+        plans do |t|
+          t.raw "004.00-⚪️--legacy", files: {"spec.md" => spec_body}
+        end
+      end
+
+      it "proposes exactly one rename, to the arrow spelling" do
+        expect(changes.map { |c| File.basename(c.target) }).to eq(["004.00-⚪️ → legacy"])
+      end
+
+      it "does not pretend the state changed" do
+        expect(changes.map { |c| [c.from, c.to] }).to eq([[:new, :new]])
+      end
+
+      it "names the spelling as the reason" do
+        expect(changes.first.reason).to eq("name is not in canonical NNN.MM-<emoji> → <slug> form")
       end
     end
 
@@ -127,8 +162,10 @@ RSpec.describe Agentilda::Resync::Dirs, :tree do
         end
       end
 
+      # The unpadded twin sorts first and claims the canonical name; the
+      # padded twin's own migration then finds it taken.
       it "refuses rather than silently leaving the folder misnamed" do
-        expect { resync.call(commit: true) }.to raise_error(Agentilda::Error, /005-⚪️--ledger.*already exists/)
+        expect { resync.call(commit: true) }.to raise_error(Agentilda::Error, /005\.00-⚪️--ledger.*already exists/)
       end
     end
 
@@ -210,19 +247,19 @@ RSpec.describe Agentilda::Resync::Dirs, :tree do
     it "changes nothing without an explicit commit" do
       resync.call
 
-      expect(names).to eq(["001.00-⚪️--initial-spec"])
+      expect(names).to eq(["001.00-⚪️ → initial-spec"])
     end
 
     it "renames the folder when committed" do
       resync.call(commit: true)
 
-      expect(names).to eq(["001.00-⭐️--initial-spec"])
+      expect(names).to eq(["001.00-⭐️ → initial-spec"])
     end
 
     it "preserves the folder's contents across the rename" do
       resync.call(commit: true)
 
-      expect(File.exist?(File.join(plans_root, "001.00-⭐️--initial-spec", "plan.md"))).to be(true)
+      expect(File.exist?(File.join(plans_root, "001.00-⭐️ → initial-spec", "plan.md"))).to be(true)
     end
 
     it "reports what it did" do

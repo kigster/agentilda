@@ -15,15 +15,21 @@ module Agentilda
     #   folder whose status already holds is left alone, which is what stops
     #   ⭕️ Blocked and 🅱️ Product Blocked — deliberately identical invariants,
     #   distinguished only by the name — from collapsing into one.
-    # - **The number is not in `NNN.MM` form** — a folder written `018-⚪️--foo`
-    #   before the padding rule, or `18.1-⚪️--foo` by hand. These read fine and
-    #   sort wrong, which is the whole reason the rule exists: `018.09` <
-    #   `018.1` < `018.10` puts a single mixed-width folder in the middle of
-    #   the range. Both are renamed to `018.00-⚪️--foo` and `018.01-⚪️--foo`.
+    # - **The spelling is not canonical** — a folder written `018-⚪️--foo`
+    #   before the `NNN.MM` padding rule or the ` → ` separator, or
+    #   `18.1-⚪️--foo` by hand. Unpadded numbers read fine and sort wrong —
+    #   `018.09` < `018.1` < `018.10` puts a single mixed-width folder in the
+    #   middle of the range. Both are renamed, to `018.00-⚪️ → foo` and
+    #   `018.01-⚪️ → foo`.
     #
-    # The two cases collapse into one rule — **rename any folder that is not
-    # already named what it should be named** — which is why the emoji fix and
-    # the renumber cannot disagree about the target.
+    # The repairs are applied in that order reversed, as **up to two renames
+    # per folder**: first the spelling, under the status the folder already
+    # claims — which is how a `--`-era folder migrates to the ` → ` form —
+    # and only then the status its contents justify. Both renames aim at
+    # {Feature.plan_dirname}, so they cannot disagree about the final name;
+    # splitting them keeps each auditable on its own, instead of one report
+    # line where a spelling migration also appears to have opinions about
+    # the state of the work.
     class Dirs
       # A proposed rename.
       #
@@ -40,8 +46,9 @@ module Agentilda
       # @!attribute [r] reason
       #   @return [String] why the current name is wrong
       Change = Data.define(:dirname, :from, :to, :source, :target, :reason) do
-        # @return [String] a single auditable line
-        def to_s = "#{dirname} → #{File.basename(target)}  (#{reason})"
+        # @return [String] a single auditable line — `⇒` rather than `→`,
+        #   which the folder names themselves now contain
+        def to_s = "#{dirname} ⇒ #{File.basename(target)}  (#{reason})"
       end
 
       # The state a folder's contents justify, or the one it claims when
@@ -65,12 +72,13 @@ module Agentilda
       # @return [Agentilda::Tree]
       attr_reader :tree
 
-      # What would change, without changing anything.
+      # What would change, without changing anything. A folder can appear
+      # twice: its spelling migration first, then its status correction.
       #
       # @return [Array<Agentilda::Resync::Dirs::Change>]
       def plan
-        tree.subjects.filter_map do |subject|
-          change_for(subject) unless @except.include?(subject.feature.ordinal.to_s)
+        tree.subjects.flat_map do |subject|
+          @except.include?(subject.feature.ordinal.to_s) ? [] : changes_for(subject)
         end
       end
 
@@ -88,41 +96,64 @@ module Agentilda
       private
 
       # A folder moves when the name it has is not the name it should have.
-      # {target} says what that name is.
+      # {target} says what that name is; this says how to get there, as up
+      # to two renames applied in order. The status rename starts from where
+      # the spelling rename left the folder, not from where it stands now,
+      # so committing the steps sequentially never renames a path that has
+      # already moved out from under it.
       #
       # @param subject [Agentilda::Subject]
-      # @return [Agentilda::Resync::Dirs::Change, nil]
-      def change_for(subject)
+      # @return [Array<Agentilda::Resync::Dirs::Change>] empty when the name
+      #   is already right
+      def changes_for(subject)
         feature = subject.feature
         fit = self.class.target(subject)
-        dirname = feature.dirname_as(fit)
-        return nil if dirname == feature.dirname
+        steps = []
 
+        spelled = feature.dirname_as(subject.status)
+        if spelled != feature.dirname
+          steps << step(feature, from: subject.status, to: subject.status,
+            source: feature.path, reason: spelling_reason(feature))
+        end
+
+        if fit.key != subject.status.key
+          source = steps.empty? ? feature.path : steps.last.target
+          steps << step(feature, from: subject.status, to: fit, source:,
+            reason: subject.violation || "contents now justify #{fit.label}")
+        end
+
+        steps
+      end
+
+      # @param feature [Agentilda::Feature]
+      # @param from [Agentilda::Status]
+      # @param to [Agentilda::Status]
+      # @param source [String] absolute path the rename starts from
+      # @param reason [String]
+      # @return [Agentilda::Resync::Dirs::Change]
+      def step(feature, from:, to:, source:, reason:)
         Change.new(
-          dirname: feature.dirname,
-          from: subject.status.key,
-          to: fit.key,
-          source: feature.path,
-          target: File.join(File.dirname(feature.path), dirname),
-          reason: reason_for(subject, fit)
+          dirname: File.basename(source),
+          from: from.key,
+          to: to.key,
+          source:,
+          target: File.join(File.dirname(feature.path), feature.dirname_as(to)),
+          reason:
         )
       end
 
-      # @param subject [Agentilda::Subject]
-      # @param fit [Agentilda::Status] the state the folder is moving to
-      # @return [String] why the current name is wrong
-      def reason_for(subject, fit)
-        feature = subject.feature
-        return subject.violation || "contents now justify #{fit.label}" unless fit.key == subject.status.key
+      # @param feature [Agentilda::Feature]
+      # @return [String] why the spelling is wrong, status aside
+      def spelling_reason(feature)
         return "#{feature.dirname_ordinal} is not padded to #{feature.ordinal}" unless feature.padded?
 
-        "name is not in canonical NNN.MM-<emoji>--<slug> form"
+        "name is not in canonical NNN.MM-<emoji> → <slug> form"
       end
 
       # A rename that finds its target occupied has not happened, and saying
       # nothing about it would leave the folder misnamed with a report
       # claiming otherwise. Two folders can want the same canonical name —
-      # `018-⚪️--foo` and `018.00-⚪️--foo` are the same plan written twice.
+      # `018-⚪️--foo` and `018.00-⚪️ → foo` are the same plan written twice.
       #
       # @param change [Agentilda::Resync::Dirs::Change]
       # @return [void]

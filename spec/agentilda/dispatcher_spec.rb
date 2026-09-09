@@ -94,7 +94,7 @@ RSpec.describe Agentilda::Dispatcher, :tree do
 
       aggregate_failures do
         expect(calls.map(&:first)).to contain_exactly("luke-backend", "rey-frontend")
-        expect(Dir.children(plans_root)).to include("001.00-⚪️--already-planned")
+        expect(Dir.children(plans_root)).to include("001.00-⚪️ → already-planned")
       end
     end
   end

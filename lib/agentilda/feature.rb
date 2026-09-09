@@ -44,21 +44,22 @@ module Agentilda
     }.join(" ")
   end
 
-  # The one place a plan folder's name is spelled out: `NNN.MM-<emoji>--<slug>`.
+  # The one place a plan folder's name is spelled out: `NNN.MM-<emoji> → <slug>`.
   #
-  # The double dash after the emoji is deliberate: an emoji renders two cells
-  # wide and visually swallows a single dash beside it, so `🔎-refactor` reads
+  # The spaced arrow after the emoji is deliberate: an emoji renders two cells
+  # wide and visually swallows a bare dash beside it, so `🔎-refactor` reads
   # as if the emoji and the slug were touching. Everything that mints or
   # renames a folder goes through here; {Feature.parse} accepts the older
-  # single-dash spelling too, and `resync dirs` normalises it on contact.
+  # `--` and single-dash spellings too, and `resync dirs` migrates them on
+  # contact.
   #
   # @param ordinal [Agentilda::Ordinal, String]
   # @param status [Agentilda::Status]
   # @param slug [String]
   # @return [String]
-  def self.plan_dirname(ordinal, status, slug) = "#{ordinal}-#{status.emoji}--#{slug}"
+  def self.plan_dirname(ordinal, status, slug) = "#{ordinal}-#{status.emoji} → #{slug}"
 
-  # One `NNN.MM-<emoji>--<slug>` folder, decoded.
+  # One `NNN.MM-<emoji> → <slug>` folder, decoded.
   #
   # @!attribute [r] ordinal
   #   @return [Agentilda::Ordinal]
@@ -82,13 +83,14 @@ module Agentilda
       ordinal = Ordinal.from_dirname(dirname) or return nil
 
       rest = dirname.sub(/\A[\d.]+[-_]/, "")
-      head, tail = rest.split(/[-_]/, 2)
+      head, tail = rest.split(/\s*→\s*|[-_]/, 2)
 
       # A leading segment with no ASCII word character is the status emoji.
       # The slug strips any further separators: the canonical spelling puts
-      # two dashes after the emoji, and folders from before that rule put one.
+      # a spaced arrow after the emoji, and folders from before that rule put
+      # two dashes, or one.
       status = (Agentilda.status_for_emoji(head) if tail && !head.to_s.empty? && !head.match?(/[A-Za-z0-9]/))
-      slug = status ? tail.sub(/\A[-_]+/, "") : rest
+      slug = status ? tail.sub(/\A[-_\s]+/, "") : rest
 
       new(ordinal:, status: status || STATUS_BY_KEY.fetch(:new), slug:, dirname:, path:)
     end
