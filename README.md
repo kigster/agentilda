@@ -1,5 +1,8 @@
 # The Agentilda Ruby Gem
 
+[![CircleCI](https://dl.circleci.com/status-badge/img/gh/kigster/agentilda/tree/main.svg?style=shield)](https://dl.circleci.com/status-badge/redirect/gh/kigster/agentilda/tree/main)![Coverage](docs/badges/coverage_badge.svg)
+
+
 This gem implements an agentic workflow using five specialized agents defined in the `./agents` directory.
 
 The best resource that describes it in detail is the result of running `tilda docs -o <file>` command, or the file [docs/WORKFLOW.md](docs/WORKFLOW.md).
