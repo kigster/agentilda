@@ -96,3 +96,4 @@ Style/SingleArgumentDig:
 
 RSpec/MultipleMemoizedHelpers:
   Enabled: false
+
