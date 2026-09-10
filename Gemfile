@@ -29,4 +29,5 @@ group :development, :test do
   gem "rubocop-rspec"
   gem "rubocop-rake"
   gem "rubocop-rubycw"
+  gem "rubocop-on-rbs"
 end
