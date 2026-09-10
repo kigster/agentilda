@@ -1,13 +1,17 @@
 # frozen_string_literal: true
 
+require "fileutils"
+
 module Agentilda
   module CLI
     # `agentilda docs` — regenerate the conventions document.
     class Docs < Base
       desc "Generate the conventions document from the state machine itself"
 
-      option :output, aliases: ["-o"], desc: "Write here instead of STDOUT",
-        default: "#{ENV["HOME"]}/.agents/context/workflow.md"
+      option :output,
+        aliases: ["-o"],
+        desc:    "Write here instead of STDOUT",
+        default: "#{ENV.fetch("HOME", nil)}/.agents/context/workflow.md"
 
       example ["", "-o ~/.agents/context/workflow.md"]
 

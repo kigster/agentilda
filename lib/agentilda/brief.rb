@@ -1,5 +1,7 @@
 # frozen_string_literal: true
 
+require "tty/command"
+
 module Agentilda
   # A new plan's opening brief: four questions, and a best-effort first pass
   # at answering them from what the project already has on disk.
@@ -81,8 +83,8 @@ module Agentilda
       status = error.message[/^[ \t]*exit status:[ \t]*(\S+)/, 1]
       outcome = status ? "exited #{status}" : "failed"
       said = [STDOUT_SECTION, STDERR_SECTION]
-        .filter_map { |section| tail(error.message[section, 1]) }
-        .join(" | ")
+             .filter_map { |section| tail(error.message[section, 1]) }
+             .join(" | ")
 
       said.empty? ? "#{outcome} and said nothing" : "#{outcome}: #{said}"
     end
@@ -94,7 +96,7 @@ module Agentilda
       return nil if lines.empty?
 
       joined = lines.last(3).join(" ")
-      (joined.length > REASON_LIMIT) ? "#{joined[0, REASON_LIMIT - 1]}..." : joined
+      joined.length > REASON_LIMIT ? "#{joined[0, REASON_LIMIT - 1]}..." : joined
     end
     private_class_method :tail
 
@@ -175,10 +177,10 @@ module Agentilda
     # @return [Array<String>]
     def invocation
       ["claude",
-        "-p", prompt, "--add-dir", root,
-        "--model", BRIEF_MODEL,
-        "--allowedTools", ALLOWED_TOOLS.join(","),
-        "--disallowedTools", DENIED_TOOLS.join(",")]
+       "-p", prompt, "--add-dir", root,
+       "--model", BRIEF_MODEL,
+       "--allowedTools", ALLOWED_TOOLS.join(","),
+       "--disallowedTools", DENIED_TOOLS.join(",")]
     end
 
     private

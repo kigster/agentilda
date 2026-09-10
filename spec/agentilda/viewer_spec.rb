@@ -64,7 +64,7 @@ RSpec.describe Agentilda::Viewer do
         viewer.mdfried(paths)
 
         expect(piped).to eq([["mdfried", "# leah-researcher\n"],
-          ["mdfried", "# luke-backend\n"]])
+                             ["mdfried", "# luke-backend\n"]])
       end
     end
 

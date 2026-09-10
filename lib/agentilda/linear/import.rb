@@ -41,7 +41,7 @@ module Agentilda
 
       # @return [Hash] for `--format json`
       def to_h_json
-        {kind:, op:, plan: ordinal, unit:, identifier:, title:, digest:, args:}.compact
+        { kind:, op:, plan: ordinal, unit:, identifier:, title:, digest:, args: }.compact
       end
     end
 
@@ -103,7 +103,7 @@ module Agentilda
       # @return [Hash{Agentilda::Status => Array<String>}] state => ordinals
       def unplaced
         @unplaced ||= (chosen - subjects).group_by(&:status)
-          .transform_values { |group| group.map { |s| s.feature.ordinal.to_s } }
+                                         .transform_values { |group| group.map { |s| s.feature.ordinal.to_s } }
       end
 
       private
@@ -152,8 +152,10 @@ module Agentilda
       # @param pull [Agentilda::PullRequest]
       # @return [Agentilda::Linear::Unit]
       def adopted_unit(pull)
-        Unit.new(key: "##{pull.number}", title: Units.clean_title(pull.title),
-          body: "", pull_requests: [pull])
+        Unit.new(key: "##{pull.number}",
+          title: Units.clean_title(pull.title),
+          body: "",
+          pull_requests: [pull])
       end
 
       # @param subject [Agentilda::Subject]
@@ -175,15 +177,22 @@ module Agentilda
         recorded = record_for(subject).by_unit[Issues::PARENT]
         title = plan_title(subject)
 
-        args = {team:, project: project_name, title:, description: plan_description(subject),
-                state: placement.name, labels: placement.labels}
+        args = { team:, project: project_name, title:, description: plan_description(subject),
+                state: placement.name, labels: placement.labels }
         digest = Issues.digest(args)
 
         op, reason = decide(recorded&.identifier, recorded&.digest, digest)
         args = args.merge(id: recorded.identifier).except(:team, :project) if op == :update && recorded
 
-        Action.new(kind: :issue, op:, ordinal: subject.feature.ordinal.to_s, unit: Issues::PARENT,
-          identifier: recorded&.identifier, title:, digest:, args:, reason:)
+        Action.new(kind: :issue,
+          op:,
+          ordinal: subject.feature.ordinal.to_s,
+          unit: Issues::PARENT,
+          identifier: recorded&.identifier,
+          title:,
+          digest:,
+          args:,
+          reason:)
       end
 
       # @param subject [Agentilda::Subject]
@@ -194,17 +203,24 @@ module Agentilda
         recorded = record_for(subject).by_unit[unit.key]
         parent = record_for(subject).by_unit[Issues::PARENT]
 
-        args = {team:, project: project_name, title: unit.title,
+        args = { team:, project: project_name, title: unit.title,
                 description: unit_description(subject, unit),
-                state: placement.name, labels: placement.labels, links: links_for(unit)}
+                state: placement.name, labels: placement.labels, links: links_for(unit) }
         args = args.merge(parentId: parent.identifier) if parent
         digest = Issues.digest(args.except(:parentId))
 
         op, reason = decide(recorded&.identifier, recorded&.digest, digest)
         args = args.merge(id: recorded.identifier).except(:team, :project) if op == :update && recorded
 
-        Action.new(kind: :subissue, op:, ordinal: subject.feature.ordinal.to_s, unit: unit.key,
-          identifier: recorded&.identifier, title: unit.title, digest:, args:, reason:)
+        Action.new(kind: :subissue,
+          op:,
+          ordinal: subject.feature.ordinal.to_s,
+          unit: unit.key,
+          identifier: recorded&.identifier,
+          title: unit.title,
+          digest:,
+          args:,
+          reason:)
       end
 
       # The three-way decision, in one place so a plan and a unit cannot
@@ -271,7 +287,7 @@ module Agentilda
       # @param unit [Agentilda::Linear::Unit]
       # @return [Array<Hash>]
       def links_for(unit)
-        unit.pull_requests.select(&:url).map { |pr| {url: pr.url, title: pr.label} }
+        unit.pull_requests.select(&:url).map { |pr| { url: pr.url, title: pr.label } }
       end
 
       # A plan section can run to several hundred lines of design notes and
@@ -291,7 +307,7 @@ module Agentilda
       # @return [String]
       def provenance
         "_Imported by `agentilda linear import`. The plan folder is the source of truth; " \
-        "edits made here do not travel back._"
+          "edits made here do not travel back._"
       end
     end
   end

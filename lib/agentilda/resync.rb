@@ -112,13 +112,19 @@ module Agentilda
 
         spelled = feature.dirname_as(subject.status)
         if spelled != feature.dirname
-          steps << step(feature, from: subject.status, to: subject.status,
-            source: feature.path, reason: spelling_reason(feature))
+          steps << step(feature,
+            from:   subject.status,
+            to:     subject.status,
+            source: feature.path,
+            reason: spelling_reason(feature))
         end
 
         if fit.key != subject.status.key
           source = steps.empty? ? feature.path : steps.last.target
-          steps << step(feature, from: subject.status, to: fit, source:,
+          steps << step(feature,
+            from:   subject.status,
+            to:     fit,
+            source:,
             reason: subject.violation || "contents now justify #{fit.label}")
         end
 
@@ -134,10 +140,10 @@ module Agentilda
       def step(feature, from:, to:, source:, reason:)
         Change.new(
           dirname: File.basename(source),
-          from: from.key,
-          to: to.key,
+          from:    from.key,
+          to:      to.key,
           source:,
-          target: File.join(File.dirname(feature.path), feature.dirname_as(to)),
+          target:  File.join(File.dirname(feature.path), feature.dirname_as(to)),
           reason:
         )
       end
@@ -277,10 +283,14 @@ module Agentilda
       # @param pull [Hash]
       # @return [Agentilda::Resync::Prs::Change]
       def restamped(pull)
-        Change.new(number: pull[:number], title: pull[:title], ordinal: nil, ambiguous: false,
+        Change.new(number: pull[:number],
+          title: pull[:title],
+          ordinal: nil,
+          ambiguous: false,
           new_title: pull[:title].sub(STALE, "[#{Agentilda::NO_PLAN_PREFIX}] "),
           reason: "the no-plan marker is now [#{Agentilda::NO_PLAN_PREFIX}]",
-          assumed: false, adopted: false)
+          assumed: false,
+          adopted: false)
       end
 
       # @param pulls [Array<Hash>]
@@ -302,7 +312,7 @@ module Agentilda
         adoptees = create ? adoption.call(pulls) : adoption.plan(pulls)
         by_number = adoptees.to_h { |a| [a.pull[:number], a] }
 
-        changes.map { |c| (c.ambiguous? && by_number[c.number]) ? adopted(c, by_number[c.number]) : c }
+        changes.map { |c| c.ambiguous? && by_number[c.number] ? adopted(c, by_number[c.number]) : c }
       end
 
       # @return [Hash{Integer => Hash}]
@@ -313,11 +323,11 @@ module Agentilda
       # @return [Agentilda::Resync::Prs::Change]
       def adopted(change, adoptee)
         change.with(
-          ordinal: adoptee.ordinal,
+          ordinal:   adoptee.ordinal,
           new_title: "#{adoptee.ordinal.to_prefix} #{change.title}",
-          reason: "#{change.reason} — adopted into #{adoptee.dirname}",
+          reason:    "#{change.reason} — adopted into #{adoptee.dirname}",
           ambiguous: false,
-          adopted: true
+          adopted:   true
         )
       end
 
@@ -372,8 +382,14 @@ module Agentilda
       # @param why [String]
       # @return [Agentilda::Resync::Prs::Change]
       def resolved(pull, ordinal, why)
-        Change.new(number: pull[:number], title: pull[:title], ordinal:, reason: why,
-          new_title: "#{ordinal.to_prefix} #{pull[:title]}", ambiguous: false, assumed: false, adopted: false)
+        Change.new(number: pull[:number],
+          title: pull[:title],
+          ordinal:,
+          reason: why,
+          new_title: "#{ordinal.to_prefix} #{pull[:title]}",
+          ambiguous: false,
+          assumed: false,
+          adopted: false)
       end
 
       # Nothing resolved, so this is developer work — but that is an assertion
@@ -382,17 +398,28 @@ module Agentilda
       # @param pull [Hash]
       # @return [Agentilda::Resync::Prs::Change]
       def no_plan(pull)
-        Change.new(number: pull[:number], title: pull[:title], ordinal: nil,
+        Change.new(number: pull[:number],
+          title: pull[:title],
+          ordinal: nil,
           new_title: "[#{Agentilda::NO_PLAN_PREFIX}] #{pull[:title]}",
-          reason: "no plan resolved from the branch or the diff", ambiguous: false, assumed: true, adopted: false)
+          reason: "no plan resolved from the branch or the diff",
+          ambiguous: false,
+          assumed: true,
+          adopted: false)
       end
 
       # @param pull [Hash]
       # @param why [String]
       # @return [Agentilda::Resync::Prs::Change]
       def flag(pull, why)
-        Change.new(number: pull[:number], title: pull[:title], new_title: nil, ordinal: nil,
-          reason: why, ambiguous: true, assumed: false, adopted: false)
+        Change.new(number: pull[:number],
+          title: pull[:title],
+          new_title: nil,
+          ordinal: nil,
+          reason: why,
+          ambiguous: true,
+          assumed: false,
+          adopted: false)
       end
     end
   end

@@ -8,15 +8,15 @@ The gem offers a CLI command `tilda` (as well as `agentilda`) that performs a sl
 
 ```
 # Happy path
-⚪️ New ──▶
+  ⚪️ New ──▶
     🔎 Researched ──▶
-        📋 Ready for Planning ──▶
-            ⭐️ Planned ──▶
-                🟡 Building ──▶
-                    🎨 Building UI ──▶
-                        🟢 Ready for Review ──▶
-                            👀 In Review ──▶
-                                ✅ Approved
+       📋 Ready for Planning ──▶
+          ⭐️ Planned ──▶
+             🟡 Building ──▶
+                🎨 Building UI ──▶
+                   🟢 Ready for Review ──▶
+                      👀 In Review ──▶
+                         ✅ Approved
 ```
 
 ## Agents

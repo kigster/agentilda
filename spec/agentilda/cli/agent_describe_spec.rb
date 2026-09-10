@@ -31,14 +31,14 @@ RSpec.describe Agentilda::CLI::Agents::Describe do
 
   def path(name) = File.join(@dir, "#{name}.md")
 
-  def run(**kwargs)
+  def run(**)
     err = StringIO.new
     status = 0
 
     original = $stderr
     $stderr = err
     begin
-      command.call(**kwargs)
+      command.call(**)
     rescue SystemExit => e
       status = e.status
     ensure

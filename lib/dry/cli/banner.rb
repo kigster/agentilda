@@ -33,7 +33,7 @@ module Dry
       # @return [String]
       def self.call(result)
         max_length, commands = commands_and_arguments(result)
-        column = max_length + max_length / 2
+        column = max_length + (max_length / 2)
 
         by_depth(commands).filter_map { |banner, node|
           next if node.hidden
@@ -120,10 +120,10 @@ module Dry
 
         def pastel
           @pastel ||= if Banner.color_enabled?
-            Pastel.new
-          else
-            NoColorPastel.new
-          end
+                        Pastel.new
+                      else
+                        NoColorPastel.new
+                      end
         end
 
         extend Forwardable
@@ -201,7 +201,7 @@ module Dry
 
         "\n#{color_header("Examples")}:\n" + command.examples.map do |example|
           args, desc = example.split("#")
-          comment_line = (desc.nil? || desc.empty?) ? "" : "  #{bright_black("##{desc}")}\n"
+          comment_line = desc.nil? || desc.empty? ? "" : "  #{bright_black("##{desc}")}\n"
           comment_line + "  #{color_command(name)} #{color_arguments(args)}"
         end.join("\n\n")
       end
@@ -253,7 +253,7 @@ module Dry
       # @api private
       def self.extended_command_arguments(command)
         command.arguments.map do |argument|
-          "    #{argument.name.to_s.upcase.ljust(DESCRIPTION_START)}  # #{"REQUIRED " if argument.required?}#{wrap_description(argument.desc, prefix: " " * 31 + "# ")}"
+          "    #{argument.name.to_s.upcase.ljust(DESCRIPTION_START)}  # #{"REQUIRED " if argument.required?}#{wrap_description(argument.desc, prefix: (" " * 31) + "# ")}"
         end.join("\n")
       end
 
@@ -264,17 +264,17 @@ module Dry
         result = command.options.map do |option|
           name = Inflector.dasherize(option.name)
           name = if option.boolean?
-            "[no-]#{name}"
-          elsif option.flag?
-            name
-          elsif option.array?
-            "#{name}=VALUE1,VALUE2,.."
-          else
-            "#{name}=VALUE"
-          end
+                   "[no-]#{name}"
+                 elsif option.flag?
+                   name
+                 elsif option.array?
+                   "#{name}=VALUE1,VALUE2,.."
+                 else
+                   "#{name}=VALUE"
+                 end
           name = "#{name}, #{option.alias_names.join(", ")}" if option.aliases.any?
           name = "  --#{name.ljust(DESCRIPTION_START)}"
-          name = "#{name}  # #{wrap_description(option.desc, prefix: " " * 31 + "# ")}"
+          name = "#{name}  # #{wrap_description(option.desc, prefix: (" " * 31) + "# ")}"
           name = "#{name}, default: #{option.default.inspect}" unless option.default.nil?
           name
         end

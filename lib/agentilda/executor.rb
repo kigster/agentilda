@@ -1,5 +1,8 @@
 # frozen_string_literal: true
 
+require "fileutils"
+require "shellwords"
+
 module Agentilda
   # Runs one agent against one plan by shelling out to the `claude` CLI.
   #
@@ -40,6 +43,7 @@ module Agentilda
     #     cap, :quit when the grace period after q ran out, nil otherwise
     # @!attribute [r] pid
     #   @return [Integer, nil]
+    # @return [Data]
     Result = Data.define(:ok, :note, :up, :down, :subagents, :delegated, :seconds, :killed, :pid) do
       def initialize(killed: nil, pid: nil, **rest) = super
 
@@ -234,8 +238,13 @@ module Agentilda
     def call(agent, subject, root: @root, round: 1, successor: nil, handle: nil, partners: [], &on_progress)
       started = UI.monotonic
       if @dry_run
-        return Result.new(ok: true, note: "dry run - would invoke #{agent.name}", up: 0, down: 0,
-          subagents: 0, delegated: 0, seconds: 0.0)
+        return Result.new(ok: true,
+          note: "dry run - would invoke #{agent.name}",
+          up: 0,
+          down: 0,
+          subagents: 0,
+          delegated: 0,
+          seconds: 0.0)
       end
 
       handle ||= Handle.new
@@ -249,7 +258,8 @@ module Agentilda
       child = @spawn.call(argv, chdir: root)
       handle.child = child
       transcript.pid = child.pid
-      clock = Clock.new(seconds: timeout_for(agent), control:,
+      clock = Clock.new(seconds: timeout_for(agent),
+        control:,
         on_expire: -> { handle.kill!(grace: 0, reason: :timeout) })
       handle.clock = clock
       clock.start
@@ -264,8 +274,12 @@ module Agentilda
       Control.release(control)
 
       if handle.killed
-        return spent(transcript, started, ok: false, pid: child.pid, killed: handle.killed,
-          note: "#{killed_note(handle.killed, clock)}, last seen #{transcript.activity || "starting up"} - trace: #{trace}")
+        return spent(transcript,
+          started,
+          ok:     false,
+          pid:    child.pid,
+          killed: handle.killed,
+          note:   "#{killed_note(handle.killed, clock)}, last seen #{transcript.activity || "starting up"} - trace: #{trace}")
       end
       unless status.success?
         return failure(transcript, started, "claude exited #{status.exitstatus}: #{said(transcript)} - trace: #{trace}", pid: child.pid)
@@ -277,7 +291,10 @@ module Agentilda
       violation = boundary_violation(before, root)
       return failure(transcript, started, violation, pid: child.pid) if violation
 
-      spent(transcript, started, ok: true, pid: child.pid,
+      spent(transcript,
+        started,
+        ok:   true,
+        pid:  child.pid,
         note: "completed#{" - #{transcript.tools} tool calls" if transcript.tools.positive?}")
     end
 
@@ -291,9 +308,15 @@ module Agentilda
 
     # @return [Agentilda::Executor::Result]
     def spent(transcript, started, ok:, note:, pid: nil, killed: nil)
-      Result.new(ok:, note:, up: transcript.up, down: transcript.down,
-        subagents: transcript.spawned, delegated: transcript.delegated,
-        seconds: UI.monotonic - started, killed:, pid:)
+      Result.new(ok:,
+        note:,
+        up: transcript.up,
+        down: transcript.down,
+        subagents: transcript.spawned,
+        delegated: transcript.delegated,
+        seconds: UI.monotonic - started,
+        killed:,
+        pid:)
     end
 
     # @param transcript [Agentilda::Transcript]
@@ -302,13 +325,13 @@ module Agentilda
       text = (transcript.failed? ? transcript.error : transcript.plain.last(3).join(" ")).to_s.strip
       return "said nothing" if text.empty?
 
-      (text.length > REASON_LIMIT) ? "#{text[0, REASON_LIMIT - 1]}..." : text
+      text.length > REASON_LIMIT ? "#{text[0, REASON_LIMIT - 1]}..." : text
     end
 
     # @param reason [Symbol]
     # @param clock [Agentilda::Clock]
     # @return [String]
-    def killed_note(reason, clock)
+    def killed_note(reason, _clock)
       case reason
       when :timeout then "timed out (killed #{Clock::GRACE}s after STOP)"
       when :budget then "token budget of #{@max_tokens} exceeded"
@@ -332,7 +355,7 @@ module Agentilda
       # count — 2 for a four-thousand-token answer — and a spinner counting
       # what came back would read zero all run. See {Transcript#meter}.
       argv = ["claude", "-p", prompt_for(agent, subject, root, control:, round:, successor:, partners:), "--add-dir", root,
-        "--output-format", "stream-json", "--verbose", "--include-partial-messages", "--brief"]
+              "--output-format", "stream-json", "--verbose", "--include-partial-messages", "--brief"]
       denied = denied_for(agent)
       argv += ["--disallowedTools", denied.join(",")] unless denied.empty?
       argv += ["--allowedTools", agent.allowed_tools.join(",")] unless agent.allowed_tools.empty?
@@ -373,8 +396,12 @@ module Agentilda
     # @return [String]
     def trace_path(agent, subject)
       FileUtils.mkdir_p(@trace_dir)
-      name = format("%s-%s-%s-%d-%04x.ndjson", Time.now.strftime("%Y%m%d-%H%M%S"),
-        subject.feature.ordinal, agent.name, Process.pid, rand(0x10000))
+      name = format("%s-%s-%s-%d-%04x.ndjson",
+        Time.now.strftime("%Y%m%d-%H%M%S"),
+        subject.feature.ordinal,
+        agent.name,
+        Process.pid,
+        rand(0x10000))
       File.join(@trace_dir, name)
     end
 
@@ -537,7 +564,7 @@ module Agentilda
       plans_dir = File.dirname(subject.feature.path)
       plan = subject.feature.ordinal
       names = partners.map { |p| "`#{p.name}`" }
-      who = (names.size == 1) ? "Your partner on this plan is #{names.first}" : "Your partners on this plan are #{names.join(" and ")}"
+      who = names.size == 1 ? "Your partner on this plan is #{names.first}" : "Your partners on this plan are #{names.join(" and ")}"
 
       <<~SECTION
 
@@ -574,8 +601,8 @@ module Agentilda
     def control_section(control)
       return "" if control.nil?
 
-      "\n## Control file — poll it between steps\n\n" \
-        "    #{control}\n\n" \
+      "\n## Control file — poll it between steps\n\n    " \
+        "#{control}\n\n" \
         "Read this file before each significant step. Empty means carry on. " \
         "A line starting WARN: tells you how much time is left. WRAP_UP: means " \
         "finish the essential remainder now. STOP means write what you have, " \

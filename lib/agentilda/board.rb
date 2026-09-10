@@ -8,8 +8,20 @@ module Agentilda
   # @!attribute [r] rows
   #   @return [Array<Agentilda::Board::Row>] one per agent invocation still
   #     worth showing: running, or finished within the last few seconds
-  Board = Data.define(:started_at, :status, :plans, :up, :down, :rows, :root, :running,
-    :live_up, :live_down, :selected, :dialog, :help, :hidden) do
+  Board = Data.define(:started_at,
+    :status,
+    :plans,
+    :up,
+    :down,
+    :rows,
+    :root,
+    :running,
+    :live_up,
+    :live_down,
+    :selected,
+    :dialog,
+    :help,
+    :hidden) do
     def initialize(selected: nil, dialog: nil, help: false, hidden: 0, **rest) = super
   end
 
@@ -27,8 +39,24 @@ module Agentilda
   #   @return [Symbol, nil] the clock's phase while running
   # @!attribute [r] frame
   #   @return [Integer] spinner frame counter
-  Board::Row = Data.define(:key, :at, :ordinal, :file, :agent, :role, :round, :rounds, :model,
-    :remaining, :phase, :up, :down, :message, :state, :pr, :frame, :bold) do
+  Board::Row = Data.define(:key,
+    :at,
+    :ordinal,
+    :file,
+    :agent,
+    :role,
+    :round,
+    :rounds,
+    :model,
+    :remaining,
+    :phase,
+    :up,
+    :down,
+    :message,
+    :state,
+    :pr,
+    :frame,
+    :bold) do
     def initialize(pr: nil, phase: nil, remaining: nil, frame: 0, bold: false, message: nil, **rest) = super
 
     # @return [Boolean]

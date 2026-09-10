@@ -8,8 +8,10 @@ module Agentilda
       class Dirs < Base
         desc "Rename plan folders so the name matches the contents and the NNN.MM form"
 
-        option :commit, type: :boolean, default: false,
-          desc: "Actually rename the folders (default: dry run)"
+        option :commit,
+          type:    :boolean,
+          default: false,
+          desc:    "Actually rename the folders (default: dry run)"
 
         example [
           "                # show what would be renamed",
@@ -20,7 +22,7 @@ module Agentilda
         # @return [void]
         def call(**options)
           changes = Agentilda::Resync::Dirs.new(tree: tree_for(options))
-            .call(commit: commit?(options))
+                                           .call(commit: commit?(options))
 
           if changes.empty?
             success("Every folder is already named NNN.MM-<emoji> → <slug> and the emoji matches.") unless quiet?(options)

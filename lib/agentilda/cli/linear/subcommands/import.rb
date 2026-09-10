@@ -8,18 +8,26 @@ module Agentilda
       class Import < Team
         desc "Create Linear issues from the plans: one per folder, one child per work unit"
 
-        option :project, aliases: ["-p", "--project-url", "--project-id"],
-          desc: "The project to file everything under: its URL, its name, or its id"
-        option :commit, type: :boolean, default: false,
-          desc: "Actually create and update in Linear (default: dry run)"
-        option :format, default: "text", values: %w[text json],
-          desc: "json emits the exact arguments the Linear MCP tools take"
-        option :since, aliases: ["-s"],
-          desc: "Skip plans numbered below this, e.g. 010.00"
+        option :project,
+          aliases: ["-p", "--project-url", "--project-id"],
+          desc:    "The project to file everything under: its URL, its name, or its id"
+        option :commit,
+          type:    :boolean,
+          default: false,
+          desc:    "Actually create and update in Linear (default: dry run)"
+        option :format,
+          default: "text",
+          values:  %w[text json],
+          desc:    "json emits the exact arguments the Linear MCP tools take"
+        option :since,
+          aliases: ["-s"],
+          desc:    "Skip plans numbered below this, e.g. 010.00"
         option :status,
           desc: "Only plans in these states: a comma-separated list of status keys"
-        option :force, type: :boolean, default: false,
-          desc: "Update everything, whether the plan has changed or not"
+        option :force,
+          type:    :boolean,
+          default: false,
+          desc:    "Update everything, whether the plan has changed or not"
 
         example [
           "TAX -p 'US Tax Law: Self Contained Ruby Gem'   # show what would be created",
@@ -61,7 +69,7 @@ module Agentilda
         def resolve_project(team, tree, options)
           reference = options[:project].to_s
           looks_up = reference.match?(%r{\Ahttps?://}) || reference.match?(/\A[0-9a-f-]{32,}\z/)
-          return {"id" => nil, "name" => reference, "url" => nil} if !looks_up && offline?
+          return { "id" => nil, "name" => reference, "url" => nil } if !looks_up && offline?
 
           _api, survey = survey_for(team, tree)
           survey.project(reference)
@@ -84,8 +92,11 @@ module Agentilda
 
         # @return [Agentilda::Linear::Import]
         def build(tree, team, project, options)
-          Agentilda::Linear::Import.new(tree:, team: Agentilda::Linear.key!(team), project:,
-            since: options[:since], statuses: statuses(options),
+          Agentilda::Linear::Import.new(tree:,
+            team: Agentilda::Linear.key!(team),
+            project:,
+            since: options[:since],
+            statuses: statuses(options),
             force: options.fetch(:force, false))
         end
 
@@ -116,13 +127,13 @@ module Agentilda
         # @return [String]
         def row(action)
           [action.op, action.kind, action.ordinal, action.unit || "-",
-            action.identifier || "-", action.title].join("\t")
+           action.identifier || "-", action.title].join("\t")
         end
 
         # @param action [Agentilda::Linear::Action]
         # @return [String]
         def line(action)
-          verb = paint(action.op.to_s.ljust(6), (action.op == :create) ? :green : :yellow)
+          verb = paint(action.op.to_s.ljust(6), action.op == :create ? :green : :yellow)
           indent = action.child? ? "    " : ""
           "#{verb} #{indent}#{action.title}  #{paint("(#{action.reason})", :bright_black)}"
         end

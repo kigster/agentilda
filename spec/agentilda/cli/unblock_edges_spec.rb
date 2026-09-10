@@ -6,7 +6,7 @@
 RSpec.describe Agentilda::CLI::Unblock, :tree do
   subject(:command) { described_class.new }
 
-  def run(*plans, **options)
+  def run(*plans, **)
     out = CapturedStream.new
     err = CapturedStream.new
     status = 0
@@ -14,7 +14,7 @@ RSpec.describe Agentilda::CLI::Unblock, :tree do
     original_out, original_err = $stdout, $stderr
     $stdout, $stderr = out, err
     begin
-      command.call(plans:, dir: plans_root, **options)
+      command.call(plans:, dir: plans_root, **)
     rescue SystemExit => e
       status = e.status
     ensure
@@ -27,7 +27,7 @@ RSpec.describe Agentilda::CLI::Unblock, :tree do
   def unwrapped(text) = text.tr("║╔╗╚╝═", " ").gsub(/\s+/, " ")
 
   def blocked_plan(ordinal)
-    plans { |t| t.plan(ordinal, :blocked, "stuck-#{ordinal.tr(".", "-")}", files: {"blocked.md" => "# Blocked\n\n## B1. Which vendor\n"}) }
+    plans { |t| t.plan(ordinal, :blocked, "stuck-#{ordinal.tr(".", "-")}", files: { "blocked.md" => "# Blocked\n\n## B1. Which vendor\n" }) }
   end
 
   describe "--agent naming nobody" do

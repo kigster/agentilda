@@ -147,7 +147,10 @@ module Agentilda
       return [] if subjects.empty?
 
       before = subjects.map { |subject| [subject.feature.ordinal.to_s, self.class.questions(subject)] }.to_h
-      results = UI.concurrently(subjects, headline(subjects), jobs: 1, label: method(:label),
+      results = UI.concurrently(subjects,
+        headline(subjects),
+        jobs:   1,
+        label:  method(:label),
         fields: method(:log_fields)) do |subject, progress|
         invoke(subject, &progress)
       end
@@ -161,9 +164,9 @@ module Agentilda
     # @param subject [Agentilda::Subject]
     # @yieldparam phrase [String] what the agent is doing, as it changes
     # @return [Array(Boolean, String)]
-    def invoke(subject, &on_activity)
-      @executor.call(agent, subject, root:, &on_activity)
-    rescue => e
+    def invoke(subject, &)
+      @executor.call(agent, subject, root:, &)
+    rescue StandardError => e
       [false, "#{e.class}: #{e.message.lines.first.to_s.strip}"]
     end
 
@@ -185,15 +188,18 @@ module Agentilda
       ok, note = result.is_a?(Exception) ? [false, result.message.lines.first.to_s.strip] : result
       current = tree.find(subject.feature.ordinal) || subject
 
-      Outcome.new(subject: current, ok: !!ok, note: note.to_s,
-        before: before.fetch(subject.feature.ordinal.to_s, []), after: self.class.questions(current))
+      Outcome.new(subject: current,
+        ok: !!ok,
+        note: note.to_s,
+        before: before.fetch(subject.feature.ordinal.to_s, []),
+        after: self.class.questions(current))
     end
 
     # @param subjects [Array<Agentilda::Subject>]
     # @return [String]
     def headline(subjects)
       "#{commit? ? "handing" : "would hand"} #{subjects.size} plan#{"s" unless subjects.size == 1} " \
-      "to #{agent.name} in #{root}"
+        "to #{agent.name} in #{root}"
     end
 
     # @param subject [Agentilda::Subject]
@@ -202,6 +208,6 @@ module Agentilda
 
     # @param subject [Agentilda::Subject]
     # @return [Hash] the columns this plan's log lines carry
-    def log_fields(subject) = {plan: subject.feature.ordinal.to_s, status: subject.status.to_s, agent: agent.name}
+    def log_fields(subject) = { plan: subject.feature.ordinal.to_s, status: subject.status.to_s, agent: agent.name }
   end
 end

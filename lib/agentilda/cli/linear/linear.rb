@@ -11,8 +11,9 @@ module Agentilda
       class Team < Base
         def self.inherited(klass)
           super
-          klass.argument :team, required: true,
-            desc: "The Linear team key that prefixes its issues, e.g. TAX"
+          klass.argument :team,
+            required: true,
+            desc:     "The Linear team key that prefixes its issues, e.g. TAX"
         end
 
         private

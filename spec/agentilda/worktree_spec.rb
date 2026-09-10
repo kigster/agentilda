@@ -5,32 +5,31 @@
 RSpec.describe Agentilda::Worktree do
   subject(:worktrees) { described_class.new(root: repo, dir: worktree_dir, user: "tester") }
 
-  around do |example|
-    Dir.mktmpdir("spb-worktree") do |tmp|
-      @repo = File.join(tmp, "project")
-      @worktree_dir = File.join(tmp, "project.worktrees")
-      FileUtils.mkdir_p(File.join(@repo, Agentilda::PLANS_DIR))
-      system("git", "-C", @repo, "init", "-q", "--initial-branch=main", out: File::NULL, err: File::NULL)
-      system("git", "-C", @repo, "config", "user.email", "alan.turing@manchester.edu")
-      system("git", "-C", @repo, "config", "user.name", "Alan Turing")
-      File.write(File.join(@repo, "README.md"), "# project\n")
-      system("git", "-C", @repo, "add", "-A", out: File::NULL, err: File::NULL)
-      system("git", "-C", @repo, "commit", "-qm", "initial", out: File::NULL, err: File::NULL)
-      example.run
-    end
-  end
-
-  let(:repo) { @repo }
+  let(:tmp) { Dir.mktmpdir("spb-worktree") }
+  let(:repo) { File.join(tmp, "project") }
   let(:worktree_dir) { @worktree_dir }
-
   let(:feature) do
     Agentilda::Feature.new(
       ordinal: Agentilda::Ordinal.parse("002.00"),
-      status: Agentilda::STATUS_BY_KEY.fetch(:new),
-      slug: "tenancy-households",
+      status:  Agentilda::STATUS_BY_KEY.fetch(:new),
+      slug:    "tenancy-households",
       dirname: "002.00-⚪️--tenancy-households",
-      path: File.join(repo, Agentilda::PLANS_DIR, "002.00-⚪️--tenancy-households")
+      path:    File.join(repo, Agentilda::PLANS_DIR, "002.00-⚪️--tenancy-households")
     )
+  end
+
+  around do |example|
+    Dir.mktmpdir("spb-worktree") do |tmp|
+      @worktree_dir = File.join(tmp, "project.worktrees")
+      FileUtils.mkdir_p(File.join(repo, Agentilda::PLANS_DIR))
+      system("git", "-C", repo, "init", "-q", "--initial-branch=main", out: File::NULL, err: File::NULL)
+      system("git", "-C", repo, "config", "user.email", "alan.turing@manchester.edu")
+      system("git", "-C", repo, "config", "user.name", "Alan Turing")
+      File.write(File.join(repo, "README.md"), "# project\n")
+      system("git", "-C", repo, "add", "-A", out: File::NULL, err: File::NULL)
+      system("git", "-C", repo, "commit", "-qm", "initial", out: File::NULL, err: File::NULL)
+      example.run
+    end
   end
 
   describe "#branch_for" do
@@ -240,7 +239,7 @@ RSpec.describe Agentilda::Worktree do
       FileUtils.mkdir_p(worktree_dir)
       File.write(File.join(worktree_dir, "002.00-tenancy-households"), "in the way")
 
-      expect { worktrees.checkout_for(feature) }.to raise_error(Agentilda::Error, /could not create a worktree for tester\/002\.00-tenancy-households/)
+      expect { worktrees.checkout_for(feature) }.to raise_error(Agentilda::Error, %r{could not create a worktree for tester/002\.00-tenancy-households})
     end
   end
 

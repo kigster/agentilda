@@ -13,7 +13,9 @@ gem "yard"
 group :development do
   gem "colored2"
   gem "irb"
-  gem "standard"
+  gem "rubocop"
+  gem "rubocop-rspec"
+  gem "rubocop-rake"
 end
 
 group :test do

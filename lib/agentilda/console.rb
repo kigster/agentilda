@@ -19,7 +19,7 @@ module Agentilda
       @selected = nil
       @dialog = false
       @help = false
-      @pending = {kill: false, extend: 0}
+      @pending = { kill: false, extend: 0 }
       @mutex = Mutex.new
     end
 
@@ -114,7 +114,7 @@ module Agentilda
     # @return [void]
     def close_dialog
       @dialog = false
-      @pending = {kill: false, extend: 0}
+      @pending = { kill: false, extend: 0 }
     end
 
     # @param step [Integer]

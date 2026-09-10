@@ -12,8 +12,13 @@ RSpec.describe Agentilda::ProgressLog do
     it "lays every field out in its own column" do
       line = described_class.render(
         "editing spec.md",
-        plan: "003.00", status: "⭐️ Planned", agent: "yoda-writer",
-        seconds: 42, round: "01", pid: 91_234, at:
+        plan:    "003.00",
+        status:  "⭐️ Planned",
+        agent:   "yoda-writer",
+        seconds: 42,
+        round:   "01",
+        pid:     91_234,
+        at:
       )
 
       expect(line).to eq(
@@ -31,8 +36,13 @@ RSpec.describe Agentilda::ProgressLog do
       header = described_class.render("round 1 - 3 plans", pid: 91_234, at:)
       full = described_class.render(
         "editing spec.md",
-        plan: "003.00", status: "⭐️ Planned", agent: "yoda-writer",
-        seconds: 42, round: "01", pid: 91_234, at:
+        plan:    "003.00",
+        status:  "⭐️ Planned",
+        agent:   "yoda-writer",
+        seconds: 42,
+        round:   "01",
+        pid:     91_234,
+        at:
       )
 
       aggregate_failures do

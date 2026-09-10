@@ -12,7 +12,7 @@ module Agentilda
   # sizes itself drifts sideways every time a number grows.
   class Screen
     # Cells per column. The status column takes what is left.
-    COLUMNS = {at: 9, ordinal: 6, file: 16, agent: 18, model: 7, timer: 12, tokens: 13}.freeze
+    COLUMNS = { at: 9, ordinal: 6, file: 16, agent: 18, model: 7, timer: 12, tokens: 13 }.freeze
 
     # Cells of the timer column the countdown itself takes: "99:59" and one of
     # air. The column is wider than that only so "[wrapping]" fits after STOP.
@@ -29,9 +29,9 @@ module Agentilda
     # What each document is painted as. A pull request number is painted by
     # {#file_cell} from the row's `pr` instead.
     FILE_STYLES = {
-      "spec.md" => %i[green],
-      "plan.md" => %i[yellow],
-      "plan-backend.md" => %i[yellow bold],
+      "spec.md"          => %i[green],
+      "plan.md"          => %i[yellow],
+      "plan-backend.md"  => %i[yellow bold],
       "plan-frontend.md" => %i[cyan],
       "pull-requests.md" => %i[magenta]
     }.freeze
@@ -47,7 +47,7 @@ module Agentilda
     # @param width [Integer] terminal columns
     # @return [Integer] cells the status column gets
     def self.status_width(width)
-      fixed = COLUMNS.values.sum + SEPARATOR.length * COLUMNS.size + MARGIN * 2
+      fixed = COLUMNS.values.sum + (SEPARATOR.length * COLUMNS.size) + (MARGIN * 2)
       [width - fixed, 10].max
     end
 
@@ -104,10 +104,10 @@ module Agentilda
     def top_bar(board, width)
       elapsed = UI.monotonic - board.started_at
       status = case board.status
-      when :quitting then UI.paint("quitting", :red, :on_white)
-      when :wrapping_up then UI.paint("wrapping up", :red, :on_white)
-      else UI.paint("running", :green, :on_white)
-      end
+               when :quitting then UI.paint("quitting", :red, :on_white)
+               when :wrapping_up then UI.paint("wrapping up", :red, :on_white)
+               else UI.paint("running", :green, :on_white)
+               end
       clock = UI.paint(format("%d:%02d", elapsed / 60, elapsed % 60), :black, :on_white)
       plans = UI.paint("plans in work: #{board.plans.join(", ")}", :black, :on_white)
       bar("[ #{status} #{clock} ] [ #{plans} ] [ #{tokens("tokens", board.up, board.down)} ]", width)
@@ -133,24 +133,24 @@ module Agentilda
     #
     # @return [String]
     def bar(content, width)
-      inner = width - MARGIN * 2
+      inner = width - (MARGIN * 2)
       plain = strip(content)
       filler = UI.paint(" " * [inner - UI.display_width(plain), 0].max, :black, :on_white)
-      " " * MARGIN + content + filler + " " * MARGIN
+      (" " * MARGIN) + content + filler + (" " * MARGIN)
     end
 
     # @return [String]
     def header(width)
       cells = [["timestamp", :at], ["plan", :ordinal], ["file", :file], ["agent [R:n/m]", :agent],
-        ["model", :model], ["time", :timer], ["tokens", :tokens]].map { |text, key| UI.fit(text, COLUMNS[key]) }
+               ["model", :model], ["time", :timer], ["tokens", :tokens]].map { |text, key| UI.fit(text, COLUMNS[key]) }
       cells << UI.fit("what the agent says", self.class.status_width(width))
       # Fitted first, painted second: {UI.fit} counts an escape sequence as
       # four cells, so a painted header cut to width loses its reset code.
-      " " * MARGIN + UI.paint(cells.join(SEPARATOR), :bold)
+      (" " * MARGIN) + UI.paint(cells.join(SEPARATOR), :bold)
     end
 
     # @return [String]
-    def rule(width) = " " * MARGIN + "─" * (width - MARGIN * 2)
+    def rule(width) = (" " * MARGIN) + ("─" * (width - (MARGIN * 2)))
 
     # @return [String]
     def line(row, width, selected:)
@@ -164,7 +164,7 @@ module Agentilda
         UI.paint(UI.fit("↑#{UI.abbreviate(row.up)}", 7), :magenta) + UI.paint(UI.fit("↓#{UI.abbreviate(row.down)}", 6), :cyan),
         status_cell(row, width)
       ]
-      text = " " * MARGIN + cells.join(SEPARATOR)
+      text = (" " * MARGIN) + cells.join(SEPARATOR)
       selected ? UI.paint(text, :inverse) : text
     end
 
@@ -177,7 +177,7 @@ module Agentilda
         number = UI.fit("##{row.pr[:number]}", COLUMNS[:file]).rstrip
         painted = UI.paint(number, row.pr[:rejected] ? :red : :bright_blue)
         linked = row.pr[:url] ? self.class.hyperlink(painted, row.pr[:url]) : painted
-        linked + " " * (COLUMNS[:file] - UI.display_width(number))
+        linked + (" " * (COLUMNS[:file] - UI.display_width(number)))
       else
         UI.paint(UI.fit(row.file, COLUMNS[:file]), *FILE_STYLES.fetch(row.file, [:white]))
       end
@@ -189,27 +189,27 @@ module Agentilda
     # @return [String]
     def timer_cell(row)
       mark = case row.state
-      when :running then SPINNER[row.frame % SPINNER.size]
-      when :done then UI.paint("✓", :green)
-      else UI.paint("✖", :red, :bold)
-      end
+             when :running then SPINNER[row.frame % SPINNER.size]
+             when :done then UI.paint("✓", :green)
+             else UI.paint("✖", :red, :bold)
+             end
       text = if row.state != :running
-        UI.fit("", COLUMNS[:timer] - 2)
-      elsif row.phase == :stopped || row.phase == :expired
-        UI.paint(UI.fit("[wrapping]", COLUMNS[:timer] - 2), :red, :bold)
-      elsif row.remaining.nil?
-        UI.fit("", COLUMNS[:timer] - 2)
-      else
-        # Minutes right-aligned so the digits hold still as they count down.
-        # Only the clock is painted; the cells kept for "[wrapping]" stay bare.
-        clock = UI.fit(format("%2d:%02d", row.remaining / 60, row.remaining % 60), CLOCK)
-        colour = case row.phase
-        when :wrap_up then :red
-        when :warned then :yellow
-        else :bright_black
-        end
-        UI.paint(clock, colour) + " " * (COLUMNS[:timer] - 2 - CLOCK)
-      end
+               UI.fit("", COLUMNS[:timer] - 2)
+             elsif [:stopped, :expired].include?(row.phase)
+               UI.paint(UI.fit("[wrapping]", COLUMNS[:timer] - 2), :red, :bold)
+             elsif row.remaining.nil?
+               UI.fit("", COLUMNS[:timer] - 2)
+             else
+               # Minutes right-aligned so the digits hold still as they count down.
+               # Only the clock is painted; the cells kept for "[wrapping]" stay bare.
+               clock = UI.fit(format("%2d:%02d", row.remaining / 60, row.remaining % 60), CLOCK)
+               colour = case row.phase
+                        when :wrap_up then :red
+                        when :warned then :yellow
+                        else :bright_black
+                        end
+               UI.paint(clock, colour) + (" " * (COLUMNS[:timer] - 2 - CLOCK))
+             end
       "#{mark} #{text}"
     end
 
@@ -218,7 +218,7 @@ module Agentilda
     # @return [String]
     def status_cell(row, width)
       text = UI.fit(row.message.to_s, self.class.status_width(width))
-      styles = (row.state == :failed) ? %i[white bold on_red] : %i[white bold on_yellow]
+      styles = row.state == :failed ? %i[white bold on_red] : %i[white bold on_yellow]
       styles = %i[red bold] if row.bold && row.state != :running
       UI.paint(text, *styles)
     end
@@ -237,10 +237,14 @@ module Agentilda
       box_width = [lines.map { |l| UI.display_width(l.chomp) }.max.to_i + 6, width].min
       box_height = lines.size + 4
       TTY::Box.frame(
-        top: [(@height.call - box_height) / 2, 0].max, left: [(width - box_width) / 2, 0].max,
-        width: box_width, height: box_height, padding: 1,
-        title: {top_left: " #{title} "}, enable_color: UI.color?,
-        style: UI.color? ? {border: {fg: :cyan}} : {}
+        top:          [(@height.call - box_height) / 2, 0].max,
+        left:         [(width - box_width) / 2, 0].max,
+        width:        box_width,
+        height:       box_height,
+        padding:      1,
+        title:        { top_left: " #{title} " },
+        enable_color: UI.color?,
+        style:        UI.color? ? { border: { fg: :cyan } } : {}
       ) { body }
     end
 

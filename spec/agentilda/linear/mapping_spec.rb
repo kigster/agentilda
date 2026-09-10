@@ -112,8 +112,12 @@ RSpec.describe Agentilda::Linear do
 
   # @return [Agentilda::Status] a sixteenth state, as a future edit would add it
   def invented
-    Agentilda::Status.new(key: :invented, emoji: "🦆", label: "Invented",
-      requires: [], note: "", invariant: nil)
+    Agentilda::Status.new(key: :invented,
+      emoji: "🦆",
+      label: "Invented",
+      requires: [],
+      note: "",
+      invariant: nil)
   end
 
   describe ".key!" do

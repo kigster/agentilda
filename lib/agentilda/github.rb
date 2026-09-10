@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require "json"
+require "tty/command"
 
 module Agentilda
   # The `gh` CLI, wrapped thinly.
@@ -25,8 +26,15 @@ module Agentilda
     # @return [Array<Hash>] `{number:, title:, url:, branch:, files:}`
     def pulls(state: "all")
       out = UI.spinning("Fetching pull requests from GitHub") {
-        @command.run("gh", "pr", "list", "--state", state, "--limit", @limit.to_s,
-          "--json", FIELDS.join(",")).out
+        @command.run("gh",
+          "pr",
+          "list",
+          "--state",
+          state,
+          "--limit",
+          @limit.to_s,
+          "--json",
+          FIELDS.join(",")).out
       }
 
       # `gh` can exit 0 having printed NOTHING — most often when it cannot reach
@@ -39,12 +47,12 @@ module Agentilda
       JSON.parse(out).map do |pr|
         {
           number: pr["number"],
-          title: pr["title"].to_s,
-          url: pr["url"],
+          title:  pr["title"].to_s,
+          url:    pr["url"],
           branch: pr["headRefName"].to_s,
-          files: Array(pr["files"]).map { |f| f["path"] }.compact,
-          state: self.class.state_label(pr),
-          open: pr["mergedAt"].nil? && pr["state"].to_s.upcase == "OPEN"
+          files:  Array(pr["files"]).map { |f| f["path"] }.compact,
+          state:  self.class.state_label(pr),
+          open:   pr["mergedAt"].nil? && pr["state"].to_s.upcase == "OPEN"
         }
       end
     rescue TTY::Command::ExitError, JSON::ParserError => e
@@ -107,10 +115,10 @@ module Agentilda
       pr = JSON.parse(out)
       {
         number: pr["number"],
-        title: pr["title"].to_s,
-        url: pr["url"].to_s,
-        state: self.class.state_label(pr),
-        body: pr["body"].to_s
+        title:  pr["title"].to_s,
+        url:    pr["url"].to_s,
+        state:  self.class.state_label(pr),
+        body:   pr["body"].to_s
       }
     rescue TTY::Command::ExitError, JSON::ParserError => e
       raise Error, "could not read pull request #{ref}: #{e.message.lines.first.to_s.strip}"

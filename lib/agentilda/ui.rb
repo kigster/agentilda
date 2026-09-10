@@ -1,6 +1,16 @@
 # frozen_string_literal: true
 
+require "concurrent/hash"
+require "etc"
+require "fileutils"
+require "pastel"
+require "strings"
+require "tty/box"
+require "tty/progressbar"
+require "tty/screen"
+require "tty/spinner"
 require "tty/spinner/multi"
+require "unicode/display_width"
 
 module Agentilda
   # Everything the user sees that is not the deliverable itself.
@@ -117,7 +127,7 @@ module Agentilda
             @spinner.update(timer: UI.countdown(left))
             break unless left.positive?
           end
-        rescue
+        rescue StandardError
           # A dying spinner must not take the round down with it.
         end
       end
@@ -262,7 +272,7 @@ module Agentilda
         return "" if left.nil?
 
         text = fit(format("%d:%02d", left / 60, left % 60), TIMER_WIDTH)
-        paint(text, (left <= TIMER_WARNING) ? :red : :bright_black)
+        paint(text, left <= TIMER_WARNING ? :red : :bright_black)
       end
 
       # Token counts run to seven figures, and seven figures on a spinner line
@@ -303,15 +313,18 @@ module Agentilda
       def spinning(message)
         return yield(logging_activity(message)) unless animate?
 
-        spinner = TTY::Spinner.new("[:spinner] #{message}:activity", format: :dots, output: $stderr,
-          success_mark: paint("✓", :green), error_mark: paint("✖", :red))
+        spinner = TTY::Spinner.new("[:spinner] #{message}:activity",
+          format:       :dots,
+          output:       $stderr,
+          success_mark: paint("✓", :green),
+          error_mark:   paint("✖", :red))
         spinner.update(activity: "")
         spinner.auto_spin
         begin
           result = yield(activity_for(spinner))
           spinner.success(paint("done", :bright_black))
           result
-        rescue
+        rescue StandardError
           spinner.error(paint("failed", :red))
           raise
         end
@@ -330,8 +343,12 @@ module Agentilda
 
         bar = TTY::ProgressBar.new(
           "#{message} [:bar] :current/:total :percent",
-          total: list.size, output: $stderr, width: 24,
-          complete: "█", incomplete: "░", head: "█"
+          total:      list.size,
+          output:     $stderr,
+          width:      24,
+          complete:   "█",
+          incomplete: "░",
+          head:       "█"
         )
         list.each do |item|
           yield item
@@ -386,8 +403,10 @@ module Agentilda
         results = Concurrent::Hash.new
         spinners = TTY::Spinner::Multi.new(
           ":spinner #{paint(message, :bold)}",
-          format: :dots, output: $stderr,
-          success_mark: paint("✓", :green), error_mark: paint("✖", :red)
+          format:       :dots,
+          output:       $stderr,
+          success_mark: paint("✓", :green),
+          error_mark:   paint("✖", :red)
         )
 
         list.each_with_index do |item, index|
@@ -401,7 +420,7 @@ module Agentilda
             else
               line.done
             end
-          rescue => e
+          rescue StandardError => e
             results[index] = e
             line&.failed(e.message.lines.first.to_s.strip)
           end
@@ -448,12 +467,14 @@ module Agentilda
       # @return [Object]
       def once(item, label, fields = NO_FIELDS, failure: NO_FAILURE, timeout: NO_TIMEOUT, &block)
         text = label.call(item)
-        line = Line.new(fields: fields.call(item), mark: paint("done", :bright_black),
-          timeout: timeout.call(item), spinner: (solo_spinner(text) if animate?))
+        line = Line.new(fields: fields.call(item),
+          mark: paint("done", :bright_black),
+          timeout: timeout.call(item),
+          spinner: (solo_spinner(text) if animate?))
         line.start
         begin
           result = block.call(item, line)
-        rescue => e
+        rescue StandardError => e
           reason = e.message.lines.first.to_s.strip
           line.failed(reason)
           report_line("#{text}: #{reason}", bullet: "✗") unless animate?
@@ -475,8 +496,11 @@ module Agentilda
       # @param text [String]
       # @return [TTY::Spinner]
       def solo_spinner(text)
-        spinner = TTY::Spinner.new("[:spinner] :timer:meter#{text}:pid:activity", format: :dots, output: $stderr,
-          success_mark: paint("✓", :green), error_mark: paint("✖", :red))
+        spinner = TTY::Spinner.new("[:spinner] :timer:meter#{text}:pid:activity",
+          format:       :dots,
+          output:       $stderr,
+          success_mark: paint("✓", :green),
+          error_mark:   paint("✖", :red))
         spinner.update(timer: "", meter: meter(nil), activity: "", pid: "")
         spinner.auto_spin
         spinner
@@ -509,7 +533,7 @@ module Agentilda
               item, index = pair
               results[index] = begin
                 once(item, label, fields, failure:, &)
-              rescue => e
+              rescue StandardError => e
                 e
               end
             end
@@ -561,7 +585,7 @@ module Agentilda
 
       # @param text [String]
       # @return [Integer] how many terminal cells the text occupies
-      def display_width(text) = Unicode::DisplayWidth.of(text.to_s)
+      def display_width(text) = ::Unicode::DisplayWidth.of(text.to_s)
 
       # Pad or truncate to an exact number of terminal *cells*.
       #
@@ -597,7 +621,7 @@ module Agentilda
       # such output to be disabled", is the behaviour being removed here.
       def box(kind, message)
         text = message.to_s
-        $stderr.puts TTY::Box.public_send(kind, text, enable_color: color?, width:, height: box_height(text))
+        warn TTY::Box.public_send(kind, text, enable_color: color?, width:, height: box_height(text))
       end
 
       # standard:enable Style/StderrPuts
@@ -616,11 +640,14 @@ module Agentilda
         box_width = [lines.map { |l| display_width(l.chomp) }.max.to_i + 6, TTY::Screen.width].min
         box_height = lines.size + 4
         $stderr.print TTY::Box.frame(
-          top: [(TTY::Screen.height - box_height) / 2, 0].max,
-          left: [(TTY::Screen.width - box_width) / 2, 0].max,
-          width: box_width, height: box_height, padding: 1,
-          title: {top_left: " #{title} "}, enable_color: color?,
-          style: color? ? {border: {fg: :cyan}} : {}
+          top:          [(TTY::Screen.height - box_height) / 2, 0].max,
+          left:         [(TTY::Screen.width - box_width) / 2, 0].max,
+          width:        box_width,
+          height:       box_height,
+          padding:      1,
+          title:        { top_left: " #{title} " },
+          enable_color: color?,
+          style:        color? ? { border: { fg: :cyan } } : {}
         ) { text.to_s }
       end
       # standard:enable Style/StderrPuts
@@ -647,7 +674,7 @@ module Agentilda
       # @param bullet [String]
       # @return [void]
       # standard:disable Style/StderrPuts -- see {.box}: `warn` is a no-op under -W0.
-      def line(message, bullet: "·") = $stderr.puts("  #{paint(bullet, :bright_black)} #{message}")
+      def line(message, bullet: "·") = warn("  #{paint(bullet, :bright_black)} #{message}")
 
       # standard:enable Style/StderrPuts
     end

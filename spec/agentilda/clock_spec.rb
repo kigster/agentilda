@@ -1,13 +1,13 @@
 # frozen_string_literal: true
 
 RSpec.describe Agentilda::Clock do
-  let(:control) { File.join(Dir.mktmpdir, "control") }
-  let(:expired) { [] }
-  let(:now) { {t: 0.0} }
-
   subject(:clock) do
     described_class.new(seconds: 1200, control:, on_expire: -> { expired << :yes }, now: -> { now[:t] })
   end
+
+  let(:control) { File.join(Dir.mktmpdir, "control") }
+  let(:expired) { [] }
+  let(:now) { { t: 0.0 } }
 
   # The subject is built here rather than lazily so that every clock is armed
   # at t=0; examples move now[:t] before their first reference to it.

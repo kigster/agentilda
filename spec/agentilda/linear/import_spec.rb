@@ -11,17 +11,21 @@ RSpec.describe Agentilda::Linear::Import, :tree do
   end
 
   let(:options) { {} }
-  let(:project) { {"id" => "p-1", "name" => "US Tax Law: Self Contained Ruby Gem", "url" => "https://linear.app/p-1"} }
+  let(:project) { { "id" => "p-1", "name" => "US Tax Law: Self Contained Ruby Gem", "url" => "https://linear.app/p-1" } }
 
   let!(:tree) do
     plans do |t|
-      t.plan "001.00", :new, "initial-spec",
-        files: {"spec.md" => spec_body(title: "Answer one question", goal: "Make it work.")}
-      t.plan "002.00", :approved, "dev-foundation",
-        files: {"spec.md" => spec_body(title: "Dev Foundation"),
-                "plan.md" => "## PR-1 — Test rig\n\nThe rig.\n\n## PR-2 — Rails foundation\n\nThe app.\n"},
-        prs: [t.merged(2, "Spec 002 PR-1: Test rig"), t.merged(3, "Spec 002 PR-2: Rails foundation")]
-      t.plan "003.00", :blocked, "pricing", files: {"blocked.md" => "B1. Which tier?"}
+      t.plan "001.00",
+        :new,
+        "initial-spec",
+        files: { "spec.md" => spec_body(title: "Answer one question", goal: "Make it work.") }
+      t.plan "002.00",
+        :approved,
+        "dev-foundation",
+        files: { "spec.md" => spec_body(title: "Dev Foundation"),
+                 "plan.md" => "## PR-1 — Test rig\n\nThe rig.\n\n## PR-2 — Rails foundation\n\nThe app.\n" },
+        prs:   [t.merged(2, "Spec 002 PR-1: Test rig"), t.merged(3, "Spec 002 PR-2: Rails foundation")]
+      t.plan "003.00", :blocked, "pricing", files: { "blocked.md" => "B1. Which tier?" }
     end
   end
 
@@ -31,8 +35,8 @@ RSpec.describe Agentilda::Linear::Import, :tree do
     it "gives every plan an issue, and every work unit a child of it" do
       expect(import.actions.map { |a| [a.ordinal, a.kind, a.unit] }).to eq(
         [["001.00", :issue, "PLAN"],
-          ["002.00", :issue, "PLAN"], ["002.00", :subissue, "PR-1"], ["002.00", :subissue, "PR-2"],
-          ["003.00", :issue, "PLAN"]]
+         ["002.00", :issue, "PLAN"], ["002.00", :subissue, "PR-1"], ["002.00", :subissue, "PR-2"],
+         ["003.00", :issue, "PLAN"]]
       )
     end
 
@@ -66,14 +70,16 @@ RSpec.describe Agentilda::Linear::Import, :tree do
     # They are the Linear MCP server's own argument names on purpose: the same
     # JSON has to drive both transports, or the two will drift.
     it "addresses everything by the names a human already knows" do
-      expect(child.args).to include(team: "TAX", project: a_string_including("Ruby Gem"),
-        state: "Done", labels: [])
+      expect(child.args).to include(team: "TAX",
+        project: a_string_including("Ruby Gem"),
+        state: "Done",
+        labels: [])
     end
 
     it "attaches the pull requests rather than listing them in the body" do
       aggregate_failures do
-        expect(child.args[:links]).to eq([{url: "https://github.com/example/repo/pull/2",
-                                           title: "#2 — Spec 002 PR-1: Test rig"}])
+        expect(child.args[:links]).to eq([{ url:   "https://github.com/example/repo/pull/2",
+                                            title: "#2 — Spec 002 PR-1: Test rig" }])
         expect(child.args[:description]).not_to include("/pull/2")
       end
     end
@@ -87,9 +93,11 @@ RSpec.describe Agentilda::Linear::Import, :tree do
     # is false about most of them and useless on a board.
     it "takes a child's state from its own pull requests, not from the plan" do
       plans do |t|
-        t.plan "004.00", :building, "half-done",
-          files: {"spec.md" => spec_body, "plan.md" => "## PR-1 — Done bit\n\n## PR-2 — Open bit\n"},
-          prs: [t.merged(7, "Spec 004 PR-1: Done bit"), t.open(8, "Spec 004 PR-2: Open bit")]
+        t.plan "004.00",
+          :building,
+          "half-done",
+          files: { "spec.md" => spec_body, "plan.md" => "## PR-1 — Done bit\n\n## PR-2 — Open bit\n" },
+          prs:   [t.merged(7, "Spec 004 PR-1: Done bit"), t.open(8, "Spec 004 PR-2: Open bit")]
       end
       states = import.actions.select { |a| a.ordinal == "004.00" && a.child? }.map { |a| a.args[:state] }
 
@@ -107,14 +115,18 @@ RSpec.describe Agentilda::Linear::Import, :tree do
     def record(dirname, digest:, unit: "PR-1", identifier: "TAX-41")
       File.write(File.join(plans_root, dirname, "linear.md"),
         Agentilda::Linear::Issues.render(team: "TAX",
-          project: {name: project["name"], url: project["url"]},
-          issues: [Agentilda::Linear::Issue.new(unit:, identifier:, url: "https://linear.app/i",
-            title: "t", state: "Done", digest:)]))
+          project: { name: project["name"], url: project["url"] },
+          issues: [Agentilda::Linear::Issue.new(unit:,
+            identifier:,
+            url: "https://linear.app/i",
+            title: "t",
+            state: "Done",
+            digest:)]))
     end
 
     def digest_of(unit)
       described_class.new(tree: Agentilda::Tree.new(dir: plans_root), team: "TAX", project:)
-        .actions.find { |a| a.unit == unit }.digest
+                     .actions.find { |a| a.unit == unit }.digest
     end
 
     it "creates what no linear.md has ever heard of" do
@@ -153,7 +165,7 @@ RSpec.describe Agentilda::Linear::Import, :tree do
     end
 
     context "with --force" do
-      let(:options) { {force: true} }
+      let(:options) { { force: true } }
 
       it "updates even what it would otherwise have left alone" do
         record("002.00-✅ → dev-foundation", digest: digest_of("PR-1"))
@@ -164,10 +176,12 @@ RSpec.describe Agentilda::Linear::Import, :tree do
   end
 
   describe "pull requests attributed to a folder from outside it" do
-    let(:options) { {adopted: {"002.00-✅ → dev-foundation" => [orphan]}} }
+    let(:options) { { adopted: { "002.00-✅ → dev-foundation" => [orphan] } } }
     let(:orphan) do
-      Agentilda::PullRequest.new(number: "91", title: "Wire the rig to CI",
-        url: "https://github.com/example/repo/pull/91", state: "Merged 🟣")
+      Agentilda::PullRequest.new(number: "91",
+        title: "Wire the rig to CI",
+        url: "https://github.com/example/repo/pull/91",
+        state: "Merged 🟣")
     end
 
     it "gives it a child of its own, since no declared unit claims it" do
@@ -187,15 +201,19 @@ RSpec.describe Agentilda::Linear::Import, :tree do
 
   describe "choosing which plans to import" do
     it "skips everything numbered below --since" do
-      filtered = described_class.new(tree: Agentilda::Tree.new(dir: plans_root), team: "TAX",
-        project:, since: "002.00")
+      filtered = described_class.new(tree: Agentilda::Tree.new(dir: plans_root),
+        team: "TAX",
+        project:,
+        since: "002.00")
 
       expect(filtered.actions.map(&:ordinal).uniq).to eq(%w[002.00 003.00])
     end
 
     it "keeps only the states asked for" do
-      filtered = described_class.new(tree: Agentilda::Tree.new(dir: plans_root), team: "TAX",
-        project:, statuses: [:blocked])
+      filtered = described_class.new(tree: Agentilda::Tree.new(dir: plans_root),
+        team: "TAX",
+        project:,
+        statuses: [:blocked])
 
       expect(filtered.actions.map(&:ordinal).uniq).to eq(%w[003.00])
     end
@@ -204,8 +222,8 @@ RSpec.describe Agentilda::Linear::Import, :tree do
   describe "a plan whose state nobody has decided how to file" do
     before do
       plans do |t|
-        t.plan "009.00", :shit, "scrapped-work", files: {"rewrite.md" => "Start again."}
-        t.plan "010.00", :rolled_back, "pulled", files: {"rollback.md" => "It broke checkout."}
+        t.plan "009.00", :shit, "scrapped-work", files: { "rewrite.md" => "Start again." }
+        t.plan "010.00", :rolled_back, "pulled", files: { "rollback.md" => "It broke checkout." }
       end
     end
 

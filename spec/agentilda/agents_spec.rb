@@ -161,8 +161,12 @@ RSpec.describe Agentilda::Agents do
 
     it "reads the timeouts as settled" do
       expect(agents.all.to_h { |a| [a.name, a.timeout] }).to include(
-        "yoda-writer" => 300, "palpatine-planner" => 600, "luke-backend" => 1200,
-        "rey-frontend" => 1200, "hansolo-reviewer" => 300, "leah-researcher" => 1200
+        "yoda-writer"       => 300,
+        "palpatine-planner" => 600,
+        "luke-backend"      => 1200,
+        "rey-frontend"      => 1200,
+        "hansolo-reviewer"  => 300,
+        "leah-researcher"   => 1200
       )
     end
 

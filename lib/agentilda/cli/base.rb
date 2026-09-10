@@ -1,5 +1,7 @@
 # frozen_string_literal: true
 
+require "dry/cli"
+
 module Agentilda
   module CLI
     # Shared flags and the plumbing every command needs.
@@ -8,10 +10,15 @@ module Agentilda
 
       def self.inherited(klass)
         super
-        klass.option :dir, default: Agentilda::PLANS_DIR, aliases: ["-D"],
-          desc: "The .plans directory"
-        klass.option :quiet, type: :boolean, default: false, aliases: ["-q"],
-          desc: "Suppress progress output on STDERR"
+        klass.option :dir,
+          default: Agentilda::PLANS_DIR,
+          aliases: ["-D"],
+          desc:    "The .plans directory"
+        klass.option :quiet,
+          type:    :boolean,
+          default: false,
+          aliases: ["-q"],
+          desc:    "Suppress progress output on STDERR"
       end
 
       private
@@ -22,7 +29,8 @@ module Agentilda
         tree = Tree.new(dir: options.fetch(:dir, Agentilda::PLANS_DIR))
         unless tree.exist?
           refuse("No #{Agentilda::PLANS_DIR} directory at\n#{tree.dir}\n\n" \
-                 "Run this from the project root, or pass -D.", 66)
+                 "Run this from the project root, or pass -D.",
+            66)
         end
         tree
       end

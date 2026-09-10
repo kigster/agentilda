@@ -32,8 +32,9 @@ module Agentilda
         @endpoint = endpoint
         return if transport || (token && !token.empty?)
 
-        raise Error, "no Linear token. Set #{TOKEN_VARIABLE}, or use the MCP transport:\n  " \
-                     "agentilda linear import <TEAM> -p <PROJECT> --format json"
+        raise Error,
+          "no Linear token. Set #{TOKEN_VARIABLE}, or use the MCP transport:\n  " \
+          "agentilda linear import <TEAM> -p <PROJECT> --format json"
       end
 
       # The team, its workflow states and its labels, in one round trip.
@@ -45,8 +46,8 @@ module Agentilda
         node = query(TEAM, key: key.to_s.upcase).dig("teams", "nodes")&.first
         raise Error, "no Linear team has the key #{key.to_s.upcase}" unless node
 
-        {id: node["id"], name: node["name"], key: node["key"],
-         states: node.dig("states", "nodes").to_a, labels: node.dig("labels", "nodes").to_a}
+        { id: node["id"], name: node["name"], key: node["key"],
+         states: node.dig("states", "nodes").to_a, labels: node.dig("labels", "nodes").to_a }
       end
 
       # @param team_id [String]
@@ -75,7 +76,7 @@ module Agentilda
       # @param team_id [String]
       # @return [Hash] `{id:, name:}`
       def create_label(name, team_id)
-        unwrap(query(LABEL_CREATE, input: {name:, teamId: team_id}), "issueLabelCreate", "issueLabel")
+        unwrap(query(LABEL_CREATE, input: { name:, teamId: team_id }), "issueLabelCreate", "issueLabel")
       end
 
       # @param issue_id [String]
@@ -83,7 +84,7 @@ module Agentilda
       # @param title [String]
       # @return [void]
       def link(issue_id:, url:, title:)
-        query(ATTACHMENT_CREATE, input: {issueId: issue_id, url:, title:})
+        query(ATTACHMENT_CREATE, input: { issueId: issue_id, url:, title: })
       end
 
       # @param query [String] a GraphQL document
@@ -139,8 +140,11 @@ module Agentilda
         request["Authorization"] = token
         request.body = JSON.generate(query: document, variables:)
 
-        response = Net::HTTP.start(uri.hostname, uri.port, use_ssl: uri.scheme == "https",
-          open_timeout: 10, read_timeout: 30) { |http| http.request(request) }
+        response = Net::HTTP.start(uri.hostname,
+          uri.port,
+          use_ssl:      uri.scheme == "https",
+          open_timeout: 10,
+          read_timeout: 30) { |http| http.request(request) }
 
         parse(response)
       rescue JSON::ParserError, IOError, SystemCallError, Net::OpenTimeout, Net::ReadTimeout => e
@@ -153,8 +157,8 @@ module Agentilda
         return JSON.parse(response.body.to_s) if response.is_a?(Net::HTTPSuccess)
 
         hint = if ["400", "401"].include?(response.code)
-          "\n\nCheck #{TOKEN_VARIABLE}. A personal API key is sent verbatim, without a `Bearer` prefix."
-        end
+                 "\n\nCheck #{TOKEN_VARIABLE}. A personal API key is sent verbatim, without a `Bearer` prefix."
+               end
         raise Error, "Linear returned HTTP #{response.code}#{hint}"
       end
 

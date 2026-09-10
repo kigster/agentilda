@@ -6,31 +6,44 @@ module Agentilda
     class Run < Base
       desc "Run specialist agents over the plans until nothing changes"
 
-      option :commit, type: :boolean, default: false,
-        desc: "Actually invoke the agents (default: dry run, prints the plan of work)"
-      option :rounds, desc: "Cap on rounds per agent per plan; each agent declares its own, at most 5 " \
-        "(default: the agent's own)"
-      option :timeout, desc: "Seconds before one agent is abandoned; only tightens an agent's own clock " \
-        "(default: the agent's own, else 900)"
+      option :commit,
+        type:    :boolean,
+        default: false,
+        desc:    "Actually invoke the agents (default: dry run, prints the plan of work)"
+      option :rounds,
+        desc: "Cap on rounds per agent per plan; each agent declares its own, at most 5 " \
+              "(default: the agent's own)"
+      option :timeout,
+        desc: "Seconds before one agent is abandoned; only tightens an agent's own clock " \
+              "(default: the agent's own, else 900)"
       option :agent, desc: "Only run this one agent"
       option :prompt, desc: "Extra instructions appended to the agent's prompt (only with --agent)"
-      option :skip, desc: "Never assign this agent; its plans wait, the rest of the pipeline runs. " \
-        "Comma separated for several"
-      option :model, desc: "Model for every agent this run, overriding each agent's own frontmatter " \
-        "(default: what the agent declares, else the claude CLI's default)"
-      option :max_tokens, desc: "Token budget per agent invocation, input plus output, sub-agents " \
-        "included. The agent is told the number so it can finish inside it; the meter aborts it past " \
-        "the number so the telling is true. (default: unmetered)"
-      option :plan, aliases: ["--plans"],
-        desc: "Only these plans, comma separated: NNN or NNN.MM, e.g. --plan 003,005.01. Default: the whole tree"
+      option :skip,
+        desc: "Never assign this agent; its plans wait, the rest of the pipeline runs. " \
+              "Comma separated for several"
+      option :model,
+        desc: "Model for every agent this run, overriding each agent's own frontmatter " \
+              "(default: what the agent declares, else the claude CLI's default)"
+      option :max_tokens,
+        desc: "Token budget per agent invocation, input plus output, sub-agents " \
+              "included. The agent is told the number so it can finish inside it; the meter aborts it past " \
+              "the number so the telling is true. (default: unmetered)"
+      option :plan,
+        aliases: ["--plans"],
+        desc:    "Only these plans, comma separated: NNN or NNN.MM, e.g. --plan 003,005.01. Default: the whole tree"
       option :root, desc: "Repository root the agents work in (default: the .plans parent)"
-      option :isolation, default: "worktree", values: %w[worktree shared],
-        desc: "worktree: a checkout and branch per plan, run in parallel. shared: one tree, serial"
-      option :jobs, aliases: ["-j"],
-        desc: "Agents to run at once (default: cores - 2, capped at 12)"
-      option :dont_push_anything, type: :boolean, default: false,
-        desc: "With --commit and --isolation worktree, a finished branch is pushed and its pull request " \
-              "opened as soon as it lands, titled [NNN.MM](X). Pass this to turn that off and leave it uncommitted."
+      option :isolation,
+        default: "worktree",
+        values:  %w[worktree shared],
+        desc:    "worktree: a checkout and branch per plan, run in parallel. shared: one tree, serial"
+      option :jobs,
+        aliases: ["-j"],
+        desc:    "Agents to run at once (default: cores - 2, capped at 12)"
+      option :dont_push_anything,
+        type:    :boolean,
+        default: false,
+        desc:    "With --commit and --isolation worktree, a finished branch is pushed and its pull request " \
+                 "opened as soon as it lands, titled [NNN.MM](X). Pass this to turn that off and leave it uncommitted."
       option :log, desc: "Append progress to this file (default: a per-project file under the system temp dir)"
 
       example [
@@ -58,24 +71,26 @@ module Agentilda
 
         if options[:prompt] && !options[:agent]
           refuse("--prompt only works with --agent: it speaks to one agent, and without " \
-                 "that restriction every agent in the round would hear it.", 64)
+                 "that restriction every agent in the round would hear it.",
+            64)
         end
 
-        tree = tree_for(options)
-        root = options[:root] || File.dirname(tree.dir)
+        tree   = tree_for(options)
+        root   = options[:root] || File.dirname(tree.dir)
         agents = Agentilda::Agents.new
         agents = filtered(agents, options[:agent]) if options[:agent]
         agents = skipped(agents, options[:skip], options[:agent]) if options[:skip]
-        plans = options[:plan] ? scoped(tree, options[:plan]) : nil
+        plans  = options[:plan] ? scoped(tree, options[:plan]) : nil
         assignable!(agents, tree, plans, options[:agent]) if options[:agent]
 
         isolation = options.fetch(:isolation, "worktree").to_sym
-        jobs = (options[:jobs] || config[:jobs] || UI.default_jobs).to_i
-        timeout = (options[:timeout] || config[:timeout])&.to_i
+        jobs      = (options[:jobs] || config[:jobs] || UI.default_jobs).to_i
+        timeout   = (options[:timeout] || config[:timeout])&.to_i
 
         if isolation == :worktree && !::Agentilda::Worktree.new(root:).repository?
           refuse("#{root} is not a git repository, so plans cannot be isolated.\n\n" \
-                 "Run with --isolation shared to work in one tree, serially.", 66)
+                 "Run with --isolation shared to work in one tree, serially.",
+            66)
         end
 
         # Set before the loop starts, not after: `UI.animate?` (and therefore
@@ -83,7 +98,7 @@ module Agentilda
         # loop runs, not just when `report` prints its closing summary.
         quiet?(options)
         UI.log_path = options[:log] || config[:log] ||
-          File.join(Dir.tmpdir, "agentilda-#{File.basename(root)}.log")
+                      File.join(Dir.tmpdir, "agentilda-#{File.basename(root)}.log")
         info("Progress: #{UI.log_path}") unless quiet?(options)
         credentials_warning if commit?(options) && !quiet?(options)
 
@@ -101,27 +116,35 @@ module Agentilda
         # run has nothing to draw and a pipe has nowhere to draw it. Without a
         # screen the keys still work, so the one line says which.
         Control.reset!
-        screen = (Screen.new if UI.animate? && commit?(options))
-        console = (Console.new(screen:) if screen)
+        screen   = (Screen.new if UI.animate? && commit?(options))
+        console  = (Console.new(screen:) if screen)
         keyboard = Keyboard.listen(sink: console)
         UI.line("keys: h for help - s select, k kill, x extend, w wrap up, n stop, q quit") if keyboard && console.nil? && !quiet?(options)
 
         runner = Runner.new(
-          tree:, agents:, isolation:, jobs:, plans:, state:,
-          worktree: (::Agentilda::Worktree.new(root:) if isolation == :worktree),
-          rounds: (options[:rounds] || config[:rounds])&.to_i,
-          executor: Executor.new(root:, timeout:, dry_run: !commit?(options),
-            instructions: options[:prompt], model: options[:model],
-            max_tokens: (options[:max_tokens] || config[:max_tokens])&.to_i,
-            interactive: !keyboard.nil? && commit?(options)),
-          dry_run: !commit?(options),
+          tree:,
+          agents:,
+          isolation:,
+          jobs:,
+          plans:,
+          state:,
+          worktree:  (::Agentilda::Worktree.new(root:) if isolation == :worktree),
+          rounds:    (options[:rounds] || config[:rounds])&.to_i,
+          executor:  Executor.new(root:,
+            timeout:,
+            dry_run:      !commit?(options),
+            instructions: options[:prompt],
+            model:        options[:model],
+            max_tokens:   (options[:max_tokens] || config[:max_tokens])&.to_i,
+            interactive:  !keyboard.nil? && commit?(options)),
+          dry_run:   !commit?(options),
           publisher: publisher_for(root, isolation, options),
-          on_board: console&.method(:paint)
+          on_board:  console&.method(:paint)
         )
 
         # The dispatcher exists only once the run starts, so the console is
         # introduced to it through the block rather than up front.
-        started = UI.monotonic
+        started  = UI.monotonic
         attempts = begin
           screen&.open
           runner.call { |dispatcher| console&.attach(dispatcher) }
@@ -156,14 +179,15 @@ module Agentilda
       # @return [Agentilda::Agents] without the agents named
       def skipped(agents, text, restricted)
         roster = Agentilda::Agents.new
-        names = text.split(",").map(&:strip).reject(&:empty?)
+        names  = text.split(",").map(&:strip).reject(&:empty?)
         names.each do |name|
           roster.find(name) or
             refuse("No agent called #{name}.\n\nKnown: #{roster.all.map(&:name).join(", ")}", 65)
-          if name == restricted
-            refuse("--agent #{name} and --skip #{name} contradict each other: " \
-                   "one asks for only this agent, the other for anything but.", 64)
-          end
+          next unless name == restricted
+
+          refuse("--agent #{name} and --skip #{name} contradict each other: " \
+                 "one asks for only this agent, the other for anything but.",
+            64)
         end
         agents.without(*names)
       end
@@ -183,7 +207,8 @@ module Agentilda
           ordinal = Ordinal.parse(token)
           unless ordinal && known.include?(ordinal)
             refuse("No plan #{token} in #{tree.dir}.\n\n" \
-                   "Known: #{known.join(", ")}", 66)
+                   "Known: #{known.join(", ")}",
+              66)
           end
           ordinal
         }
@@ -201,23 +226,24 @@ module Agentilda
       # @param name [String]
       # @return [void]
       def assignable!(agents, tree, plans, name)
-        agent = agents.find(name)
+        agent  = agents.find(name)
         active = tree.subjects.select { |s|
           (plans.nil? || plans.include?(s.feature.ordinal)) &&
             !StateMachine::SETTLED.include?(s.status.key)
         }
         return if active.empty? || active.any? { |s| agent.handles?(s.status) }
 
-        roster = Agentilda::Agents.new
-        lines = active.map { |s|
+        roster  = Agentilda::Agents.new
+        lines   = active.map { |s|
           takers = roster.for_status(s.status).map(&:name)
-          verb = (takers.size == 1) ? "takes" : "take"
+          verb   = takers.size == 1 ? "takes" : "take"
           "  #{s.feature.ordinal} is #{s.status.emoji} #{s.status.label}" \
             "#{" - #{takers.join(" and ")} #{verb} it" unless takers.empty?}"
         }
         handled = agent.handles.map { |k| Agentilda::STATUS_BY_KEY[k]&.then { |st| "#{st.emoji} #{st.label}" } || k }
         refuse("#{name} handles #{handled.join(", ")}, and no plan in scope is there:\n\n" \
-               "#{lines.join("\n")}\n\nName the agent that takes these states, or drop --agent.", 65)
+               "#{lines.join("\n")}\n\nName the agent that takes these states, or drop --agent.",
+          65)
       end
 
       # @param attempts [Array<Agentilda::Runner::Attempt>]
@@ -257,12 +283,12 @@ module Agentilda
         puts "attempts"
         attempts.each do |a|
           mark = if !a.ok
-            "FAIL"
-          elsif a.advanced?
-            "#{a.from} -> #{a.to}"
-          else
-            "no change"
-          end
+                   "FAIL"
+                 elsif a.advanced?
+                   "#{a.from} -> #{a.to}"
+                 else
+                   "no change"
+                 end
           puts "  #{a.ordinal}\t#{a.agent}\t[R:#{a.round}]\t#{mark}\t#{a.note}"
         end
 
@@ -280,8 +306,8 @@ module Agentilda
         end
 
         advanced = attempts.count(&:advanced?)
-        blocked = runner.blocked
-        summary = ["#{attempts.size} invocation#{"s" unless attempts.size == 1}", "#{advanced} advanced"]
+        blocked  = runner.blocked
+        summary  = ["#{attempts.size} invocation#{"s" unless attempts.size == 1}", "#{advanced} advanced"]
         summary << (runner.isolated? ? "#{runner.jobs} at a time, one worktree each" : "serial, shared tree")
         summary << "#{blocked.size} blocked" unless blocked.empty?
         summary << "#{failures(attempts).size} failed" unless failures(attempts).empty?
@@ -297,9 +323,9 @@ module Agentilda
         return if blocked.empty?
 
         warn("#{blocked.size} plan#{"s" unless blocked.size == 1} need a human decision:\n" +
-             blocked.map { |b| "  #{b.feature.ordinal} #{b.status.emoji} #{b.feature.title} — see blocked.md" }.join("\n") +
-             "\n\nWrite the answers into blocked.md, then: agentilda unblock " \
-             "#{blocked.map { |b| b.feature.ordinal }.join(",")} --commit")
+               blocked.map { |b| "  #{b.feature.ordinal} #{b.status.emoji} #{b.feature.title} — see blocked.md" }.join("\n") +
+               "\n\nWrite the answers into blocked.md, then: agentilda unblock " \
+               "#{blocked.map { |b| b.feature.ordinal }.join(",")} --commit")
       end
     end
   end

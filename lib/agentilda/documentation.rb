@@ -195,7 +195,7 @@ module Agentilda
     # @return [String]
     def merged_note
       "🟣 Merged is deliberately **not** a folder state. It describes a pull request, " \
-      "and a folder that claimed it would be claiming a pull request's condition as its own."
+        "and a folder that claimed it would be claiming a pull request's condition as its own."
     end
 
     # Why this is prose rather than another derived table: the mechanism is a
@@ -309,9 +309,9 @@ module Agentilda
     # @return [String]
     def files_section
       known = Agentilda::STATUSES
-        .flat_map(&:requires)
-        .uniq
-        .map { |f| "| `#{f}` | #{holders_of(f)} |" }
+              .flat_map(&:requires)
+              .uniq
+              .map { |f| "| `#{f}` | #{holders_of(f)} |" }
 
       <<~MARKDOWN
         ## Files allowed in a plan folder

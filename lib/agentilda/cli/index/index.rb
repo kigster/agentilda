@@ -6,10 +6,12 @@ module Agentilda
     class Index < Base
       desc "Create or update .plans/INDEX.md — a global index of every plan."
 
-      option :output, aliases: ["-o"],
-        desc: "Write somewhere other than <plans>/INDEX.md; - for STDOUT"
-      option :project, aliases: ["-p"],
-        desc: "Heading for the page, default: the repository's directory name"
+      option :output,
+        aliases: ["-o"],
+        desc:    "Write somewhere other than <plans>/INDEX.md; - for STDOUT"
+      option :project,
+        aliases: ["-p"],
+        desc:    "Heading for the page, default: the repository's directory name"
 
       example [
         "                     # write .plans/INDEX.md",

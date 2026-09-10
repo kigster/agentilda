@@ -1,5 +1,8 @@
 # frozen_string_literal: true
 
+require "agentilda/status"
+require "agentilda/ui"
+
 module Agentilda
   # One line of `run --log FILE`, laid out as fixed-width columns.
   #
@@ -18,6 +21,7 @@ module Agentilda
   # @example
   #   ProgressLog.render("editing spec.md", plan: "003.00", status: "⭐️ Planned",
   #     agent: "yoda-writer", seconds: 42, round: "01", pid: 91_234)
+
   #   #=> "[16:22:14 | 003.00 | ⭐️ Planned            | yoda-writer          | 01 |   91234 |    42s] editing spec.md"
   module ProgressLog
     # Wall clock only. A log line answers "when", and the date is the file's.
@@ -60,7 +64,7 @@ module Agentilda
     # that line happens to be missing, so a reader indenting a wrapped message
     # has a number to indent by.
     COLUMN_WIDTHS = [TIME_WIDTH, PLAN_WIDTH, STATUS_WIDTH, AGENT_WIDTH, ROUND_WIDTH, PID_WIDTH,
-      SECONDS_WIDTH].freeze
+                     SECONDS_WIDTH].freeze
 
     # @see COLUMN_WIDTHS
     LINE_WIDTH = COLUMN_WIDTHS.sum + (SEPARATOR.length * (COLUMN_WIDTHS.size - 1)) + 2

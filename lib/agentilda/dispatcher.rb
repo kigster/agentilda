@@ -1,5 +1,7 @@
 # frozen_string_literal: true
 
+require "agentilda/status"
+
 module Agentilda
   # The loop. One tick a second: reap what finished and settle it against
   # the ledger, poll what is running for its latest line, start what is
@@ -15,8 +17,20 @@ module Agentilda
     # `starts_as` rename. History is keyed by `state`: luke picked at ⭐️
     # works at 🟡, and keying by ⭐️ would offer him 🟡 afterwards as though
     # he had never been there (the 020.00 regression, run twice over).
-    Job = Struct.new(:key, :task, :thread, :handle, :started_at, :file, :status, :message,
-      :up, :down, :result, :from, :state, :frame) do
+    Job = Struct.new(:key,
+      :task,
+      :thread,
+      :handle,
+      :started_at,
+      :file,
+      :status,
+      :message,
+      :up,
+      :down,
+      :result,
+      :from,
+      :state,
+      :frame) do
       # @return [Boolean]
       def finished? = !thread.alive?
     end
@@ -104,10 +118,16 @@ module Agentilda
     def board
       up = @attempts.sum(&:up) + @running.sum { |j| j.up.to_i }
       down = @attempts.sum(&:down) + @running.sum { |j| j.down.to_i }
-      Board.new(started_at: @started_at, status: run_status,
+      Board.new(started_at: @started_at,
+        status: run_status,
         plans: (@running.map { |j| j.task.subject.feature.ordinal.to_s } + @recent.map { |r| r[:row].ordinal }).uniq,
-        up:, down:, rows: rows, root: @runner.root, running: @running.size,
-        live_up: @running.sum { |j| j.up.to_i }, live_down: @running.sum { |j| j.down.to_i })
+        up:,
+        down:,
+        rows: rows,
+        root: @runner.root,
+        running: @running.size,
+        live_up: @running.sum { |j| j.up.to_i },
+        live_down: @running.sum { |j| j.down.to_i })
     end
 
     private
@@ -132,11 +152,23 @@ module Agentilda
     def row_for(job)
       task = job.task
       job.frame = job.frame.to_i + 1
-      Board::Row.new(key: job.key, at: Time.now, ordinal: task.subject.feature.ordinal.to_s,
-        file: job.file || task.agent.ledger.first.to_s, agent: task.agent.name, role: task.agent.role,
-        round: task.round, rounds: rounds_for(task.agent), model: model_for(task.agent),
-        remaining: job.handle.remaining, phase: job.handle.phase, up: job.up.to_i, down: job.down.to_i,
-        message: job.message, state: :running, pr: pr_for(task), frame: job.frame)
+      Board::Row.new(key: job.key,
+        at: Time.now,
+        ordinal: task.subject.feature.ordinal.to_s,
+        file: job.file || task.agent.ledger.first.to_s,
+        agent: task.agent.name,
+        role: task.agent.role,
+        round: task.round,
+        rounds: rounds_for(task.agent),
+        model: model_for(task.agent),
+        remaining: job.handle.remaining,
+        phase: job.handle.phase,
+        up: job.up.to_i,
+        down: job.down.to_i,
+        message: job.message,
+        state: :running,
+        pr: pr_for(task),
+        frame: job.frame)
     end
 
     # @param task [Agentilda::Runner::Task]
@@ -146,7 +178,7 @@ module Agentilda
 
       subject = Tree.new(dir: @runner.tree.dir).find(task.subject.feature.ordinal) or return nil
       pull = subject.pull_requests.find(&:open?) or return nil
-      {number: pull.number, url: pull.url, rejected: subject.status.key == :rejected}
+      { number: pull.number, url: pull.url, rejected: subject.status.key == :rejected }
     end
 
     # @param agent [Agentilda::Agent]
@@ -202,7 +234,7 @@ module Agentilda
 
         candidates = @runner.agents.for_status(state)
         preferred = @preferred[subject.feature.ordinal.to_s]
-        candidates = candidates.sort_by { |a| (a.name == preferred) ? 0 : 1 } if preferred
+        candidates = candidates.sort_by { |a| a.name == preferred ? 0 : 1 } if preferred
         agent = candidates.find { |a| eligible?(a, subject) }
         return [agent, subject] if agent
       end
@@ -248,15 +280,28 @@ module Agentilda
       subject = rename_on_start(subject, agent) unless @runner.dry_run?
       task = @runner.prepare(agent, subject, round)
       handle = Executor::Handle.new
-      job = Job.new(key: "#{ordinal}/#{agent.name}", task:, handle:, started_at: UI.monotonic,
-        from:, state: subject.status.key, up: 0, down: 0, frame: 0)
+      job = Job.new(key: "#{ordinal}/#{agent.name}",
+        task:,
+        handle:,
+        started_at: UI.monotonic,
+        from:,
+        state: subject.status.key,
+        up: 0,
+        down: 0,
+        frame: 0)
       successor = @runner.agents.for_status(STATUS_BY_KEY.fetch(agent.advances_to)).first&.name if agent.advances_to && STATUS_BY_KEY.key?(agent.advances_to)
       # Each member of a pair is told who the others are, so the executor
       # can name them beside the plan's mailbox.
       partners = @runner.agents.for_status(Resync::Dirs.target(subject)) - [agent]
       remember(ordinal, agent.name, job.state, "Started", round)
-      @state&.record(ordinal, agent: agent.name, round:, status: "Started", state: from.to_s,
-        model: model_for(agent), file: agent.ledger.first, started_at: Time.now.iso8601)
+      @state&.record(ordinal,
+        agent:      agent.name,
+        round:,
+        status:     "Started",
+        state:      from.to_s,
+        model:      model_for(agent),
+        file:       agent.ledger.first,
+        started_at: Time.now.iso8601)
       UI.log("started", **task.log_fields)
       job.thread = Thread.new do
         Thread.current.report_on_exception = false
@@ -266,7 +311,7 @@ module Agentilda
             job.down = progress.down
             job.message = progress.message || progress.activity
           }
-        rescue => e
+        rescue StandardError => e
           e
         end
       end
@@ -294,8 +339,14 @@ module Agentilda
         entry = Ledger.last_for(reading, job.task.agent.name)
         job.file = entry&.file || job.file
         job.status = entry&.status
-        @state&.record(job.task.subject.feature.ordinal.to_s, agent: job.task.agent.name, round: job.task.round,
-          status: entry&.status || "Started", file: job.file, up: job.up, down: job.down, pid: job.handle.pid)
+        @state&.record(job.task.subject.feature.ordinal.to_s,
+          agent:  job.task.agent.name,
+          round:  job.task.round,
+          status: entry&.status || "Started",
+          file:   job.file,
+          up:     job.up,
+          down:   job.down,
+          pid:    job.handle.pid)
       end
     end
 
@@ -314,8 +365,11 @@ module Agentilda
         @running.delete(job)
         attempt = settle(job)
         @attempts << attempt
-        @recent << {at: UI.monotonic, row: row_for(job).with(state: attempt.ok ? :done : :failed,
-          message: attempt.note, remaining: nil, phase: nil, bold: !attempt.ok)}
+        @recent << { at: UI.monotonic, row: row_for(job).with(state: attempt.ok ? :done : :failed,
+          message: attempt.note,
+          remaining: nil,
+          phase: nil,
+          bold: !attempt.ok) }
         UI.log(attempt.ok ? "finished: #{attempt.note}" : "failed: #{attempt.note}", **job.task.log_fields)
       end
     end
@@ -337,22 +391,28 @@ module Agentilda
       problems = reading.problems.map { |p| "#{p.file}:#{p.line} unreadable ledger line" }
 
       attempt = if result.killed || (result.ok && (entry.nil? || entry.status == "Started"))
-        verify_and_sign(job, base, reason_for(result))
-      elsif !result.ok
-        remember(ordinal, agent.name, job.state, "Interrupted", task.round)
-        base.with(ok: false, note: result.note)
-      elsif entry.completed?
-        complete(job, base, entry, reading)
-      elsif entry.blocked?
-        park(job, base, entry)
-      else
-        remember(ordinal, agent.name, job.state, entry.status, task.round)
-        base.with(status: entry.status, note: retry_note(agent, entry))
-      end
+                  verify_and_sign(job, base, reason_for(result))
+                elsif !result.ok
+                  remember(ordinal, agent.name, job.state, "Interrupted", task.round)
+                  base.with(ok: false, note: result.note)
+                elsif entry.completed?
+                  complete(job, base, entry, reading)
+                elsif entry.blocked?
+                  park(job, base, entry)
+                else
+                  remember(ordinal, agent.name, job.state, entry.status, task.round)
+                  base.with(status: entry.status, note: retry_note(agent, entry))
+                end
       attempt = attempt.with(note: "#{attempt.note}; #{problems.join(", ")}") unless problems.empty?
       attempt = attempt.with(to: fresh(task)&.status&.key || attempt.to)
-      @state&.record(ordinal, agent: agent.name, round: task.round, status: attempt.status || "Completed",
-        exit: attempt.ok ? "ok" : attempt.note, ended_at: Time.now.iso8601, up: attempt.up, down: attempt.down)
+      @state&.record(ordinal,
+        agent:    agent.name,
+        round:    task.round,
+        status:   attempt.status || "Completed",
+        exit:     attempt.ok ? "ok" : attempt.note,
+        ended_at: Time.now.iso8601,
+        up:       attempt.up,
+        down:     attempt.down)
       attempt
     end
 
@@ -385,8 +445,13 @@ module Agentilda
       target = agent.advances_to
       if target && subject.machine.may?(target)
         successor = @runner.agents.for_status(STATUS_BY_KEY.fetch(target)).first&.name
-        lines = [Ledger.render(Ledger::Entry.new(at: Time.now, agent: agent.name, status: "Completed",
-          round: task.round, note: "signed by harness: work verified on disk", file: "", line: 0))]
+        lines = [Ledger.render(Ledger::Entry.new(at: Time.now,
+          agent: agent.name,
+          status: "Completed",
+          round: task.round,
+          note: "signed by harness: work verified on disk",
+          file: "",
+          line: 0))]
         lines << Ledger.render_handoff(Ledger::Handoff.new(at: Time.now, next: successor, file: "", line: 0)) if successor
         Ledger.append(File.join(subject.feature.path, agent.ledger.first), *lines)
         entry = Ledger.last_for(read_ledger(task), agent.name)
@@ -399,8 +464,14 @@ module Agentilda
 
     # @return [void]
     def write_interrupted(subject, agent, round, reason)
-      line = Ledger.render(Ledger::Entry.new(at: Time.now, agent: agent.name, status: "Interrupted",
-        round:, note: reason, file: "", line: 0, bold: true))
+      line = Ledger.render(Ledger::Entry.new(at: Time.now,
+        agent: agent.name,
+        status: "Interrupted",
+        round:,
+        note: reason,
+        file: "",
+        line: 0,
+        bold: true))
       Ledger.append(File.join(subject.feature.path, agent.ledger.first), line)
     end
 
@@ -425,13 +496,12 @@ module Agentilda
 
       attempt = base.with(status: "Completed")
       if target
-        if subject.machine.may?(target)
-          subject.machine.promote!(target)
-          attempt = attempt.with(to: target, note: "#{base.note}#{" (#{entry.note})" if entry.note}")
-          attempt = publish_if_reviewable(task, target, attempt)
-        else
-          return attempt.with(ok: false, note: "ledger says Completed but #{STATUS_BY_KEY.fetch(target)} is not justified: #{STATUS_BY_KEY.fetch(target).violation(subject)}")
-        end
+        return attempt.with(ok: false, note: "ledger says Completed but #{STATUS_BY_KEY.fetch(target)} is not justified: #{STATUS_BY_KEY.fetch(target).violation(subject)}") unless subject.machine.may?(target)
+
+        subject.machine.promote!(target)
+        attempt = attempt.with(to: target, note: "#{base.note}#{" (#{entry.note})" if entry.note}")
+        attempt = publish_if_reviewable(task, target, attempt)
+
       end
 
       handoff = Ledger.handoff_after(reading, entry)
@@ -497,7 +567,7 @@ module Agentilda
       task = job.task
       subject = fresh(task) or return base.with(ok: false, note: "plan folder vanished")
       remember(subject.feature.ordinal.to_s, task.agent.name, job.state, "Blocked", task.round)
-      target = (verdict_of(entry) == :product) ? :product_blocked : :blocked
+      target = verdict_of(entry) == :product ? :product_blocked : :blocked
       if subject.machine.may?(target)
         subject.machine.promote!(target)
         base.with(to: target, status: "Blocked", note: "blocked; see blocked.md")
@@ -518,11 +588,21 @@ module Agentilda
       task = job.task
       result = job.result
       spend = ->(field) { result.respond_to?(field) ? result.public_send(field) : 0 }
-      Runner::Attempt.new(ordinal: task.subject.feature.ordinal.to_s, agent: task.agent.name, from: job.from,
-        to: job.from, ok: result.respond_to?(:ok) ? !!result.ok : false,
-        note: result.respond_to?(:note) ? result.note.to_s : "", up: spend.call(:up), down: spend.call(:down),
-        subagents: spend.call(:subagents), delegated: spend.call(:delegated), seconds: spend.call(:seconds),
-        round: task.round, file: job.file || task.agent.ledger.first.to_s, model: model_for(task.agent), status: job.status)
+      Runner::Attempt.new(ordinal: task.subject.feature.ordinal.to_s,
+        agent: task.agent.name,
+        from: job.from,
+        to: job.from,
+        ok: result.respond_to?(:ok) ? !!result.ok : false,
+        note: result.respond_to?(:note) ? result.note.to_s : "",
+        up: spend.call(:up),
+        down: spend.call(:down),
+        subagents: spend.call(:subagents),
+        delegated: spend.call(:delegated),
+        seconds: spend.call(:seconds),
+        round: task.round,
+        file: job.file || task.agent.ledger.first.to_s,
+        model: model_for(task.agent),
+        status: job.status)
     end
 
     # @return [Agentilda::Subject, nil] the plan read fresh from the main tree
@@ -540,7 +620,7 @@ module Agentilda
       @mutex.synchronize do
         entries = @history[[ordinal.to_s, agent]]
         entry = entries.find { |h| h[:state] == state && h[:round] == round }
-        entry ? entry[:status] = status : entries << {state:, status:, round:}
+        entry ? entry[:status] = status : entries << { state:, status:, round: }
       end
     end
 

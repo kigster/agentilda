@@ -39,25 +39,25 @@ module Agentilda
     # nothing here changes, and its plans quietly import as Backlog with no
     # indication anything was missed.
     PLACEMENTS = {
-      new: Placement.new(type: "backlog", name: "Backlog", labels: []),
-      researched: Placement.new(type: "backlog", name: "Backlog", labels: %w[researched]),
+      new:                Placement.new(type: "backlog", name: "Backlog", labels: []),
+      researched:         Placement.new(type: "backlog", name: "Backlog", labels: %w[researched]),
       ready_for_planning: Placement.new(type: "backlog", name: "Backlog", labels: %w[spec-ready]),
-      planned: Placement.new(type: "unstarted", name: "Todo", labels: []),
-      building: Placement.new(type: "started", name: "In Progress", labels: []),
+      planned:            Placement.new(type: "unstarted", name: "Todo", labels: []),
+      building:           Placement.new(type: "started", name: "In Progress", labels: []),
       # Both halves of building are one column on a board. A reader there
       # wants to know work is under way; which half is under way is this
       # tool's business, and the label carries it for anyone who does care.
-      building_ui: Placement.new(type: "started", name: "In Progress", labels: %w[frontend]),
-      ready_for_review: Placement.new(type: "started", name: "In Review", labels: []),
-      in_review: Placement.new(type: "started", name: "In Review", labels: []),
-      rejected: Placement.new(type: "started", name: "In Review", labels: %w[changes-requested]),
-      approved: Placement.new(type: "completed", name: "Done", labels: []),
-      deployed: Placement.new(type: "completed", name: "Done", labels: %w[deployed]),
-      blocked: Placement.new(type: "unstarted", name: "Todo", labels: %w[blocked]),
-      product_blocked: Placement.new(type: "unstarted", name: "Todo", labels: %w[blocked-on-product]),
-      deferred: Placement.new(type: "backlog", name: "Backlog", labels: %w[deferred]),
-      retroactive: Placement.new(type: "completed", name: "Done", labels: %w[retroactive]),
-      discarded: Placement.new(type: "canceled", name: "Canceled", labels: [])
+      building_ui:        Placement.new(type: "started", name: "In Progress", labels: %w[frontend]),
+      ready_for_review:   Placement.new(type: "started", name: "In Review", labels: []),
+      in_review:          Placement.new(type: "started", name: "In Review", labels: []),
+      rejected:           Placement.new(type: "started", name: "In Review", labels: %w[changes-requested]),
+      approved:           Placement.new(type: "completed", name: "Done", labels: []),
+      deployed:           Placement.new(type: "completed", name: "Done", labels: %w[deployed]),
+      blocked:            Placement.new(type: "unstarted", name: "Todo", labels: %w[blocked]),
+      product_blocked:    Placement.new(type: "unstarted", name: "Todo", labels: %w[blocked-on-product]),
+      deferred:           Placement.new(type: "backlog", name: "Backlog", labels: %w[deferred]),
+      retroactive:        Placement.new(type: "completed", name: "Done", labels: %w[retroactive]),
+      discarded:          Placement.new(type: "canceled", name: "Canceled", labels: [])
     }.freeze
 
     # States deliberately left out, and why.
@@ -72,8 +72,8 @@ module Agentilda
     # A plan in one of these states is reported and skipped. To import them,
     # decide where they belong and move the entry into {PLACEMENTS}.
     UNPLACED = {
-      shit: "the plan survives and its pull requests do not; whether that is work still to do " \
-            "or work abandoned depends on what the team does next",
+      shit:        "the plan survives and its pull requests do not; whether that is work still to do " \
+                   "or work abandoned depends on what the team does next",
       rolled_back: "it shipped and was pulled; whether that reopens this work or opens new work " \
                    "depends on what broke"
     }.freeze

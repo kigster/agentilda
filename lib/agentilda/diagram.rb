@@ -1,5 +1,7 @@
 # frozen_string_literal: true
 
+require "agentilda/status"
+
 module Agentilda
   # `agentilda states` — the state machine as a terminal picture.
   #
@@ -43,7 +45,8 @@ module Agentilda
     #
     # @return [String]
     def spine_section
-      section("MAIN SPINE", "a bare `promote` walks this path",
+      section("MAIN SPINE",
+        "a bare `promote` walks this path",
         ["  " + spine_chain.map { |key| node(key) }.join(" #{ARROW} ")])
     end
 
@@ -54,8 +57,8 @@ module Agentilda
     # @return [String, nil]
     def rejoin_section
       rows = StateMachine::SPINE
-        .except(*spine_chain)
-        .map { |from, to| "  #{node(from)} #{ARROW} #{node(to)}" }
+             .except(*spine_chain)
+             .map { |from, to| "  #{node(from)} #{ARROW} #{node(to)}" }
 
       section("REJOINING THE SPINE", "off-spine states whose default promotion lands back on it", rows)
     end
@@ -74,9 +77,11 @@ module Agentilda
         [s.key, targets] unless targets.empty?
       }
 
-      section("OTHER TRANSITIONS", "everything else the machine permits", groups.flat_map { |key, targets|
-        fan_out(key, targets)
-      })
+      section("OTHER TRANSITIONS",
+        "everything else the machine permits",
+        groups.flat_map { |key, targets|
+          fan_out(key, targets)
+        })
     end
 
     # @return [String, nil]
@@ -118,7 +123,7 @@ module Agentilda
     # @return [Array<String>]
     def fan_out(key, targets)
       lines = targets.each_with_index.map { |to, i|
-        connector = (i == targets.size - 1) ? "└─▶" : "├─▶"
+        connector = i == targets.size - 1 ? "└─▶" : "├─▶"
         "      #{connector} #{node(to)}"
       }
       ["  #{node(key)}", *lines]

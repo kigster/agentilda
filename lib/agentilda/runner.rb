@@ -10,8 +10,21 @@ module Agentilda
   # published. Blocked plans (⭕️ 🅱️) are stepped around, never assigned.
   class Runner
     # What one agent did to one plan.
-    Attempt = Data.define(:ordinal, :agent, :from, :to, :ok, :note, :up, :down, :subagents,
-      :delegated, :seconds, :round, :file, :model, :status) do
+    Attempt = Data.define(:ordinal,
+      :agent,
+      :from,
+      :to,
+      :ok,
+      :note,
+      :up,
+      :down,
+      :subagents,
+      :delegated,
+      :seconds,
+      :round,
+      :file,
+      :model,
+      :status) do
       def initialize(round: 1, file: "", model: nil, status: nil, **rest) = super
 
       # @return [Boolean] whether the plan actually moved
@@ -22,8 +35,8 @@ module Agentilda
     Task = Data.define(:agent, :subject, :root, :checkout, :round) do
       # @return [Hash] columns for the log
       def log_fields
-        {plan: subject.feature.ordinal.to_s, status: subject.status.to_s,
-         agent: agent.name, round: format("%02d", round)}
+        { plan: subject.feature.ordinal.to_s, status: subject.status.to_s,
+         agent: agent.name, round: format("%02d", round) }
       end
     end
 
@@ -117,9 +130,9 @@ module Agentilda
     def record_pull_request(path, publication)
       number = publication.url.to_s[%r{/pull/(\d+)}, 1]
       rows = PullRequests.new(dir: path).all.map { |pr|
-        {number: pr.number, title: pr.title, url: pr.url, state: pr.state, body: ""}
+        { number: pr.number, title: pr.title, url: pr.url, state: pr.state, body: "" }
       }
-      rows << {number:, title: publication.title, url: publication.url, state: "Open 🟡", body: ""}
+      rows << { number:, title: publication.title, url: publication.url, state: "Open 🟡", body: "" }
       PullRequests.upsert(File.join(path, PullRequests::FILENAME), rows)
     end
   end

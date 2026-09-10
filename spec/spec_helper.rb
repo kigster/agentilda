@@ -11,7 +11,7 @@ require "coverage/badge"
 # The directory is made up front because the move happens in `at_exit`, and
 # without it the whole suite dies there — which reports as a passing run
 # followed by a stack trace.
-REPO_ROOT = File.expand_path("../..", __dir__)
+REPO_ROOT = File.expand_path("..", __dir__)
 BADGE_DIR = File.join(REPO_ROOT, "docs", "badges")
 FileUtils.mkdir_p(BADGE_DIR)
 
@@ -50,6 +50,9 @@ require "tmpdir"
 # is still covered — deliberately, by examples that stub `UI.color?` — rather
 # than by accident, differently, on each machine.
 ENV["NO_COLOR"] = "1"
+ENV["GIT_CONFIG_COUNT"] = "1"
+ENV["GIT_CONFIG_KEY_0"] = "commit.gpgsign"
+ENV["GIT_CONFIG_VALUE_0"] = "false"
 
 $LOAD_PATH.unshift(File.expand_path("../lib", __dir__))
 require "agentilda"

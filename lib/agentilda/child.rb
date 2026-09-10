@@ -18,7 +18,7 @@ module Agentilda
     # @return [Agentilda::Child]
     def self.spawn(argv, chdir: nil)
       reader, writer = IO.pipe
-      options = {out: writer, err: writer, in: File::NULL}
+      options = { out: writer, err: writer, in: File::NULL }
       options[:chdir] = chdir if chdir
       pid = Process.spawn(*argv, **options)
       writer.close

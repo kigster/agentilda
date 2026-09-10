@@ -74,7 +74,7 @@ RSpec.describe Agentilda::Ledger do
 
   describe ".read", :tree do
     it "reads the files in the order given and skips the ones that do not exist" do
-      path = plans { |t| t.plan "001.00", :new, "x", files: {"spec.md" => document} }
+      path = plans { |t| t.plan "001.00", :new, "x", files: { "spec.md" => document } }
       dir = File.join(path, "001.00-⚪️ → x")
       reading = described_class.read(dir, %w[plan-backend.md spec.md])
       expect(reading.entries.map(&:file).uniq).to eq(["spec.md"])
@@ -86,9 +86,10 @@ RSpec.describe Agentilda::Ledger do
       early = "> [2026-09-04 11:00:00 AM PDT] [ agent: luke-backend   status: Completed, round 1 ]"
       late = "> [2026-09-04 11:30:00 AM PDT] [ agent: luke-backend   status: Started, round 1 ]"
       reading = described_class::Reading.new(
-        entries: described_class.parse(late, file: "pull-requests.md").entries +
+        entries:  described_class.parse(late, file: "pull-requests.md").entries +
           described_class.parse(early, file: "plan-backend.md").entries,
-        handoffs: [], problems: []
+        handoffs: [],
+        problems: []
       )
       expect(described_class.last_for(reading, "luke-backend").status).to eq("Started")
     end
@@ -119,8 +120,14 @@ RSpec.describe Agentilda::Ledger do
 
   describe ".render and .block" do
     it "round-trips an entry through the parser" do
-      entry = described_class::Entry.new(at: Time.new(2026, 9, 4, 11, 29, 20), agent: "leah-researcher",
-        status: "Started", round: 1, note: nil, file: "spec.md", line: 0, bold: false)
+      entry = described_class::Entry.new(at: Time.new(2026, 9, 4, 11, 29, 20),
+        agent: "leah-researcher",
+        status: "Started",
+        round: 1,
+        note: nil,
+        file: "spec.md",
+        line: 0,
+        bold: false)
       text = described_class.render(entry)
       back = described_class.parse(text, file: "spec.md").entries.first
       expect(back.with(file: "spec.md", line: 1, at: back.at)).to eq(entry.with(line: 1, at: back.at))

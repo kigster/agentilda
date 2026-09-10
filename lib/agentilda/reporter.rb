@@ -1,5 +1,7 @@
 # frozen_string_literal: true
 
+require "agentilda/status"
+
 module Agentilda
   # `/spec-status` — every plan, its state in icon and words, and its pull
   # requests as clickable links.
@@ -76,8 +78,12 @@ module Agentilda
     #
     # @return [Integer]
     def pr_column
-      @pr_column ||= row(" ", " " * ORDINAL_WIDTH, " " * EMOJI_WIDTH,
-        " " * label_width, " " * title_width, "").length
+      @pr_column ||= row(" ",
+        " " * ORDINAL_WIDTH,
+        " " * EMOJI_WIDTH,
+        " " * label_width,
+        " " * title_width,
+        "").length
     end
 
     # @return [Integer] cell at which the feature name starts
@@ -158,7 +164,7 @@ module Agentilda
     # @return [String]
     def footer
       counts = totals.map { |key, n| "#{STATUS_BY_KEY.fetch(key).emoji} #{n}" }.join("   ")
-      lines = ["  #{tree.subjects.size} #{(tree.subjects.size == 1) ? "plan" : "plans"}   #{counts}"]
+      lines = ["  #{tree.subjects.size} #{tree.subjects.size == 1 ? "plan" : "plans"}   #{counts}"]
 
       unless inconsistent.empty?
         lines << "  #{UI.paint("#{inconsistent.size} with a status their contents do not justify", :red)}"
