@@ -2,8 +2,6 @@ inherit_from:
   - .rubocop_todo.yml
   - .relaxed_rubocop.yml
 
-  - .relaxed_rubocop.yml
-
 AllCops:
   SuggestExtensions: false
   TargetRubyVersion: 4.0
