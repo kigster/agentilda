@@ -10,6 +10,7 @@ AllCops:
     - '**/*.rb'
   Exclude:
     - "bin/**/*"
+    - "vendor/bundle/**/*"
 
 Style/StringLiterals:
   EnforcedStyle: double_quotes
