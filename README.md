@@ -9,6 +9,30 @@ This gem implements an agentic workflow using five specialized agents defined in
 >
 > The best resource that describes it in detail is the result of running `tilda docs -o <file>` command, or the file [docs/WORKFLOW.md](docs/WORKFLOW.md).
 
+## Usage
+
+Install the gem (and it's partner `agent-lock`) globally:
+
+```bash
+gem install agentilda agent-lock -N
+hash -r
+```
+
+Now, you should be able to run from anywhere, hopefully:
+
+```bash
+tilda -h
+alock -h
+```
+
+> [!NOTE]
+>
+> Both gems support tab completion. Set this up in your dot files for your shell. Eg for ZSH, put:
+> ```zsh
+> eval "$(tilda completion zsh)"
+> eval "$(alock completion zsh)"
+> ```
+
 The gem offers a CLI command `tilda` (as well as `agentilda`) that performs a slew of commands aimed at producing, updating, keeping in sync any project's root directory `.plans`, that will initially contain just the `spec.md` and pull requests documents in the `.plans`, and drives a team of specialist agents over them. The agents implement the following workflow:
 
 ```text
