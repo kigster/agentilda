@@ -57,8 +57,10 @@ module Agentilda
       @mutex.synchronize do
         @board = board
         @selected = nil if @selected && board.rows.none? { |r| r.key == @selected && r.running? }
-        @screen.draw(board.with(selected: @selected, dialog: (dialog_text if @dialog),
-          help: (help_text if @help), about: (about_text if @about)))
+        @screen.draw(board.with(selected: @selected,
+          dialog: (dialog_text if @dialog),
+          help: (help_text if @help),
+          about: (about_text if @about)))
       end
     end
 
