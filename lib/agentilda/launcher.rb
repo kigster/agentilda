@@ -41,7 +41,7 @@ module Agentilda
       # it; this one collided within the week.
       return unless argv.first == "run"
 
-      argv = argv.each_with_object([]) do |token, out|
+      @argv = argv.each_with_object([]) do |token, out|
         out << token
         next unless ["--push-pr", "-p"].include?(token)
 
