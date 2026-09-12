@@ -12,11 +12,7 @@ The gem's responsibilities are:
 * creating and properly renaming at the right state transitions spec folders that by the default live under `.plans` folder (override with an environment variable `$PLANS_DIR`)
   * Creating a seed `spec.md` files based on very limited information, and passing it to a human for editing.
 * running one or more agents on one or more plans concurrently using the state machine defined for each plan, and the agents that do the work to move plan from one state to the next.
-* 
-
-
-
-keeps a project's `.plans/` directory joined up with its GitHub pull requests and Linear issues, then drives specialist Claude subagents over those plan folders until nothing moves.
+* maintaining project's `.plans/` directory sync'ed up with its GitHub pull requests and Linear issues, then drives specialist Claude subagents over those plan folders until nothing moves.
 
 This repo is the tool. It does not keep plans of its own, and it has no `.plans/` directory. The workflow it implements is documented at length in `README.md`, which is worth reading once before touching `status.rb` or `state_machine.rb`.
 
