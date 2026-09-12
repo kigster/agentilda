@@ -60,8 +60,10 @@ module Agentilda
       ProgramBanner.banner if help
       code = 0
       Dry::CLI.new(::Agentilda::CLI).call(arguments: help ? [] : argv)
-    rescue StandardError
-      warn red("Error: #{$!.message}")
+    rescue SystemExit => e
+      code = e.status
+    rescue StandardError => e
+      warn red("Error: #{e.message}")
       code = 1
     ensure
       kernel.exit(code)
