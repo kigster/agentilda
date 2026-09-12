@@ -111,13 +111,15 @@ Then typing `tilda<TAB><TAB>` will show you a bunch of options, subcommands and 
 
 ### Agents — Who Are They?
 
--
-- `leah-researcher.md` is the first one to graresearch,
-- then a written specification,
-- then a plan,
-- then a frontend end, backend,
-- submit PR,
-- and perform an adversarial review.
+- `leah-researcher.md` is the first one to take your brief spec and add a substantial research to it
+- then, `yoda-writer` finishes the written specification using proper copyrighting skills
+- then, `palpatin-planner` writes a `plan.md` and the feature should be either ready for development, or Yoda or Palpatine identified technical or product blocks.
+- assuming no blocks, `luke-backend` agent splits the plan into the frontend and backend portions, and then starts working on the backend while in parallel invoking `rey-frontend` agent. 
+- Luke and Rey communicate with each other and ultimately submit a single PR.
+- The baton is passed to `lando-reviewer` which reviews the PR and can either approve or reject it, after performing an adversarial review.
+- if it's rejected, Luke and Rey try to address the feedback and submit it again. There is a limit to how many times they can bounce back and force (may the force....)
+
+---
 
 Install the gem with `gem install agentilda` and then run `tilda -h` for more options. It's also recommended to add command completion to your shell. Eg, for zsh:
 
