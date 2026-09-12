@@ -158,7 +158,7 @@ A feature moves through the specialists one state at a time, and never further t
 
 ```mermaid
 stateDiagram-v2
-    direction LR
+    direction TB
     New: ⚪️ New
     Researched: 🔎 Researched
     Ready: 📋 Ready for Planning
