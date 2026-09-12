@@ -110,6 +110,11 @@ RSpec.describe Agentilda::Screen do
     expect(text).to include("kill: yes", "extend: +10m", "ENTER", "ESC")
   end
 
+  it "draws the about screen over the table when asked" do
+    text = strip_ansi(screen.render(board.with(about: "Agentilda Version 2.0.0-alpha\n\nThanks for using this! Press 'q' to exit and stop all agents.")))
+    expect(text).to include("Agentilda Version 2.0.0-alpha", "stop all agents", "ESC")
+  end
+
   describe ".hyperlink" do
     it "wraps text in an OSC 8 link" do
       expect(described_class.hyperlink("#7", "https://example.com/pull/7")).to eq("\e]8;;https://example.com/pull/7\e\\#7\e]8;;\e\\")

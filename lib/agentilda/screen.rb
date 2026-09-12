@@ -85,6 +85,7 @@ module Agentilda
       lines += [rule(width), "", bottom_bar(board, width)]
       lines << overlay(board.dialog, "Agent", width) if board.dialog
       lines << overlay(board.help, "Keys", width, footer: "[ESC] close") if board.help
+      lines << overlay(board.about, "About", width, footer: "[ESC] close") if board.about
       lines.join("\n") + "\n"
     end
 

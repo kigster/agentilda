@@ -108,4 +108,18 @@ RSpec.describe Agentilda::Console do
       dialog: a_string_including("kill: yes"),
       help: a_string_including("kill")))
   end
+
+  it "paints the board with the about text once toggled, mentioning the version" do
+    console.toggle_about
+    console.paint(board)
+    expect(screen).to have_received(:draw).with(having_attributes(about: a_string_including(Agentilda::VERSION)))
+  end
+
+  it "escape closes the about screen before clearing the selection" do
+    console.select_next
+    console.toggle_about
+    console.escape
+    expect(console).not_to be_about
+    expect(console.selected).to eq("001.00/leah-researcher")
+  end
 end

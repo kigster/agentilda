@@ -22,12 +22,18 @@ RSpec.describe Agentilda::Keyboard do
     expect(described_class.listen(input:)).to be_nil
   end
 
-  it "h and ? pop the bindings when there is no console, and they mention every key" do
+  it "h pops the bindings when there is no console, and they mention every key" do
     keyboard.handle("h")
+
+    expect(Agentilda::UI).to have_received(:popup)
+      .with("Keys", a_string_including("wrap up", "q", "ctrl-c"))
+  end
+
+  it "? pops the version and a reminder of how to quit, when there is no console" do
     keyboard.handle("?")
 
     expect(Agentilda::UI).to have_received(:popup)
-      .with("Keys", a_string_including("wrap up", "q", "ctrl-c")).twice
+      .with("About", a_string_including(Agentilda::VERSION, "q", "stop all agents"))
   end
 
   describe "with a registered agent to reach" do

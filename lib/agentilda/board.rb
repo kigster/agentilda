@@ -21,8 +21,9 @@ module Agentilda
     :selected,
     :dialog,
     :help,
+    :about,
     :hidden) do
-    def initialize(selected: nil, dialog: nil, help: false, hidden: 0, **rest) = super
+    def initialize(selected: nil, dialog: nil, help: false, about: nil, hidden: 0, **rest) = super
   end
 
   # @!attribute [r] key

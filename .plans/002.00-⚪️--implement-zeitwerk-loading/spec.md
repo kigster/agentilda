@@ -186,4 +186,4 @@ Run: `eval "$(rbenv init -)" && bundle exec rspec`
 
 - [ ] **Step 4: Document remaining work**
 
-If the TUI redesign is still pending, leave it out of this refactor and capture it as the next task.
+If the TUI redesign is still pending, leave it out of this refactor and capture it as the next task.w
