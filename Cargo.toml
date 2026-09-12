@@ -1,0 +1,7 @@
+[package]
+name = "tilda-rs"
+version = "2.0.0-alpha"
+edition = "2024"
+
+[dependencies]
+ratatui = "0.30.2"

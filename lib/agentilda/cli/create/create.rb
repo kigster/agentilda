@@ -1,5 +1,7 @@
 # frozen_string_literal: true
 
+require "fileutils"
+
 module Agentilda
   module CLI
     # `agentilda create <words…>` — backs /spec-create.
@@ -23,7 +25,7 @@ module Agentilda
           "Create a retroactive plan in the gap after this plan, e.g. 002"
       option :status,
         aliases: ["-s"],
-        desc: "Open in a state other than the default"
+        desc:    "Open in a state other than the default"
       option :prs,
         aliases: ["--pr"],
         desc:
@@ -97,14 +99,14 @@ module Agentilda
         unless words.empty?
           refuse(
             "--from names the topic by its frontmatter title;\n" \
-              "drop the words, or drop --from",
+            "drop the words, or drop --from",
             64
           )
         end
         if options[:prs]
           refuse(
             "--prs reconstructs spec.md from the pull requests, so a seed file\n" \
-              "would be ignored; use one or the other",
+            "would be ignored; use one or the other",
             64
           )
         end
@@ -116,7 +118,7 @@ module Agentilda
         if title.to_s.strip.empty?
           refuse(
             "The seed file needs a frontmatter title, e.g.\n" \
-              "---\ntitle: Tax Rule DSL\n---",
+            "---\ntitle: Tax Rule DSL\n---",
             65
           )
         end
@@ -152,7 +154,7 @@ module Agentilda
         unless options[:after]
           refuse(
             "--prs documents work that already shipped;\n" \
-              "name the plan it landed after with --after, e.g. --after 018",
+            "name the plan it landed after with --after, e.g. --after 018",
             64
           )
         end
@@ -184,8 +186,8 @@ module Agentilda
         feature = Feature.parse(path)
         success(
           "Created #{File.basename(path)}\n\n" \
-            "#{feature.status.emoji} #{feature.status.label} — #{feature.status.note}\n" \
-            "#{next_step(path, feature, from_prs:)}"
+          "#{feature.status.emoji} #{feature.status.label} — #{feature.status.note}\n" \
+          "#{next_step(path, feature, from_prs:)}"
         )
       end
 
@@ -263,9 +265,9 @@ module Agentilda
         tree = Tree.new(dir: File.dirname(path))
         change =
           Agentilda::Resync::Dirs
-            .new(tree:)
-            .call(commit: true)
-            .find { |c| c.source == path }
+          .new(tree:)
+          .call(commit: true)
+          .find { |c| c.source == path }
         change ? change.target : path
       end
 
@@ -274,7 +276,7 @@ module Agentilda
       def warn_about(note)
         error(
           "The folder was created, but spec.md was not written:\n#{note}\n\n" \
-            "The pull requests are recorded. Run `agentilda run --commit` to retry."
+          "The pull requests are recorded. Run `agentilda run --commit` to retry."
         )
       end
 
@@ -283,7 +285,7 @@ module Agentilda
       def warn_about_draft(note)
         error(
           "spec.md was scaffolded, but the drafting attempt did not finish:\n#{note}\n\n" \
-            "The four headings are there, empty. Fill them in by hand, or hand off to leah-researcher."
+          "The four headings are there, empty. Fill them in by hand, or hand off to leah-researcher."
         )
       end
 
@@ -293,7 +295,7 @@ module Agentilda
       def next_step(path, feature, from_prs:)
         spec = File.join(File.basename(path), "spec.md")
         unless feature.status.key == :new &&
-            File.file?(File.join(path, "spec.md"))
+               File.file?(File.join(path, "spec.md"))
           return "Next: write #{spec}"
         end
         if from_prs

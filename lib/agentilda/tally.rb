@@ -29,7 +29,7 @@ module Agentilda
     Row = Data.define(:name, :invocations, :subagents, :up, :down, :seconds)
 
     # Cells per column, so the header, the rows and the rule cannot drift.
-    WIDTHS = {name: 22, invocations: 6, subagents: 11, up: 9, down: 9, seconds: 8}.freeze
+    WIDTHS = { name: 22, invocations: 6, subagents: 11, up: 9, down: 9, seconds: 8 }.freeze
 
     # @param attempts [Array<Agentilda::Runner::Attempt>]
     # @param seconds [Float] wall clock for the whole loop, which is not the
@@ -87,8 +87,12 @@ module Agentilda
     # @return [Array<Agentilda::Tally::Row>] one per agent, dearest first
     def by_agent
       attempts.group_by(&:agent).map { |name, list|
-        Row.new(name:, invocations: list.size, subagents: list.sum(&:subagents),
-          up: list.sum(&:up), down: list.sum(&:down), seconds: list.sum(&:seconds))
+        Row.new(name:,
+          invocations: list.size,
+          subagents: list.sum(&:subagents),
+          up: list.sum(&:up),
+          down: list.sum(&:down),
+          seconds: list.sum(&:seconds))
       }.sort_by { |row| -row.up }
     end
 
@@ -117,18 +121,18 @@ module Agentilda
       return "" if delegated.zero?
 
       "\n#{subagents} sub-agent#{"s" unless subagents == 1} reported #{UI.abbreviate(delegated)} " \
-      "tokens without splitting them, counted above as ↑."
+        "tokens without splitting them, counted above as ↑."
     end
 
     # @return [String]
     def header
       cell("Agent", :name) + %i[invocations subagents up down seconds]
-        .zip(["runs", "sub-agents", "↑", "↓", "time"])
-        .map { |key, text| right(text, key) }.join
+                             .zip(["runs", "sub-agents", "↑", "↓", "time"])
+                             .map { |key, text| right(text, key) }.join
     end
 
     # @return [String]
-    def rule = WIDTHS.values.map { |width| "─" * (width - 1) + " " }.join
+    def rule = WIDTHS.values.map { |width| ("─" * (width - 1)) + " " }.join
 
     # @param row [Agentilda::Tally::Row]
     # @return [String]

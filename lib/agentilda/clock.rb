@@ -52,7 +52,7 @@ module Agentilda
 
           @fired << before
           Control.write(@control, text)
-          @phase = (before == 60) ? :wrap_up : :warned
+          @phase = before == 60 ? :wrap_up : :warned
         end
         if left <= 0 && !@fired.include?(:stop)
           @fired << :stop

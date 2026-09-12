@@ -1,26 +1,39 @@
 # frozen_string_literal: true
 
-require "dry/cli"
 require_relative "dry/cli/banner"
-require "dry/monads"
+
 require "dry/inflector"
-require "pastel"
-require "unicode/display_width"
-require "strings"
-require "tty/box"
-require "tty/command"
-require "tty/cursor"
-require "tty/screen"
-require "tty/progressbar"
-require "tty/spinner"
-require "concurrent/array"
-require "concurrent/hash"
-require "etc"
 require "fileutils"
-require "tempfile"
-require "tmpdir"
 require "shellwords"
-require "parallel"
+require "zeitwerk"
+loader = Zeitwerk::Loader.for_gem
+loader.inflector.inflect(
+  "api"        => "API",
+  "cli"        => "CLI",
+  "github"     => "GitHub",
+  "issue"      => "Issues",
+  "list_plans" => "ListPlans",
+  "unit"       => "Units",
+  "ui"         => "UI"
+)
+loader.collapse("#{__dir__}/agentilda/cli/create")
+loader.collapse("#{__dir__}/agentilda/cli/docs")
+loader.collapse("#{__dir__}/agentilda/cli/index")
+loader.collapse("#{__dir__}/agentilda/cli/list_plans")
+loader.collapse("#{__dir__}/agentilda/cli/run")
+loader.collapse("#{__dir__}/agentilda/cli/states")
+loader.collapse("#{__dir__}/agentilda/cli/unblock")
+loader.collapse("#{__dir__}/agentilda/cli/version")
+loader.collapse("#{__dir__}/agentilda/cli/worktree")
+loader.collapse("#{__dir__}/agentilda/cli/agents/subcommands")
+loader.collapse("#{__dir__}/agentilda/cli/linear/subcommands")
+loader.collapse("#{__dir__}/agentilda/cli/mail/subcommands")
+loader.collapse("#{__dir__}/agentilda/cli/resync/subcommands")
+loader.ignore("#{__dir__}/agentilda/cli/linear/linear.rb")
+loader.ignore("#{__dir__}/agentilda/cli/mail/mail.rb")
+loader.ignore("#{__dir__}/agentilda/linear/mapping.rb")
+loader.ignore("#{__dir__}/dry")
+loader.setup
 
 # Spec → Plan → Build.
 #
@@ -35,13 +48,11 @@ require "parallel"
 # vocabulary, the numbering rules and the transition table live here and are
 # emitted by `agentilda docs`. Three hand-maintained copies of that table
 # have already drifted apart, which is why there is now exactly one.
-#
-require_relative "agentilda/version"
 
 # © 2026 Konstantin Gredeskoul
 module Agentilda
   # The folder every project keeps its plans in.
-  PLANS_DIR = ".plans"
+  PLANS_DIR = ENV.fetch("PLANS_DIR", ".plans")
 
   # Prefix for a pull request that deliberately implements no plan —
   # dependency bumps, CI work, hotfixes, developer tooling.
@@ -58,8 +69,8 @@ module Agentilda
   # Unlike `dev` this asserts nothing; it marks a question left open.
   NONE_PREFIX = "none"
 
-  # @return [Dry::Inflector] shared inflector
-  def self.inflector = @inflector ||= Dry::Inflector.new
+  # @return [Dry::Inflector] shared Inflector
+  def self.inflector = @inflector ||= ::Dry::Inflector.new
 
   # Move a directory, preferring `git mv` so its history follows it.
   #
@@ -74,10 +85,22 @@ module Agentilda
     return false if File.exist?(target)
 
     parent = File.dirname(source)
-    tracked = system("git", "-C", parent, "ls-files", "--error-unmatch", source,
-      out: File::NULL, err: File::NULL)
-    moved = tracked && system("git", "-C", parent, "mv", source, target,
-      out: File::NULL, err: File::NULL)
+    tracked = system("git",
+      "-C",
+      parent,
+      "ls-files",
+      "--error-unmatch",
+      source,
+      out: File::NULL,
+      err: File::NULL)
+    moved = tracked && system("git",
+      "-C",
+      parent,
+      "mv",
+      source,
+      target,
+      out: File::NULL,
+      err: File::NULL)
     FileUtils.mv(source, target) unless moved
     true
   end
@@ -107,59 +130,4 @@ module Agentilda
   RETROACTIVE_WRITER = "yoda-writer"
 
   class Error < StandardError; end
-end
-
-# Each component is required only once it exists, so the suite loads — and
-# stays a useful red/green signal — while the rest is being built. Drop the
-# `File.exist?` guard once every file below is in place.
-%w[
-  ui
-  config
-  ordinal
-  status
-  ledger
-  state_file
-  progress_log
-  state_machine
-  dev_work
-  frontmatter
-  markdown
-  pull_request
-  description
-  feature
-  github
-  tree
-  creator
-  brief
-  adoption
-  resolver
-  resync
-  reporter
-  tally
-  board
-  screen
-  console
-  index
-  linear
-  agent
-  transcript
-  roster
-  viewer
-  worktree
-  publisher
-  control
-  child
-  clock
-  keyboard
-  mailbox
-  executor
-  dispatcher
-  runner
-  unblocker
-  documentation
-  diagram
-  cli
-].each do |component|
-  path = File.join(__dir__, "agentilda", "#{component}.rb")
-  require path if File.exist?(path)
 end

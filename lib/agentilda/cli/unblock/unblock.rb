@@ -17,17 +17,21 @@ module Agentilda
 
       # What each token turned out to be, for whoever has to fix it.
       PROBLEMS = {
-        missing: "no plan of that number",
+        missing:     "no plan of that number",
         not_blocked: "no blocked.md, so there is nothing to drain"
       }.freeze
 
       desc "Fold answered blocks into a plan's documents and retire blocked.md"
 
-      argument :plans, type: :array, required: true,
-        desc: "Which plans to drain: NNN or NNN.MM, e.g. 003 005.01"
+      argument :plans,
+        type:     :array,
+        required: true,
+        desc:     "Which plans to drain: NNN or NNN.MM, e.g. 003 005.01"
 
-      option :commit, type: :boolean, default: false,
-        desc: "Actually invoke the agent (default: dry run, prints the questions still open)"
+      option :commit,
+        type:    :boolean,
+        default: false,
+        desc:    "Actually invoke the agent (default: dry run, prints the questions still open)"
       option :agent, default: DEFAULT_AGENT, desc: "Hand the folder to a different agent"
       option :root, desc: "Repository root the agent works in (default: the .plans parent)"
 
@@ -43,8 +47,11 @@ module Agentilda
       def call(plans:, **options)
         tree = tree_for(options)
         quiet?(options)
-        unblocker = Unblocker.new(tree:, agent: agent_for(options), root: options[:root],
-          commit: commit?(options), executor: Executor.new(root: options[:root] || File.dirname(tree.dir),
+        unblocker = Unblocker.new(tree:,
+          agent: agent_for(options),
+          root: options[:root],
+          commit: commit?(options),
+          executor: Executor.new(root: options[:root] || File.dirname(tree.dir),
             dry_run: !commit?(options)))
 
         targets = unblocker.resolve(plans)
@@ -110,7 +117,7 @@ module Agentilda
       # @param unblocker [Agentilda::Unblocker]
       # @param options [Hash]
       # @return [void]
-      def preflight(subjects, unblocker, options)
+      def preflight(subjects, _unblocker, options)
         return if quiet?(options)
 
         subjects.each do |subject|
@@ -190,7 +197,7 @@ module Agentilda
 
         unless commit?(options)
           warn("Dry run: no agent was invoked, and #{outcomes.size} " \
-               "plan#{"s" unless outcomes.size == 1} #{(outcomes.size == 1) ? "is" : "are"} unchanged.\n" \
+               "plan#{"s" unless outcomes.size == 1} #{outcomes.size == 1 ? "is" : "are"} unchanged.\n" \
                "Re-run with --commit to fold in whatever has been answered.")
           return
         end
@@ -203,9 +210,13 @@ module Agentilda
         success("#{folded} question#{"s" unless folded == 1} folded in · " \
                 "#{cleared} plan#{"s" unless cleared == 1} out of the block · " \
                 "#{waiting} still waiting on a human." +
-                (folded.zero? ? "\n\nNothing moved. An answer has to be written into blocked.md as its own " \
-                                "`## A<n>` section, answering the `## B<n>` of the same number, before " \
-                                "there is anything to fold." : ""))
+                (if folded.zero?
+                   "\n\nNothing moved. An answer has to be written into blocked.md as its own " \
+                     "`## A<n>` section, answering the `## B<n>` of the same number, before " \
+                     "there is anything to fold."
+                 else
+                   ""
+                 end))
       end
 
       # The most serious thing that happened, as an exit status. A tree that

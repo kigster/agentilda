@@ -91,7 +91,8 @@ module Agentilda
       # @param other [Agentilda::Ledger::Reading]
       # @return [Agentilda::Ledger::Reading]
       def +(other)
-        self.class.new(entries: entries + other.entries, handoffs: handoffs + other.handoffs,
+        self.class.new(entries: entries + other.entries,
+          handoffs: handoffs + other.handoffs,
           problems: problems + other.problems)
       end
     end
@@ -107,8 +108,14 @@ module Agentilda
         text.to_s.each_line.with_index(1) do |raw, line|
           stripped = raw.chomp
           if (m = ENTRY.match(stripped))
-            entries << Entry.new(at: parse_time(m[:at]), agent: m[:agent], status: m[:status],
-              round: m[:round].to_i, note: m[:note]&.strip, file:, line:, bold: !m[:bold].nil?)
+            entries << Entry.new(at: parse_time(m[:at]),
+              agent: m[:agent],
+              status: m[:status],
+              round: m[:round].to_i,
+              note: m[:note]&.strip,
+              file:,
+              line:,
+              bold: !m[:bold].nil?)
           elsif (m = NEXT.match(stripped))
             handoffs << Handoff.new(at: parse_time(m[:at]), next: m[:next], file:, line:)
           elsif ATTEMPT.match?(stripped)
@@ -126,13 +133,14 @@ module Agentilda
       # @param files [Array<String>]
       # @return [Agentilda::Ledger::Reading]
       def read(dir, files)
-        files.each_with_index.reduce(Reading.empty) do |reading, (name, index)|
+        files.each_with_index.reduce(Reading.empty) do |reading, (name, _index)|
           path = File.join(dir, name)
           next reading unless File.file?(path)
 
           found = parse(File.read(path, encoding: "UTF-8"), file: name)
           reading + Reading.new(entries: found.entries.map { |e| e.with(file: name) },
-            handoffs: found.handoffs, problems: found.problems)
+            handoffs: found.handoffs,
+            problems: found.problems)
         end
       end
 
@@ -180,14 +188,14 @@ module Agentilda
       def append(path, *lines)
         existing = File.file?(path) ? File.read(path, encoding: "UTF-8") : ""
         glue = if existing.empty?
-          ""
-        elsif existing.end_with?("\n\n")
-          ""
-        elsif existing.end_with?("\n")
-          "\n"
-        else
-          "\n\n"
-        end
+                 ""
+               elsif existing.end_with?("\n\n")
+                 ""
+               elsif existing.end_with?("\n")
+                 "\n"
+               else
+                 "\n\n"
+               end
         File.write(path, existing + glue + block(*lines))
       end
 
@@ -200,7 +208,7 @@ module Agentilda
       def last_for(reading, agent)
         files = reading.entries.map(&:file).uniq
         reading.entries.select { |e| e.agent == agent }
-          .max_by { |e| [e.at, files.index(e.file), e.line] }
+               .max_by { |e| [e.at, files.index(e.file), e.line] }
       end
 
       # The `next:` that belongs to an entry: same file, a later line, and no

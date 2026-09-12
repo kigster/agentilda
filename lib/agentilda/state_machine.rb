@@ -2,6 +2,8 @@
 
 require "aasm"
 
+require "agentilda/status"
+
 module Agentilda
   # The state machine for one plan folder.
   #
@@ -34,19 +36,19 @@ module Agentilda
     # work back through both halves of building, it does not skip the reviewer
     # and it does not assume the half nobody complained about still holds.
     SPINE = {
-      retroactive: :planned,
-      new: :researched,
-      researched: :ready_for_planning,
+      retroactive:        :planned,
+      new:                :researched,
+      researched:         :ready_for_planning,
       ready_for_planning: :planned,
-      planned: :building,
-      building: :building_ui,
-      building_ui: :ready_for_review,
-      ready_for_review: :in_review,
-      in_review: :approved,
-      approved: :deployed,
-      rejected: :building_ui,
-      rolled_back: :ready_for_review,
-      shit: :planned
+      planned:            :building,
+      building:           :building_ui,
+      building_ui:        :ready_for_review,
+      ready_for_review:   :in_review,
+      in_review:          :approved,
+      approved:           :deployed,
+      rejected:           :building_ui,
+      rolled_back:        :ready_for_review,
+      shit:               :planned
     }.freeze
 
     # Preference order when several states fit a folder's contents at once.

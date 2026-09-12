@@ -5,7 +5,7 @@ RSpec.describe Agentilda::Mailbox, :tree do
 
   let(:folder) do
     path = nil
-    plans { |t| path = t.plan "001.00", :building, "paired", files: {"spec.md" => spec_body, "plan.md" => "# P"} }
+    plans { |t| path = t.plan "001.00", :building, "paired", files: { "spec.md" => spec_body, "plan.md" => "# P" } }
     path
   end
 

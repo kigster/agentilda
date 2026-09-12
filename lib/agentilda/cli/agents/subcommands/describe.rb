@@ -10,11 +10,15 @@ module Agentilda
 
         desc "Open one specialist's definition in a Markdown viewer"
 
-        argument :name, required: false,
-          desc: "Which specialist, full name or a fragment, e.g. leah (default: every one)"
+        argument :name,
+          required: false,
+          desc:     "Which specialist, full name or a fragment, e.g. leah (default: every one)"
 
-        option :mdfried, type: :boolean, default: false, aliases: ["-m"],
-          desc: "Render in the terminal through mdfried instead of the system viewer"
+        option :mdfried,
+          type:    :boolean,
+          default: false,
+          aliases: ["-m"],
+          desc:    "Render in the terminal through mdfried instead of the system viewer"
 
         example [
           "leah               # leah-researcher, in the system Markdown viewer",

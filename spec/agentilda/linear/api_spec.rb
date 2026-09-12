@@ -7,7 +7,7 @@ RSpec.describe Agentilda::Linear::API do
   subject(:api) { described_class.new(transport:) }
 
   let(:transport) { ->(_document, _variables) { response } }
-  let(:response) { {"data" => {}} }
+  let(:response) { { "data" => {} } }
 
   describe "authentication" do
     it "refuses to be built with no way to authenticate" do
@@ -23,17 +23,17 @@ RSpec.describe Agentilda::Linear::API do
 
   describe "#team" do
     let(:response) do
-      {"data" => {"teams" => {"nodes" => [{"id" => "t-1", "name" => "Tax", "key" => "TAX",
-                                           "states" => {"nodes" => [{"id" => "s-1"}]},
-                                           "labels" => {"nodes" => []}}]}}}
+      { "data" => { "teams" => { "nodes" => [{ "id" => "t-1", "name" => "Tax", "key" => "TAX",
+                                           "states" => { "nodes" => [{ "id" => "s-1" }] },
+                                           "labels" => { "nodes" => [] } }] } } }
     end
 
     it "returns the team with its states and labels in one round trip" do
-      expect(api.team("tax")).to include(id: "t-1", key: "TAX", states: [{"id" => "s-1"}])
+      expect(api.team("tax")).to include(id: "t-1", key: "TAX", states: [{ "id" => "s-1" }])
     end
 
     context "when no team wears that key" do
-      let(:response) { {"data" => {"teams" => {"nodes" => []}}} }
+      let(:response) { { "data" => { "teams" => { "nodes" => [] } } } }
 
       it "says which key it looked for" do
         expect { api.team("nope") }.to raise_error(Agentilda::Error, /no Linear team has the key NOPE/)
@@ -43,7 +43,7 @@ RSpec.describe Agentilda::Linear::API do
 
   describe "reporting a refusal" do
     context "when Linear returns errors" do
-      let(:response) { {"errors" => [{"message" => "Entity not found"}, {"message" => "and again"}]} }
+      let(:response) { { "errors" => [{ "message" => "Entity not found" }, { "message" => "and again" }] } }
 
       it "repeats what Linear actually said" do
         expect { api.query("query { x }") }.to raise_error(Agentilda::Error, /Entity not found; and again/)
@@ -53,7 +53,7 @@ RSpec.describe Agentilda::Linear::API do
     # A failed mutation comes back as `success: false` with no errors array,
     # which reads as a success to anything only checking for errors.
     context "when a mutation reports itself unsuccessful" do
-      let(:response) { {"data" => {"issueCreate" => {"success" => false, "issue" => nil}}} }
+      let(:response) { { "data" => { "issueCreate" => { "success" => false, "issue" => nil } } } }
 
       it "does not mistake it for having worked" do
         expect { api.create_issue(title: "x") }.to raise_error(Agentilda::Error, /declined the issueCreate/)
@@ -71,7 +71,7 @@ RSpec.describe Agentilda::Linear::API do
     # A mutation can also come back with the errors array empty but the
     # payload itself missing, which is a third way of not having worked.
     context "when the mutation payload is absent entirely" do
-      let(:response) { {"data" => {}} }
+      let(:response) { { "data" => {} } }
 
       it "reports the missing payload instead of digging into nil" do
         expect { api.create_project(name: "x") }.to raise_error(Agentilda::Error, /returned no projectCreate payload/)
@@ -107,7 +107,7 @@ RSpec.describe Agentilda::Linear::API do
     # @return [Net::HTTPResponse]
     def failure(code)
       Net::HTTPResponse::CODE_TO_OBJ.fetch(code).new("1.1", code, "Nope")
-        .tap { |r| r.define_singleton_method(:body) { "" } }
+                                    .tap { |r| r.define_singleton_method(:body) { "" } }
     end
 
     it "parses a successful response into its data" do
@@ -123,7 +123,7 @@ RSpec.describe Agentilda::Linear::API do
       aggregate_failures do
         expect(request["Authorization"]).to eq("lin_api_x")
         expect(request["Content-Type"]).to eq("application/json")
-        expect(JSON.parse(request.body)).to eq("query" => "query { x }", "variables" => {"a" => 1})
+        expect(JSON.parse(request.body)).to eq("query" => "query { x }", "variables" => { "a" => 1 })
       end
     end
 

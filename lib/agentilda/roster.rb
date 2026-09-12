@@ -1,5 +1,7 @@
 # frozen_string_literal: true
 
+require "agentilda/status"
+
 module Agentilda
   # `agentilda agents` — who the specialists are and what each is offered
   # work from. Reading one in full is {Viewer}'s job: the definition file is

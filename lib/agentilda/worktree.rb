@@ -1,5 +1,8 @@
 # frozen_string_literal: true
 
+require "fileutils"
+require "shellwords"
+
 module Agentilda
   # A git worktree per plan, so agents working on different plans cannot
   # collide at all.

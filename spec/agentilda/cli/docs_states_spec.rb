@@ -5,7 +5,7 @@
 # a diagram) and `version`. None takes a tree; all deliver on STDOUT or to the
 # file named, which is what these examples pin.
 RSpec.describe "derived-output commands" do
-  def run(command, **options)
+  def run(command, **)
     out = CapturedStream.new
     err = CapturedStream.new
     status = 0
@@ -13,7 +13,7 @@ RSpec.describe "derived-output commands" do
     original_out, original_err = $stdout, $stderr
     $stdout, $stderr = out, err
     begin
-      command.call(**options)
+      command.call(**)
     rescue SystemExit => e
       status = e.status
     ensure

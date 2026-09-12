@@ -6,7 +6,7 @@
 RSpec.describe Agentilda::CLI::Index, :tree do
   subject(:command) { described_class.new }
 
-  def run(**options)
+  def run(**)
     out = CapturedStream.new
     err = CapturedStream.new
     status = 0
@@ -14,7 +14,7 @@ RSpec.describe Agentilda::CLI::Index, :tree do
     original_out, original_err = $stdout, $stderr
     $stdout, $stderr = out, err
     begin
-      command.call(dir: plans_root, **options)
+      command.call(dir: plans_root, **)
     rescue SystemExit => e
       status = e.status
     ensure
@@ -26,7 +26,7 @@ RSpec.describe Agentilda::CLI::Index, :tree do
 
   def unwrapped(text) = text.tr("║╔╗╚╝═", " ").gsub(/\s+/, " ")
 
-  before { plans { |t| t.plan("001.00", :new, "tax-rule-dsl", files: {"spec.md" => spec_body}) } }
+  before { plans { |t| t.plan("001.00", :new, "tax-rule-dsl", files: { "spec.md" => spec_body }) } }
 
   it "writes INDEX.md into the plans directory and prints where" do
     out, err, = run

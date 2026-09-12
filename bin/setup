@@ -1,0 +1,26 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+IFS=$'\n\t'
+# set -v
+
+command -v just>/dev/null  || brew install just
+command -v rbenv>/dev/null || brew install rbenv
+
+ruby_version="$(cat .ruby-version | tr -d '\n')"
+current_ruby_version="$(ruby -e 'puts RbConfig::CONFIG["RUBY_PROGRAM_VERSION"]')"
+
+if [[ ${ruby_version} != ${current_ruby_version} ]]; then
+  bash -c "$(curl -fsSL https://bit.ly/ruby-install-0-2-1)" -- ${ruby_version}
+else
+  echo -e "\e[0;33m[OK]\e[0m Ruby version ${ruby_version} is installed and current."
+fi
+
+rbenv versions | grep -q ${ruby_version} || {
+  echo -e "\e[1;31mCan't find ruby version ${ruby_version} after an attempted install.\e[0m"
+  exit 1
+}
+
+bundle check>/dev/null && {
+  echo -e "\e[0;33m[OK]\e[0m Gemfile dependencies are already satisfied."
+} || bundle install -j 12

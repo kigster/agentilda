@@ -17,7 +17,8 @@ module Agentilda
   class Keyboard
     # Key → what it does, rendered by {#help} and dispatched by {#handle}.
     BINDINGS = [
-      ["h  ?", "this help"],
+      ["h", "this help"],
+      ["?", "about agentilda"],
       ["s", "select the next running agent; arrows move the selection"],
       ["k", "mark the selected agent to be killed (STOP, 15s, then kill -9)"],
       ["x", "extend the selected agent's clock by 10 minutes, per press"],
@@ -68,7 +69,8 @@ module Agentilda
     # @return [void]
     def handle(key)
       case key
-      when "h", "?" then @sink ? @sink.toggle_help : UI.popup("Keys", help)
+      when "h" then @sink ? @sink.toggle_help : UI.popup("Keys", help)
+      when "?" then @sink ? @sink.toggle_about : UI.popup("About", about)
       when "s", "\e[B" then @sink&.select_next
       when "\e[A" then @sink&.select_prev
       when "k" then @sink&.toggle_kill
@@ -87,6 +89,9 @@ module Agentilda
       width = BINDINGS.map { |key, _| key.length }.max
       BINDINGS.map { |key, does| "#{key.ljust(width)}   #{does}" }.join("\n")
     end
+
+    # @return [String] the version and a reminder of how to leave
+    def about = "Agentilda Version #{Agentilda::VERSION}\n\nThanks for using this! Press 'q' to exit and stop all agents."
 
     private
 

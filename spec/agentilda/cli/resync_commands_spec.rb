@@ -5,7 +5,7 @@
 # says it changed nothing, a commit says exactly what it changed, and anything
 # too ambiguous to touch is reported rather than skipped in silence.
 RSpec.describe "agentilda resync", :tree do
-  def run(command, **options)
+  def run(command, **)
     out = CapturedStream.new
     err = CapturedStream.new
     status = 0
@@ -13,7 +13,7 @@ RSpec.describe "agentilda resync", :tree do
     original_out, original_err = $stdout, $stderr
     $stdout, $stderr = out, err
     begin
-      command.call(dir: plans_root, **options)
+      command.call(dir: plans_root, **)
     rescue SystemExit => e
       status = e.status
     ensure
@@ -29,7 +29,7 @@ RSpec.describe "agentilda resync", :tree do
     subject(:command) { described_class.new }
 
     it "says every folder already holds when there is nothing to do" do
-      plans { |t| t.plan("001.00", :new, "fine", files: {"spec.md" => spec_body}) }
+      plans { |t| t.plan("001.00", :new, "fine", files: { "spec.md" => spec_body }) }
       out, err, = run(command)
 
       expect(out).to eq("")
@@ -39,7 +39,7 @@ RSpec.describe "agentilda resync", :tree do
     context "with a folder whose contents outgrew its name" do
       before do
         # A ⚪️ folder that has grown a plan.md with work units best-fits ⭐️ whatever its name says.
-        plans { |t| t.plan("001.00", :new, "outgrown", files: {"spec.md" => spec_body, "plan.md" => "# Plan"}) }
+        plans { |t| t.plan("001.00", :new, "outgrown", files: { "spec.md" => spec_body, "plan.md" => "# Plan" }) }
       end
 
       it "prints the rename as a machine-readable row and leaves the disk alone" do
@@ -74,8 +74,8 @@ RSpec.describe "agentilda resync", :tree do
     before { allow(Agentilda::GitHub).to receive(:new).and_return(github) }
 
     def pull(number, title, branch: "", files: [])
-      {number:, title:, url: "https://github.com/example/repo/pull/#{number}",
-       branch:, files:, state: "Open 🟡", open: true}
+      { number:, title:, url: "https://github.com/example/repo/pull/#{number}",
+       branch:, files:, state: "Open 🟡", open: true }
     end
 
     it "says every title already carries a prefix when they all do" do
@@ -88,11 +88,11 @@ RSpec.describe "agentilda resync", :tree do
 
     context "with titles to resolve" do
       before do
-        plans { |t| t.plan("001.00", :new, "tax-rule-dsl", files: {"spec.md" => spec_body}) }
+        plans { |t| t.plan("001.00", :new, "tax-rule-dsl", files: { "spec.md" => spec_body }) }
         allow(github).to receive(:pulls).and_return([
-          pull(7, "Add the DSL", branch: "kig/001.00-tax-rule-dsl"),
-          pull(9, "Bump CI cache")
-        ])
+                                                      pull(7, "Add the DSL", branch: "kig/001.00-tax-rule-dsl"),
+                                                      pull(9, "Bump CI cache")
+                                                    ])
       end
 
       it "previews each retitle as a row without touching GitHub" do
@@ -121,7 +121,7 @@ RSpec.describe "agentilda resync", :tree do
 
     context "with a pull request nothing can resolve safely" do
       before do
-        plans { |t| t.plan("001.00", :new, "tax-rule-dsl", files: {"spec.md" => spec_body}) }
+        plans { |t| t.plan("001.00", :new, "tax-rule-dsl", files: { "spec.md" => spec_body }) }
         # The branch names a plan the tree does not hold, which is exactly the
         # case where writing any number would file work under the wrong plan.
         allow(github).to receive(:pulls).and_return([pull(4, "Mystery work", branch: "kig/099.00-mystery")])

@@ -20,16 +20,22 @@ RSpec.describe Agentilda::Dispatcher, :tree do
     }
   end
 
-  def runner_with(executor, **options)
-    Agentilda::Runner.new(tree:, executor:, agents:, isolation: :shared, jobs: 2, state:,
-      sleeper: ->(_) {}, **options)
+  def runner_with(executor, **)
+    Agentilda::Runner.new(tree:,
+      executor:,
+      agents:,
+      isolation: :shared,
+      jobs: 2,
+      state:,
+      sleeper: ->(_) {},
+**)
   end
 
   def path_of(ordinal) = tree.reload.find(Agentilda::Ordinal.parse(ordinal)).feature.path
 
   describe "the 020.00 regression" do
     let!(:built) do
-      plans { |t| t.plan "020.00", :researched, "qualified-at", files: {"spec.md" => "#{spec_body}\n## Research\n\nFound.\n"} }
+      plans { |t| t.plan "020.00", :researched, "qualified-at", files: { "spec.md" => "#{spec_body}\n## Research\n\nFound.\n" } }
     end
 
     # yoda finishes, leaves a blank plan.md, signs Completed and names
@@ -60,7 +66,7 @@ RSpec.describe Agentilda::Dispatcher, :tree do
     it "records each promotion on the attempt that earned it" do
       executor = executor_with do |agent, subject, _|
         File.write(File.join(subject.feature.path, "plan.md"), "") if agent.name == "yoda-writer"
-        (agent.name == "yoda-writer") ? "Completed" : nil
+        agent.name == "yoda-writer" ? "Completed" : nil
       end
       attempts = runner_with(executor).call
       yoda = attempts.find { |a| a.agent == "yoda-writer" }
@@ -75,8 +81,10 @@ RSpec.describe Agentilda::Dispatcher, :tree do
   describe "a folder whose name lags its contents" do
     let!(:built) do
       plans do |t|
-        t.plan "001.00", :new, "already-planned",
-          files: {"spec.md" => "#{spec_body}\n## Research\n\nWhat was found.\n", "plan.md" => "# P\n\n## Unit 1\n"}
+        t.plan "001.00",
+          :new,
+          "already-planned",
+          files: { "spec.md" => "#{spec_body}\n## Research\n\nWhat was found.\n", "plan.md" => "# P\n\n## Unit 1\n" }
       end
     end
 
@@ -102,8 +110,8 @@ RSpec.describe Agentilda::Dispatcher, :tree do
   describe "pairing" do
     let!(:built) do
       plans do |t|
-        t.plan "000.00", :new, "alone", files: {"spec.md" => spec_body}
-        t.plan "001.00", :building, "paired", files: {"spec.md" => spec_body, "plan.md" => "# P"}
+        t.plan "000.00", :new, "alone", files: { "spec.md" => spec_body }
+        t.plan "001.00", :building, "paired", files: { "spec.md" => spec_body, "plan.md" => "# P" }
       end
     end
 
@@ -119,14 +127,14 @@ RSpec.describe Agentilda::Dispatcher, :tree do
 
       expect(seen).to eq(
         ["leah-researcher", "000.00"] => [],
-        ["luke-backend", "001.00"] => ["rey-frontend"],
-        ["rey-frontend", "001.00"] => ["luke-backend"]
+        ["luke-backend", "001.00"]    => ["rey-frontend"],
+        ["rey-frontend", "001.00"]    => ["luke-backend"]
       )
     end
   end
 
   describe "handoffs" do
-    let!(:built) { plans { |t| t.plan "001.00", :new, "relay", files: {"spec.md" => spec_body} } }
+    let!(:built) { plans { |t| t.plan "001.00", :new, "relay", files: { "spec.md" => spec_body } } }
 
     it "starts the named successor only after the predecessor exited" do
       order = []
@@ -135,7 +143,8 @@ RSpec.describe Agentilda::Dispatcher, :tree do
         file = File.join(subject.feature.path, "spec.md")
         if agent.name == "leah-researcher"
           File.write(file, "#{spec_body}\n## Research\n\nFound.\n")
-          Agentilda::Ledger.append(file, "> [#{stamp}] [ agent: leah-researcher   status: Completed, round 1 ]",
+          Agentilda::Ledger.append(file,
+            "> [#{stamp}] [ agent: leah-researcher   status: Completed, round 1 ]",
             "> [#{stamp}] [ next: yoda-writer ]")
         end
         order << [:end, agent.name]
@@ -148,10 +157,11 @@ RSpec.describe Agentilda::Dispatcher, :tree do
     # hansolo is on the roster, so the refusal is about what he handles and
     # not about whether he exists; nobody left handles 🔎, so the run stops.
     it "refuses a next: that names an agent who does not handle the new state, and says so" do
-      executor = lambda { |agent, subject, round: 1, **|
+      executor = lambda { |_agent, subject, round: 1, **|
         file = File.join(subject.feature.path, "spec.md")
         File.write(file, "#{spec_body}\n## Research\n\nFound.\n")
-        Agentilda::Ledger.append(file, "> [#{stamp}] [ agent: leah-researcher   status: Completed, round 1 ]",
+        Agentilda::Ledger.append(file,
+          "> [#{stamp}] [ agent: leah-researcher   status: Completed, round 1 ]",
           "> [#{stamp}] [ next: hansolo-reviewer ]")
         Agentilda::Executor::Result.new(ok: true, note: "completed", up: 0, down: 0, subagents: 0, delegated: 0, seconds: 0.0)
       }
@@ -161,7 +171,7 @@ RSpec.describe Agentilda::Dispatcher, :tree do
   end
 
   describe "outcomes other than Completed" do
-    let!(:built) { plans { |t| t.plan "001.00", :new, "again", files: {"spec.md" => spec_body} } }
+    let!(:built) { plans { |t| t.plan "001.00", :new, "again", files: { "spec.md" => spec_body } } }
 
     it "re-runs an Almost completed agent while it has rounds, then parks the plan" do
       Dir.mktmpdir do |dir|
@@ -196,7 +206,7 @@ RSpec.describe Agentilda::Dispatcher, :tree do
     end
 
     it "parks a product block at 🅱️ when the note says so" do
-      executor = lambda { |agent, subject, round: 1, **|
+      executor = lambda { |_agent, subject, round: 1, **|
         File.write(File.join(subject.feature.path, "blocked.md"), "## B1\n\nWhich colour?\n")
         Agentilda::Ledger.append(File.join(subject.feature.path, "spec.md"),
           "> [#{stamp}] [ agent: leah-researcher   status: Blocked, round 1 (product) ]")
@@ -208,13 +218,13 @@ RSpec.describe Agentilda::Dispatcher, :tree do
   end
 
   describe "verify and sign" do
-    let!(:built) { plans { |t| t.plan "001.00", :new, "cut-off", files: {"spec.md" => spec_body} } }
+    let!(:built) { plans { |t| t.plan "001.00", :new, "cut-off", files: { "spec.md" => spec_body } } }
 
     # The agent did the work and was killed before its closing line. The
     # invariant of 🔎 holds, so the harness signs on its behalf, in bold,
     # and the plan moves.
     it "signs Completed for a killed agent whose work is on disk" do
-      executor = lambda { |agent, subject, round: 1, **|
+      executor = lambda { |_agent, subject, round: 1, **|
         file = File.join(subject.feature.path, "spec.md")
         File.write(file, "#{spec_body}\n## Research\n\nFound.\n")
         Agentilda::Ledger.append(file, "> [#{stamp}] [ agent: leah-researcher   status: Started, round 1 ]")
@@ -234,7 +244,7 @@ RSpec.describe Agentilda::Dispatcher, :tree do
       Dir.mktmpdir do |dir|
         File.write(File.join(dir, "leah.md"), "---\nname: leah-researcher\nhandles: [new]\nadvances_to: researched\nrounds: 2\nledger: [spec.md]\n---\nbody")
         two = Agentilda::Agents.new(dir:)
-        executor = lambda { |agent, subject, round: 1, **|
+        executor = lambda { |_agent, _subject, round: 1, **|
           calls << round
           Agentilda::Executor::Result.new(ok: false, note: "timed out", up: 0, down: 0, subagents: 0, delegated: 0, seconds: 0.0, killed: :timeout)
         }
@@ -255,8 +265,11 @@ RSpec.describe Agentilda::Dispatcher, :tree do
     # fixture carries it from the start.
     let!(:built) do
       plans { |t|
-        t.plan "001.00", :planned, "both", files: {"spec.md" => spec_body, "plan.md" => "# Plan\n\n## U1\n"},
-          prs: [t.open(7, "[001.00](A) Both")]
+        t.plan "001.00",
+          :planned,
+          "both",
+          files: { "spec.md" => spec_body, "plan.md" => "# Plan\n\n## U1\n" },
+          prs:   [t.open(7, "[001.00](A) Both")]
       }
     end
 
@@ -282,8 +295,13 @@ RSpec.describe Agentilda::Dispatcher, :tree do
         end
         Agentilda::Executor::Result.new(ok: true, note: "completed", up: 0, down: 0, subagents: 0, delegated: 0, seconds: 0.0)
       }
-      runner = Agentilda::Runner.new(tree:, executor:, agents: agents.only("luke-backend", "rey-frontend"),
-        isolation: :shared, jobs: 2, state:, sleeper: ->(s) { sleep(0.05) })
+      runner = Agentilda::Runner.new(tree:,
+        executor:,
+        agents: agents.only("luke-backend", "rey-frontend"),
+        isolation: :shared,
+        jobs: 2,
+        state:,
+        sleeper: ->(_s) { sleep(0.05) })
       allow(runner).to receive(:jobs).and_return(2) # let two run at once without a worktree
       runner.call
       aggregate_failures do
@@ -296,13 +314,16 @@ RSpec.describe Agentilda::Dispatcher, :tree do
   describe "the reviewer's verdicts" do
     let!(:built) do
       plans { |t|
-        t.plan "001.00", :ready_for_review, "judged", files: {"spec.md" => spec_body, "plan.md" => "# P\n\n## U\n"},
-          prs: [t.open(7, "[001.00](A) Judged")]
+        t.plan "001.00",
+          :ready_for_review,
+          "judged",
+          files: { "spec.md" => spec_body, "plan.md" => "# P\n\n## U\n" },
+          prs:   [t.open(7, "[001.00](A) Judged")]
       }
     end
 
     def hansolo(note)
-      lambda { |agent, subject, round: 1, **|
+      lambda { |_agent, subject, round: 1, **|
         Agentilda::Ledger.append(File.join(subject.feature.path, "pull-requests.md"),
           "> [#{stamp}] [ agent: hansolo-reviewer   status: Completed, round #{round} (#{note}) ]")
         Agentilda::Executor::Result.new(ok: true, note: "completed", up: 0, down: 0, subagents: 0, delegated: 0, seconds: 0.0)
@@ -325,7 +346,7 @@ RSpec.describe Agentilda::Dispatcher, :tree do
   end
 
   describe "restarting after a dead harness" do
-    let!(:built) { plans { |t| t.plan "001.00", :new, "resumed", files: {"spec.md" => spec_body} } }
+    let!(:built) { plans { |t| t.plan "001.00", :new, "resumed", files: { "spec.md" => spec_body } } }
 
     # The stranded stage is an Interrupted round, so the re-run is the
     # agent's second, and leah needs two to have it.
@@ -350,7 +371,7 @@ RSpec.describe Agentilda::Dispatcher, :tree do
   end
 
   describe "a dry run" do
-    let!(:built) { plans { |t| t.plan "001.00", :new, "preview", files: {"spec.md" => spec_body} } }
+    let!(:built) { plans { |t| t.plan "001.00", :new, "preview", files: { "spec.md" => spec_body } } }
 
     it "invokes each eligible agent once, writes no ledger, renames nothing, saves no state" do
       executor = Agentilda::Executor.new(root: File.dirname(plans_root), dry_run: true)

@@ -1,5 +1,7 @@
 # frozen_string_literal: true
 
+require "agentilda/status"
+
 module Agentilda
   # Telling "this belongs to no specification" apart from "nobody could tell".
   #

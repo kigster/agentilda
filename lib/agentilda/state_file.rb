@@ -1,5 +1,6 @@
 # frozen_string_literal: true
 
+require "fileutils"
 require "json"
 
 module Agentilda
@@ -34,7 +35,7 @@ module Agentilda
 
       path = File.join(root, ".gitignore")
       existing = File.file?(path) ? File.read(path) : ""
-      glue = (existing.empty? || existing.end_with?("\n")) ? "" : "\n"
+      glue = existing.empty? || existing.end_with?("\n") ? "" : "\n"
       File.write(path, "#{existing}#{glue}#{IGNORE}\n")
       true
     end
@@ -44,7 +45,7 @@ module Agentilda
     def initialize(path:, pid: Process.pid)
       @path = path
       @pid = pid
-      @data = {"run" => {}, "plans" => {}}
+      @data = { "run" => {}, "plans" => {} }
       @mutex = Mutex.new
     end
 
@@ -55,7 +56,7 @@ module Agentilda
     def load
       @mutex.synchronize do
         @data = JSON.parse(File.read(path)) if File.file?(path)
-        @data = {"run" => {}, "plans" => {}} unless @data.is_a?(Hash) && @data["plans"].is_a?(Hash)
+        @data = { "run" => {}, "plans" => {} } unless @data.is_a?(Hash) && @data["plans"].is_a?(Hash)
       end
       self
     rescue JSON::ParserError
@@ -79,8 +80,8 @@ module Agentilda
     # @return [void]
     def begin_run!(root:)
       @mutex.synchronize do
-        @data["run"] = {"pid" => @pid, "root" => root, "started_at" => Time.now.iso8601,
-                        "heartbeat_at" => Time.now.iso8601}
+        @data["run"] = { "pid" => @pid, "root" => root, "started_at" => Time.now.iso8601,
+                        "heartbeat_at" => Time.now.iso8601 }
       end
     end
 
@@ -97,10 +98,10 @@ module Agentilda
     # @return [void]
     def record(ordinal, agent:, round:, **fields)
       @mutex.synchronize do
-        plan = (@data["plans"][ordinal.to_s] ||= {"stages" => []})
+        plan = (@data["plans"][ordinal.to_s] ||= { "stages" => [] })
         stage = plan["stages"].find { |s| s["agent"] == agent && s["round"] == round }
         unless stage
-          stage = {"agent" => agent, "round" => round, "run_pid" => @pid}
+          stage = { "agent" => agent, "round" => round, "run_pid" => @pid }
           plan["stages"] << stage
         end
         fields.each { |key, value| stage[key.to_s] = value }
@@ -136,7 +137,7 @@ module Agentilda
       @mutex.synchronize do
         @data["plans"].flat_map { |ordinal, plan|
           plan["stages"].select { |s| s["status"] == "Started" && s["run_pid"] != @pid }
-            .map { |s| [ordinal, s.dup] }
+                        .map { |s| [ordinal, s.dup] }
         }
       end
     end

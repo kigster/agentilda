@@ -1,5 +1,9 @@
 # frozen_string_literal: true
 
+require "agentilda/feature"
+require "agentilda/ordinal"
+require "agentilda/subject"
+
 module Agentilda
   # A project's `.plans` directory: the folders in it, decoded and ordered.
   class Tree
@@ -38,8 +42,8 @@ module Agentilda
     # @return [Hash{Agentilda::Ordinal => Array<String>}] number => dirnames
     def duplicates
       features.group_by(&:ordinal)
-        .select { |_, group| group.size > 1 }
-        .transform_values { |group| group.map(&:dirname) }
+              .select { |_, group| group.size > 1 }
+              .transform_values { |group| group.map(&:dirname) }
     end
 
     # @param ordinal [Agentilda::Ordinal, String]
@@ -68,10 +72,10 @@ module Agentilda
       return [] unless exist?
 
       Dir.children(dir)
-        .map { |c| File.join(dir, c) }
-        .select { |p| File.directory?(p) }
-        .reject { |p| File.basename(p).start_with?(".") }
-        .sort
+         .map { |c| File.join(dir, c) }
+         .select { |p| File.directory?(p) }
+         .reject { |p| File.basename(p).start_with?(".") }
+         .sort
     end
   end
 end

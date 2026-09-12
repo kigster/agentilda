@@ -6,11 +6,11 @@
 RSpec.describe "agentilda mail", :tree do
   let!(:folder) do
     path = nil
-    plans { |t| path = t.plan "001.00", :building, "paired", files: {"spec.md" => spec_body, "plan.md" => "# P"} }
+    plans { |t| path = t.plan "001.00", :building, "paired", files: { "spec.md" => spec_body, "plan.md" => "# P" } }
     path
   end
 
-  def run(command, **options)
+  def run(command, **)
     out = CapturedStream.new
     err = CapturedStream.new
     status = 0
@@ -18,7 +18,7 @@ RSpec.describe "agentilda mail", :tree do
     original_out, original_err = $stdout, $stderr
     $stdout, $stderr = out, err
     begin
-      command.call(dir: plans_root, **options)
+      command.call(dir: plans_root, **)
     rescue SystemExit => e
       status = e.status
     ensure
@@ -28,9 +28,9 @@ RSpec.describe "agentilda mail", :tree do
     [strip_ansi(out.string), strip_ansi(err.string), status]
   end
 
-  def send(**options) = run(Agentilda::CLI::Mail::Send.new, **options)
+  def send(**) = run(Agentilda::CLI::Mail::Send.new, **)
 
-  def read(**options) = run(Agentilda::CLI::Mail::Read.new, **options)
+  def read(**) = run(Agentilda::CLI::Mail::Read.new, **)
 
   it "delivers a message from one half to the other" do
     _out, err, status = send(body: "GET /returns/:id is up", plan: "001.00", from: "luke-backend", to: "rey-frontend")

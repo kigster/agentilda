@@ -8,10 +8,12 @@ module Agentilda
 
       argument :plan,
         required: true,
-        desc: "Plan ordinal (e.g. 002, 002.00, or a plan folder name)"
+        desc:     "Plan ordinal (e.g. 002, 002.00, or a plan folder name)"
 
-      option :skip_seed, type: :boolean, default: false,
-        desc: "Create the worktree but skip seeding it with .env and credential files"
+      option :skip_seed,
+        type:    :boolean,
+        default: false,
+        desc:    "Create the worktree but skip seeding it with .env and credential files"
 
       example [
         "002                         # create/seed the worktree for plan 002.00",
@@ -37,27 +39,27 @@ module Agentilda
 
         checkout = worktree.checkout_for(feature)
 
-        unless is_quiet
-          if checkout.created?
-            puts("✓ Created worktree for #{feature.ordinal}: #{checkout.path}")
-          else
-            puts("✓ Using existing worktree for #{feature.ordinal}: #{checkout.path}")
-          end
+        return if is_quiet
 
-          unless options[:skip_seed]
-            seeded = worktree.seed(checkout.path)
-            if seeded
-              puts("✓ Seeded with .env and credential files")
-            else
-              warn("⚠ Could not seed worktree, see above for details")
-            end
-          end
-
-          puts("")
-          success("Worktree ready for #{feature.ordinal}")
-          puts("Path: #{checkout.path}")
-          puts("Branch: #{checkout.branch}")
+        if checkout.created?
+          puts("✓ Created worktree for #{feature.ordinal}: #{checkout.path}")
+        else
+          puts("✓ Using existing worktree for #{feature.ordinal}: #{checkout.path}")
         end
+
+        unless options[:skip_seed]
+          seeded = worktree.seed(checkout.path)
+          if seeded
+            puts("✓ Seeded with .env and credential files")
+          else
+            warn("⚠ Could not seed worktree, see above for details")
+          end
+        end
+
+        puts("")
+        success("Worktree ready for #{feature.ordinal}")
+        puts("Path: #{checkout.path}")
+        puts("Branch: #{checkout.branch}")
       end
 
       private

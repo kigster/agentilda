@@ -13,7 +13,6 @@ gem "yard"
 group :development do
   gem "colored2"
   gem "irb"
-  gem "standard"
 end
 
 group :test do
@@ -23,4 +22,12 @@ group :test do
   gem "rspec-its"
   gem "rspec_junit_formatter" # JUnit XML for CircleCI store_test_results
   gem "simplecov"
+end
+
+group :development, :test do
+  gem "rubocop"
+  gem "rubocop-rspec"
+  gem "rubocop-rake"
+  gem "rubocop-rubycw"
+  gem "rubocop-on-rbs"
 end

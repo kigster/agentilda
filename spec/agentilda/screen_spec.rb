@@ -5,14 +5,34 @@ RSpec.describe Agentilda::Screen do
 
   let(:output) { CapturedStream.new }
   let(:row) do
-    Agentilda::Board::Row.new(key: "001.00/leah-researcher", at: Time.new(2026, 9, 4, 11, 29, 20),
-      ordinal: "001.00", file: "spec.md", agent: "leah-researcher", role: "researcher", round: 1, rounds: 2,
-      model: "haiku", remaining: 761, phase: :calm, up: 1_500_000, down: 11_000,
-      message: "reading plan.md", state: :running, frame: 3)
+    Agentilda::Board::Row.new(key: "001.00/leah-researcher",
+      at: Time.new(2026, 9, 4, 11, 29, 20),
+      ordinal: "001.00",
+      file: "spec.md",
+      agent: "leah-researcher",
+      role: "researcher",
+      round: 1,
+      rounds: 2,
+      model: "haiku",
+      remaining: 761,
+      phase: :calm,
+      up: 1_500_000,
+      down: 11_000,
+      message: "reading plan.md",
+      state: :running,
+      frame: 3)
   end
   let(:board) do
-    Agentilda::Board.new(started_at: 0.0, status: :running, plans: %w[001.00], up: 2_700_000, down: 22_000,
-      rows: [row], root: "/repo/qualified-at", running: 1, live_up: 1_500_000, live_down: 11_000)
+    Agentilda::Board.new(started_at: 0.0,
+      status: :running,
+      plans: %w[001.00],
+      up: 2_700_000,
+      down: 22_000,
+      rows: [row],
+      root: "/repo/qualified-at",
+      running: 1,
+      live_up: 1_500_000,
+      live_down: 11_000)
   end
 
   def frame = strip_ansi(screen.render(board))
@@ -23,9 +43,9 @@ RSpec.describe Agentilda::Screen do
       expect(lines[0]).to include("plans in work: 001.00", "tokens: ↑ 2.7M", "↓ 22k")
       expect(lines[1]).to eq("")
       expect(lines[2]).to include("timestamp", "plan", "file", "agent", "model")
-      expect(lines[3]).to start_with(" " + "─" * 118)
+      expect(lines[3]).to start_with(" " + ("─" * 118))
       expect(lines[4]).to include("11:29:20", "001.00", "spec.md", "researcher [R:1/2]", "haiku", "12:41", "↑1.5M", "↓11k", "reading plan.md")
-      expect(lines[5]).to start_with(" " + "─" * 118)
+      expect(lines[5]).to start_with(" " + ("─" * 118))
       expect(lines[6]).to eq("")
       expect(lines[7]).to include("working in /repo/qualified-at", "agents running: 1", "↑ 1.5M", "↓ 11k")
     end
@@ -47,7 +67,7 @@ RSpec.describe Agentilda::Screen do
 
   it "shows a pull request number as a link, red when the plan was rejected" do
     allow(Agentilda::UI).to receive(:color?).and_return(true)
-    judged = board.with(rows: [row.with(file: "pull-requests.md", pr: {number: "43", url: "https://github.com/x/y/pull/43", rejected: true})])
+    judged = board.with(rows: [row.with(file: "pull-requests.md", pr: { number: "43", url: "https://github.com/x/y/pull/43", rejected: true })])
     text = screen.render(judged)
     aggregate_failures do
       expect(text).to include("\e]8;;https://github.com/x/y/pull/43\e\\")
@@ -88,6 +108,11 @@ RSpec.describe Agentilda::Screen do
   it "draws the dialog and the help over the table when asked" do
     text = strip_ansi(screen.render(board.with(dialog: "kill: yes\nextend: +10m", help: false)))
     expect(text).to include("kill: yes", "extend: +10m", "ENTER", "ESC")
+  end
+
+  it "draws the about screen over the table when asked" do
+    text = strip_ansi(screen.render(board.with(about: "Agentilda Version 2.0.0-alpha\n\nThanks for using this! Press 'q' to exit and stop all agents.")))
+    expect(text).to include("Agentilda Version 2.0.0-alpha", "stop all agents", "ESC")
   end
 
   describe ".hyperlink" do

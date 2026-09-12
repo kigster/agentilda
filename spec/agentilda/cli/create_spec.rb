@@ -8,7 +8,7 @@
 RSpec.describe Agentilda::CLI::Create, :tree do
   subject(:command) { described_class.new }
 
-  def run(*words, **options)
+  def run(*words, **)
     out = CapturedStream.new
     err = CapturedStream.new
     status = 0
@@ -16,7 +16,7 @@ RSpec.describe Agentilda::CLI::Create, :tree do
     original_out, original_err = $stdout, $stderr
     $stdout, $stderr = out, err
     begin
-      command.call(words:, dir: plans_root, **options)
+      command.call(words:, dir: plans_root, **)
     rescue SystemExit => e
       status = e.status
     ensure
@@ -67,7 +67,7 @@ RSpec.describe Agentilda::CLI::Create, :tree do
     end
 
     it "numbers after the plans already there, never over them" do
-      plans { |t| t.plan("007.00", :new, "earlier", files: {"spec.md" => spec_body}) }
+      plans { |t| t.plan("007.00", :new, "earlier", files: { "spec.md" => spec_body }) }
       out, = run("next", "thing", draft: false, open: false)
 
       expect(File.basename(out.strip)).to start_with("008.00")
@@ -101,8 +101,9 @@ RSpec.describe Agentilda::CLI::Create, :tree do
     # these examples assert only the seam: attempted, and reported honestly.
     def with_brief(result:)
       brief = instance_double(Agentilda::Brief,
-        write_scaffold!: nil, attempt!: result,
-        spec_path: File.join(plans_root, "irrelevant", "spec.md"))
+        write_scaffold!: nil,
+        attempt!:        result,
+        spec_path:       File.join(plans_root, "irrelevant", "spec.md"))
       allow(Agentilda::Brief).to receive(:new).and_return(brief)
       brief
     end
@@ -168,10 +169,10 @@ RSpec.describe Agentilda::CLI::Create, :tree do
 
     it "hands the seed on to the drafting prompt as the primary source" do
       captured = nil
-      allow(Agentilda::Brief).to receive(:new).and_wrap_original { |m, **kw|
+      allow(Agentilda::Brief).to(receive(:new).and_wrap_original { |m, **kw|
         captured = kw[:seed]
         m.call(**kw)
-      }
+      })
       run(from: seeded, draft: false, open: false)
 
       expect(captured).to include("statute they encode")
@@ -254,7 +255,7 @@ RSpec.describe Agentilda::CLI::Create, :tree do
     it "reports pull requests it could not read, not a stack trace" do
       allow(github).to receive(:pull_requests)
         .and_raise(Agentilda::Error, "could not read pull request 12: gone")
-      plans { |t| t.plan("002.00", :new, "anchor", files: {"spec.md" => spec_body}) }
+      plans { |t| t.plan("002.00", :new, "anchor", files: { "spec.md" => spec_body }) }
       _out, err, status = run("verify", after: "002", prs: "12")
 
       expect(unwrapped(err)).to include("could not read pull request 12")
@@ -263,13 +264,13 @@ RSpec.describe Agentilda::CLI::Create, :tree do
 
     context "with the pull requests fetched" do
       let(:pull) do
-        {number: 12, title: "Verify things", url: "https://github.com/example/repo/pull/12",
-         state: "Open 🟡", body: ""}
+        { number: 12, title: "Verify things", url: "https://github.com/example/repo/pull/12",
+         state: "Open 🟡", body: "" }
       end
 
       before do
         allow(github).to receive(:pull_requests).with(["12"]).and_return([pull])
-        plans { |t| t.plan("002.00", :new, "anchor", files: {"spec.md" => spec_body}) }
+        plans { |t| t.plan("002.00", :new, "anchor", files: { "spec.md" => spec_body }) }
       end
 
       it "records the pull requests and stops under --no-spec, offline" do

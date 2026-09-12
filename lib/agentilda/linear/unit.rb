@@ -93,10 +93,10 @@ module Agentilda
       # @return [String]
       def self.clean_title(title)
         title.to_s
-          .sub(/\A\[[^\]]*\]\s*/, "")
-          .sub(/\A(?:spec\s*)?\d{1,3}(?:\.\d{2})?\s*[—–:.-]?\s*/i, "")
-          .sub(/\APR[\s_-]?\d+(?:\.\d+)?\s*[—–:.-]?\s*/i, "")
-          .strip
+             .sub(/\A\[[^\]]*\]\s*/, "")
+             .sub(/\A(?:spec\s*)?\d{1,3}(?:\.\d{2})?\s*[—–:.-]?\s*/i, "")
+             .sub(/\APR[\s_-]?\d+(?:\.\d+)?\s*[—–:.-]?\s*/i, "")
+             .strip
       end
 
       private
@@ -260,14 +260,14 @@ module Agentilda
       # @return [String]
       def clean(title)
         title.to_s
-          .sub(/\A\([^)]*\)\s*/, "") # "(010a) — Per-person taxes" — a nickname, not a title
-          .sub(/\A[—–:.-]+\s*/, "")
-          .sub(GLYPH_NOTE, "")
-          .sub(TRAILING_GLYPH, "")
-          .gsub(/[*`]/, "") # before OWN_NUMBER: the number is often inside backticks
-          .sub(/\A_+/, "").sub(/_+\z/, "") # emphasis, but never `signed_off`
-          .sub(OWN_NUMBER, "")
-          .strip
+             .sub(/\A\([^)]*\)\s*/, "") # "(010a) — Per-person taxes" — a nickname, not a title
+             .sub(/\A[—–:.-]+\s*/, "")
+             .sub(GLYPH_NOTE, "")
+             .sub(TRAILING_GLYPH, "")
+             .gsub(/[*`]/, "") # before OWN_NUMBER: the number is often inside backticks
+             .sub(/\A_+/, "").sub(/_+\z/, "") # emphasis, but never `signed_off`
+             .sub(OWN_NUMBER, "")
+             .strip
       end
     end
   end

@@ -18,7 +18,7 @@ RSpec.describe Agentilda::Executor, :tree do
   let(:spawn) { ->(_argv, chdir: nil) { fake_child } }
 
   let!(:built) do
-    plans { |t| t.plan "000.00", :new, "a-feature", files: {"spec.md" => spec_body} }
+    plans { |t| t.plan "000.00", :new, "a-feature", files: { "spec.md" => spec_body } }
   end
 
   let(:subject_plan) { Agentilda::Tree.new(dir: plans_root).subjects.first }
@@ -63,7 +63,7 @@ RSpec.describe Agentilda::Executor, :tree do
 
     it "appends operator instructions when the run supplied them" do
       steered = described_class.new(root:, spawn:, instructions: "Prefer the parser refactor")
-        .invocation(agent, subject_plan)
+                               .invocation(agent, subject_plan)
 
       expect(steered[2]).to include("Operator instructions", "Prefer the parser refactor")
     end
@@ -103,7 +103,8 @@ RSpec.describe Agentilda::Executor, :tree do
       paired = executor.invocation(luke, subject_plan, partners: [rey])[2]
 
       expect(paired).to include(
-        "## Mailbox", "Your partner on this plan is `rey-frontend`",
+        "## Mailbox",
+        "Your partner on this plan is `rey-frontend`",
         File.join(subject_plan.feature.path, "mailbox.md"),
         "agentilda mail read --dir \"#{plans_root}\" --plan 000.00 --for luke-backend",
         "agentilda mail send --dir \"#{plans_root}\" --plan 000.00 --from luke-backend --to rey-frontend"
@@ -221,23 +222,32 @@ RSpec.describe Agentilda::Executor, :tree do
   # and duly ran, found nothing, and reported success.
   def agent_with(network: false, may: [])
     Agentilda::Agent.new(
-      name: "x", description: "", handles: [:new], advances_to: :planned, model: nil,
-      allowed_tools: [], may:, network:, timeout: nil, prompt: "do it", path: "x.md"
+      name:          "x",
+      description:   "",
+      handles:       [:new],
+      advances_to:   :planned,
+      model:         nil,
+      allowed_tools: [],
+      may:,
+      network:,
+      timeout:       nil,
+      prompt:        "do it",
+      path:          "x.md"
     )
   end
 
   def denied(agent)
     described_class.new(root:, spawn:).invocation(agent, subject_plan)
-      .each_cons(2).find { |flag, _| flag == "--disallowedTools" }&.last.to_s.split(",")
+                   .each_cons(2).find { |flag, _| flag == "--disallowedTools" }&.last.to_s.split(",")
   end
 
   describe ".foreign_credentials" do
     it "names the credentials an agent would authenticate with instead of the login" do
-      expect(described_class.foreign_credentials({"ANTHROPIC_API_KEY" => "sk-ant-x"})).to eq(["ANTHROPIC_API_KEY"])
+      expect(described_class.foreign_credentials({ "ANTHROPIC_API_KEY" => "sk-ant-x" })).to eq(["ANTHROPIC_API_KEY"])
     end
 
     it "ignores one that is set to nothing, which is how a shell unsets it in practice" do
-      expect(described_class.foreign_credentials({"ANTHROPIC_API_KEY" => "  "})).to be_empty
+      expect(described_class.foreign_credentials({ "ANTHROPIC_API_KEY" => "  " })).to be_empty
     end
   end
 
@@ -323,7 +333,7 @@ RSpec.describe Agentilda::Executor, :tree do
 
     def event(hash) = "#{JSON.generate(hash)}\n"
 
-    def tool(name, input) = event(type: "assistant", message: {content: [{type: "tool_use", name:, input:}]})
+    def tool(name, input) = event(type: "assistant", message: { content: [{ type: "tool_use", name:, input: }] })
 
     it "asks claude for the streaming format, which needs --verbose to work at all" do
       expect(streaming.invocation(agent, subject_plan).each_cons(2).to_a).to include(["--output-format", "stream-json"]).and include(["stream-json", "--verbose"])
@@ -332,7 +342,7 @@ RSpec.describe Agentilda::Executor, :tree do
     # A tool name is a noun and says nothing on its own. The spinner has room
     # for a phrase, so it gets one.
     it "hands each tool call to whoever is drawing the progress, as something being done" do
-      stream << tool("Read", {file_path: "/repo/spec.md"})
+      stream << tool("Read", { file_path: "/repo/spec.md" })
       streaming.call(agent, subject_plan) { |progress| seen << progress.activity }
 
       expect(seen).to eq(["reading spec.md"])
@@ -347,8 +357,8 @@ RSpec.describe Agentilda::Executor, :tree do
 
     it "reports what the invocation spent, not only whether it worked" do
       stream << event(type: "stream_event",
-        event: {type: "message_delta", usage: {input_tokens: 2, cache_creation_input_tokens: 100,
-                                               cache_read_input_tokens: 900, output_tokens: 40}})
+        event: { type: "message_delta", usage: { input_tokens: 2, cache_creation_input_tokens: 100,
+                                               cache_read_input_tokens: 900, output_tokens: 40 } })
 
       expect(streaming.call(agent, subject_plan)).to have_attributes(up: 1002, down: 40)
     end
@@ -362,7 +372,7 @@ RSpec.describe Agentilda::Executor, :tree do
       it "aborts the invocation once the meter crosses the budget" do
         allow(fake_child).to receive(:alive?).and_return(true)
         stream << event(type: "stream_event",
-          event: {type: "message_delta", usage: {input_tokens: 90, output_tokens: 40}})
+          event: { type: "message_delta", usage: { input_tokens: 90, output_tokens: 40 } })
 
         result = metered.call(agent, subject_plan)
 
@@ -375,7 +385,7 @@ RSpec.describe Agentilda::Executor, :tree do
 
       it "lets an invocation inside the budget finish untouched" do
         stream << event(type: "stream_event",
-          event: {type: "message_delta", usage: {input_tokens: 50, output_tokens: 40}})
+          event: { type: "message_delta", usage: { input_tokens: 50, output_tokens: 40 } })
         stream << event(type: "result", is_error: false, result: "done")
 
         expect(metered.call(agent, subject_plan).ok).to be(true)
@@ -407,7 +417,7 @@ RSpec.describe Agentilda::Executor, :tree do
         allow(Agentilda::Control).to receive(:overdue?).and_return(true)
         allow(fake_child).to receive(:alive?).and_return(true)
         stream << event(type: "stream_event",
-          event: {type: "message_delta", usage: {input_tokens: 1, output_tokens: 1}})
+          event: { type: "message_delta", usage: { input_tokens: 1, output_tokens: 1 } })
 
         result = streaming.call(agent, subject_plan)
 
@@ -423,7 +433,7 @@ RSpec.describe Agentilda::Executor, :tree do
     # different fact from one that failed to authenticate and spent nothing.
     it "reports what a failed invocation spent too" do
       stream << event(type: "stream_event",
-        event: {type: "message_delta", usage: {input_tokens: 500, output_tokens: 7}})
+        event: { type: "message_delta", usage: { input_tokens: 500, output_tokens: 7 } })
       stream << event(type: "result", is_error: true, result: "it went wrong")
 
       expect(streaming.call(agent, subject_plan)).to have_attributes(ok: false, up: 500, down: 7)
@@ -431,8 +441,10 @@ RSpec.describe Agentilda::Executor, :tree do
 
     it "counts the sub-agents an agent spawned" do
       stream << event(type: "system", subtype: "task_started", task_id: "t1", tool_use_id: "toolu_1")
-      stream << event(type: "system", subtype: "task_notification", task_id: "t1",
-        usage: {total_tokens: 34_116})
+      stream << event(type: "system",
+        subtype: "task_notification",
+        task_id: "t1",
+        usage: { total_tokens: 34_116 })
 
       expect(streaming.call(agent, subject_plan)).to have_attributes(subagents: 1, delegated: 34_116)
     end

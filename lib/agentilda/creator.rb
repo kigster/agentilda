@@ -1,5 +1,10 @@
 # frozen_string_literal: true
 
+require "dry/monads"
+require "fileutils"
+
+require "agentilda/status"
+
 module Agentilda
   # Mints new plan folders. Backs `/spec-create`.
   #
@@ -52,8 +57,8 @@ module Agentilda
         return [] unless File.directory?(dir)
 
         Dir.children(dir)
-          .select { |c| File.directory?(File.join(dir, c)) }
-          .filter_map { |c| Ordinal.from_dirname(c) }
+           .select { |c| File.directory?(File.join(dir, c)) }
+           .filter_map { |c| Ordinal.from_dirname(c) }
       end
     end
 

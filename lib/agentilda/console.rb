@@ -19,7 +19,8 @@ module Agentilda
       @selected = nil
       @dialog = false
       @help = false
-      @pending = {kill: false, extend: 0}
+      @about = false
+      @pending = { kill: false, extend: 0 }
       @mutex = Mutex.new
     end
 
@@ -38,6 +39,9 @@ module Agentilda
     # @return [Boolean]
     def help? = @help
 
+    # @return [Boolean]
+    def about? = @about
+
     # The dispatcher exists only once the run starts, after the keyboard is
     # already listening, so it arrives late.
     #
@@ -53,7 +57,10 @@ module Agentilda
       @mutex.synchronize do
         @board = board
         @selected = nil if @selected && board.rows.none? { |r| r.key == @selected && r.running? }
-        @screen.draw(board.with(selected: @selected, dialog: (dialog_text if @dialog), help: (help_text if @help)))
+        @screen.draw(board.with(selected: @selected,
+          dialog: (dialog_text if @dialog),
+          help: (help_text if @help),
+          about: (about_text if @about)))
       end
     end
 
@@ -93,7 +100,8 @@ module Agentilda
       close_dialog
     end
 
-    # ESC: the dialog first, then the help, then the selection.
+    # ESC: the dialog first, then the help, then the about screen, then the
+    # selection.
     #
     # @return [void]
     def escape
@@ -101,6 +109,8 @@ module Agentilda
         close_dialog
       elsif @help
         @help = false
+      elsif @about
+        @about = false
       else
         @selected = nil
       end
@@ -109,12 +119,15 @@ module Agentilda
     # @return [void]
     def toggle_help = @help = !@help
 
+    # @return [void]
+    def toggle_about = @about = !@about
+
     private
 
     # @return [void]
     def close_dialog
       @dialog = false
-      @pending = {kill: false, extend: 0}
+      @pending = { kill: false, extend: 0 }
     end
 
     # @param step [Integer]
@@ -137,5 +150,8 @@ module Agentilda
 
     # @return [String]
     def help_text = Keyboard.new(input: $stdin).help
+
+    # @return [String]
+    def about_text = Keyboard.new(input: $stdin).about
   end
 end

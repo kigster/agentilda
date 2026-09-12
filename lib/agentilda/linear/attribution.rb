@@ -75,7 +75,7 @@ module Agentilda
       MINIMUM_WORDS = 3
 
       NOISE = %w[the and for with from into that this add adds added fix fixes
-        update updates use uses spec plan pull request pr tax app web api].freeze
+                 update updates use uses spec plan pull request pr tax app web api].freeze
 
       # @param tree [Agentilda::Tree]
       def initialize(tree:)
@@ -113,9 +113,9 @@ module Agentilda
       # @return [Array<String>]
       def opening_words(body)
         text = body.to_s
-          .gsub(/<!--.*?-->/m, "")
-          .gsub(/```.*?```/m, "")
-          .gsub(/^\s*[-*|#>]+/, " ")
+                   .gsub(/<!--.*?-->/m, "")
+                   .gsub(/```.*?```/m, "")
+                   .gsub(/^\s*[-*|#>]+/, " ")
         words(text.split(/\s+/).first(OPENING_WORDS * 3).join(" ")).first(OPENING_WORDS)
       end
 
@@ -161,7 +161,7 @@ module Agentilda
       # @return [Array<String>]
       def words(text)
         text.to_s.downcase.gsub(/[^a-z0-9]+/, " ").split
-          .reject { |w| w.length < 4 || NOISE.include?(w) }.uniq
+            .reject { |w| w.length < 4 || NOISE.include?(w) }.uniq
       end
 
       # How much of a folder's name a pull request title actually said.

@@ -141,29 +141,41 @@ module Agentilda
   # the mermaid source in the generated document moves with this list.
   STATUSES = [
     Status.new(
-      key: :new, emoji: "⚪️", label: "New", requires: %w[spec.md],
-      note: "a specification exists; it has not been planned yet",
+      key:       :new,
+      emoji:     "⚪️",
+      label:     "New",
+      requires:  %w[spec.md],
+      note:      "a specification exists; it has not been planned yet",
       invariant: nil
     ),
     Status.new(
-      key: :researched, emoji: "🔎", label: "Researched", requires: %w[spec.md],
-      note: "the topic has been researched; `spec.md` carries a `## Research` chapter",
+      key:       :researched,
+      emoji:     "🔎",
+      label:     "Researched",
+      requires:  %w[spec.md],
+      note:      "the topic has been researched; `spec.md` carries a `## Research` chapter",
       invariant: lambda { |s|
         body = s.read("spec.md").to_s
         "Researched, but `spec.md` has no `## Research` chapter" unless body.match?(RESEARCH_CHAPTER)
       }
     ),
     Status.new(
-      key: :ready_for_planning, emoji: "📋", label: "Ready for Planning", requires: %w[spec.md plan.md],
-      note: "the specification is finished; `plan.md` exists and is still blank, waiting for the planner",
+      key:       :ready_for_planning,
+      emoji:     "📋",
+      label:     "Ready for Planning",
+      requires:  %w[spec.md plan.md],
+      note:      "the specification is finished; `plan.md` exists and is still blank, waiting for the planner",
       invariant: lambda { |s|
         body = Ledger.stripped(s.read("plan.md"))
         "Ready for Planning, but `plan.md` already holds a plan" if body.match?(PLAN_HEADING)
       }
     ),
     Status.new(
-      key: :planned, emoji: "⭐️", label: "Planned", requires: %w[spec.md plan.md],
-      note: "specified and planned; nobody has started building",
+      key:       :planned,
+      emoji:     "⭐️",
+      label:     "Planned",
+      requires:  %w[spec.md plan.md],
+      note:      "specified and planned; nobody has started building",
       invariant: lambda { |s|
         body = Ledger.stripped(s.read("plan.md"))
         next "Planned, but `plan.md` has no work units yet" unless body.match?(PLAN_HEADING)
@@ -185,8 +197,11 @@ module Agentilda
     # file becomes a real requirement, once something has had the chance to
     # write it.
     Status.new(
-      key: :building, emoji: "🟡", label: "Building", requires: %w[spec.md plan.md],
-      note: "the back end is under way: data, domain and the API the interface will call",
+      key:       :building,
+      emoji:     "🟡",
+      label:     "Building",
+      requires:  %w[spec.md plan.md],
+      note:      "the back end is under way: data, domain and the API the interface will call",
       invariant: lambda { |s|
         body = Ledger.stripped(s.read("plan.md"))
         "Building, but `plan.md` has no work units to build" unless body.match?(PLAN_HEADING)
@@ -198,31 +213,46 @@ module Agentilda
     # at that half, and gives the second a working system to build on rather
     # than a description of one.
     Status.new(
-      key: :building_ui, emoji: "🎨", label: "Building UI", requires: %w[spec.md plan.md],
-      note: "the back end holds; the interface is being built against it",
+      key:       :building_ui,
+      emoji:     "🎨",
+      label:     "Building UI",
+      requires:  %w[spec.md plan.md],
+      note:      "the back end holds; the interface is being built against it",
       invariant: lambda { |s|
         body = Ledger.stripped(s.read("plan.md"))
         "Building UI, but `plan.md` has no work units to build" unless body.match?(PLAN_HEADING)
       }
     ),
     Status.new(
-      key: :ready_for_review, emoji: "🟢", label: "Ready for Review", requires: %w[spec.md plan.md pull-requests.md],
-      note: "every pull request is green on CI and waiting for a reviewer",
+      key:       :ready_for_review,
+      emoji:     "🟢",
+      label:     "Ready for Review",
+      requires:  %w[spec.md plan.md pull-requests.md],
+      note:      "every pull request is green on CI and waiting for a reviewer",
       invariant: open_pull_request("Ready for Review")
     ),
     Status.new(
-      key: :in_review, emoji: "👀", label: "In Review", requires: %w[spec.md plan.md pull-requests.md],
-      note: "a reviewer has picked it up and has not ruled yet",
+      key:       :in_review,
+      emoji:     "👀",
+      label:     "In Review",
+      requires:  %w[spec.md plan.md pull-requests.md],
+      note:      "a reviewer has picked it up and has not ruled yet",
       invariant: open_pull_request("In Review")
     ),
     Status.new(
-      key: :rejected, emoji: "🔴", label: "Changes Requested", requires: %w[spec.md plan.md pull-requests.md],
-      note: "the review asked for fixes; resubmit once they are made",
+      key:       :rejected,
+      emoji:     "🔴",
+      label:     "Changes Requested",
+      requires:  %w[spec.md plan.md pull-requests.md],
+      note:      "the review asked for fixes; resubmit once they are made",
       invariant: open_pull_request("Changes Requested")
     ),
     Status.new(
-      key: :approved, emoji: "✅", label: "Approved & Merged", requires: %w[pull-requests.md],
-      note: "reviewed, approved, and every pull request merged",
+      key:       :approved,
+      emoji:     "✅",
+      label:     "Approved & Merged",
+      requires:  %w[pull-requests.md],
+      note:      "reviewed, approved, and every pull request merged",
       invariant: lambda { |s|
         return "Approved & Merged, but no pull requests are recorded" if s.pull_requests.empty?
 
@@ -231,41 +261,62 @@ module Agentilda
       }
     ),
     Status.new(
-      key: :deployed, emoji: "😎", label: "Deployed", requires: %w[deployed.md],
-      note: "live in production; `deployed.md` names the release, date and SHA",
+      key:       :deployed,
+      emoji:     "😎",
+      label:     "Deployed",
+      requires:  %w[deployed.md],
+      note:      "live in production; `deployed.md` names the release, date and SHA",
       invariant: nil
     ),
     Status.new(
-      key: :rolled_back, emoji: "😱", label: "Rolled Back", requires: %w[rollback.md],
-      note: "it shipped and was pulled; `rollback.md` names what broke",
+      key:       :rolled_back,
+      emoji:     "😱",
+      label:     "Rolled Back",
+      requires:  %w[rollback.md],
+      note:      "it shipped and was pulled; `rollback.md` names what broke",
       invariant: nil
     ),
     Status.new(
-      key: :shit, emoji: "💩", label: "Scrapped by Review", requires: %w[rewrite.md],
-      note: "the review scrapped the work; the plan survives, the pull requests do not",
+      key:       :shit,
+      emoji:     "💩",
+      label:     "Scrapped by Review",
+      requires:  %w[rewrite.md],
+      note:      "the review scrapped the work; the plan survives, the pull requests do not",
       invariant: nil
     ),
     Status.new(
-      key: :blocked, emoji: "⭕️", label: "Technical Block", requires: %w[blocked.md],
-      note: "cannot proceed; `blocked.md` names what an engineer or the CTO must decide",
+      key:       :blocked,
+      emoji:     "⭕️",
+      label:     "Technical Block",
+      requires:  %w[blocked.md],
+      note:      "cannot proceed; `blocked.md` names what an engineer or the CTO must decide",
       invariant: open_block("Technical Block")
     ),
     Status.new(
-      key: :product_blocked, emoji: "🅱️", label: "Product Block", requires: %w[blocked.md],
-      note: "cannot proceed; `blocked.md` names what a product manager must decide",
+      key:       :product_blocked,
+      emoji:     "🅱️",
+      label:     "Product Block",
+      requires:  %w[blocked.md],
+      note:      "cannot proceed; `blocked.md` names what a product manager must decide",
       invariant: open_block("Product Block")
     ),
     Status.new(
-      key: :deferred, emoji: "☢️", label: "Deferred", requires: %w[delayed.md],
-      note: "could proceed and chose not to yet; `delayed.md` must name the trigger",
+      key:       :deferred,
+      emoji:     "☢️",
+      label:     "Deferred",
+      requires:  %w[delayed.md],
+      note:      "could proceed and chose not to yet; `delayed.md` must name the trigger",
       invariant: lambda { |s|
         body = s.read("delayed.md").to_s
         "Deferred, but `delayed.md` names no trigger" unless body.match?(/trigger|revisit|when\b|until\b|once\b/i)
       }
     ),
     Status.new(
-      key: :retroactive, emoji: "🕰️", label: "Retroactive", requires: [],
-      note: "the feature is live, but has neither a specification nor a plan",
+      key:       :retroactive,
+      emoji:     "🕰️",
+      label:     "Retroactive",
+      requires:  [],
+      note:      "the feature is live, but has neither a specification nor a plan",
       invariant: lambda { |s|
         next "Retroactive, but a `spec.md` already exists — it has been documented" if s.file?("spec.md")
 
@@ -273,8 +324,11 @@ module Agentilda
       }
     ),
     Status.new(
-      key: :discarded, emoji: "❌", label: "Discarded", requires: %w[discarded.md],
-      note: "dropped for good; `discarded.md` says why. A terminal state",
+      key:       :discarded,
+      emoji:     "❌",
+      label:     "Discarded",
+      requires:  %w[discarded.md],
+      note:      "dropped for good; `discarded.md` says why. A terminal state",
       invariant: nil
     )
   ].freeze

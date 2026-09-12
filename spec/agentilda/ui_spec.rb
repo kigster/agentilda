@@ -253,8 +253,12 @@ RSpec.describe Agentilda::UI do
 
     it "appends a line in columns, creating the directory if needed" do
       described_class.log_path = @log_path
-      described_class.log("editing spec.md", plan: "003.00", status: "⭐️ Planned",
-        agent: "yoda-writer", seconds: 42, round: "01")
+      described_class.log("editing spec.md",
+        plan:    "003.00",
+        status:  "⭐️ Planned",
+        agent:   "yoda-writer",
+        seconds: 42,
+        round:   "01")
 
       expect(File.read(@log_path)).to match(/\A\[\d\d:\d\d:\d\d \| 003\.00 +\| ⭐️ Planned +\| yoda-writer +\| 01 \| +\d+ \| +42s\] editing spec\.md\n\z/)
     end
@@ -283,14 +287,20 @@ RSpec.describe Agentilda::UI do
 
     it "marks a returned failure as one, with its reason" do
       expect {
-        described_class.concurrently([:plan], "round", jobs: 1, label: ->(_) { "000.00" },
+        described_class.concurrently([:plan],
+          "round",
+          jobs:    1,
+          label:   ->(_) { "000.00" },
           failure:) { |_| "timed out after 900s" }
       }.to output(/✗.*000\.00.*timed out after 900s/m).to_stderr
     end
 
     it "still marks a clean result as done" do
       expect {
-        described_class.concurrently([:plan], "round", jobs: 1, label: ->(_) { "000.00" },
+        described_class.concurrently([:plan],
+          "round",
+          jobs:    1,
+          label:   ->(_) { "000.00" },
           failure:) { |_| :ok }
       }.to output(/✓.*000\.00/m).to_stderr
     end
@@ -298,7 +308,10 @@ RSpec.describe Agentilda::UI do
     it "logs the failure as a failure, not as finished" do
       Dir.mktmpdir("ui-log") do |dir|
         described_class.log_path = File.join(dir, "progress.log")
-        described_class.concurrently([:plan], "round", jobs: 1, label: ->(_) { "000.00" },
+        described_class.concurrently([:plan],
+          "round",
+          jobs:    1,
+          label:   ->(_) { "000.00" },
           failure:) { |_| "timed out after 900s" }
 
         expect(File.read(described_class.log_path)).to include("failed after", "timed out after 900s")
@@ -315,7 +328,7 @@ RSpec.describe Agentilda::UI do
     def update(pid: nil) = Agentilda::Transcript::Progress.new(activity: nil, up: 0, down: 0, subagents: 0, pid:)
 
     it "renders round alone until the pid is known, then both, pid first" do
-      line = Agentilda::UI::Line.new(fields: {round: "01"})
+      line = described_class::Line.new(fields: { round: "01" })
 
       expect(line.identity).to include("…, round 01")
       line.call(update(pid: 36_123))
@@ -323,7 +336,7 @@ RSpec.describe Agentilda::UI do
     end
 
     it "renders nothing for a caller with neither fact" do
-      expect(Agentilda::UI::Line.new.identity).to eq("")
+      expect(described_class::Line.new.identity).to eq("")
     end
   end
 
@@ -354,8 +367,11 @@ RSpec.describe Agentilda::UI do
       it "logs the start and the finish when a log path is set" do
         Dir.mktmpdir do |dir|
           described_class.log_path = File.join(dir, "run.log")
-          described_class.concurrently([:plan], "round 1", jobs: 1, label: ->(_) { "000.00" },
-            fields: ->(_) { {plan: "000.00", agent: "yoda-writer"} }) { |_| :done }
+          described_class.concurrently([:plan],
+            "round 1",
+            jobs:   1,
+            label:  ->(_) { "000.00" },
+            fields: ->(_) { { plan: "000.00", agent: "yoda-writer" } }) { |_| :done }
 
           log = File.read(described_class.log_path)
           aggregate_failures do
@@ -387,7 +403,7 @@ RSpec.describe Agentilda::UI do
       before { allow($stderr).to receive(:tty?).and_return(false) }
 
       it "runs every item and returns results in input order, not completion order" do
-        delays = {a: 0.02, b: 0}
+        delays = { a: 0.02, b: 0 }
         result = described_class.concurrently(%i[a b], "round", jobs: 2) { |item|
           sleep(delays[item])
           item
@@ -434,7 +450,7 @@ RSpec.describe Agentilda::UI do
   # what any agent was doing, and a quiet run writes the same phrase hundreds
   # of times.
   describe "Line" do
-    subject(:line) { Agentilda::UI::Line.new(fields: {plan: "003.00"}, spinner:) }
+    subject(:line) { described_class::Line.new(fields: { plan: "003.00" }, spinner:) }
 
     let(:spinner) { instance_double(TTY::Spinner, update: nil, success: nil, error: nil) }
 
@@ -447,13 +463,13 @@ RSpec.describe Agentilda::UI do
         @log_dir = dir
         example.run
       ensure
-        Agentilda::UI.log_path = nil
+        described_class.log_path = nil
       end
     end
 
     # A `before`, not part of the `around`: the suite-wide `UI.reset!` hook
     # runs between the two and nils whatever log_path the around had set.
-    before { Agentilda::UI.log_path = File.join(@log_dir, "run.log") }
+    before { described_class.log_path = File.join(@log_dir, "run.log") }
 
     it "redraws the spinner's meter and phrase on every update" do
       line.call(progress("reading spec.md"))
@@ -465,14 +481,14 @@ RSpec.describe Agentilda::UI do
     it "logs a phrase once, however many times the stream repeats it" do
       3.times { line.call(progress("reading spec.md")) }
 
-      expect(File.read(Agentilda::UI.log_path).scan("reading spec.md").size).to eq(1)
+      expect(File.read(described_class.log_path).scan("reading spec.md").size).to eq(1)
     end
 
     it "logs again when the agent moves on to something new" do
       line.call(progress("reading spec.md"))
       line.call(progress("editing plan.md"))
 
-      log = File.read(Agentilda::UI.log_path)
+      log = File.read(described_class.log_path)
       aggregate_failures do
         expect(log).to include("reading spec.md")
         expect(log).to include("editing plan.md")
@@ -486,15 +502,15 @@ RSpec.describe Agentilda::UI do
 
       aggregate_failures do
         expect(spinner).to have_received(:update).with(meter: a_string_including("↑999"), activity: "")
-        expect(File.exist?(Agentilda::UI.log_path)).to be(false)
+        expect(File.exist?(described_class.log_path)).to be(false)
       end
     end
 
     it "runs with no spinner at all — a piped run still logs" do
-      bare = Agentilda::UI::Line.new(fields: {plan: "003.00"})
+      bare = described_class::Line.new(fields: { plan: "003.00" })
       bare.call(progress("reading spec.md"))
 
-      expect(File.read(Agentilda::UI.log_path)).to include("reading spec.md")
+      expect(File.read(described_class.log_path)).to include("reading spec.md")
     end
 
     # Executor passes the line straight on as its stream callback.
@@ -564,7 +580,7 @@ RSpec.describe Agentilda::UI do
       seen = []
       described_class.concurrently(%i[a b], "round", jobs: 2) { |_item, line| seen << line }
 
-      expect(seen).to all(be_a(Agentilda::UI::Line))
+      expect(seen).to all(be_a(described_class::Line))
     end
   end
 

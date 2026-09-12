@@ -1,53 +1,40 @@
 # The Agentilda Ruby Gem
 
+[![CircleCI](https://dl.circleci.com/status-badge/img/gh/kigster/agentilda/tree/main.svg?style=shield)](https://dl.circleci.com/status-badge/redirect/gh/kigster/agentilda/tree/main)![Coverage](docs/badges/coverage_badge.svg)
+
+
 This gem implements an agentic workflow using five specialized agents defined in the `./agents` directory.
 
-The best resource that describes it in detail is the result of running `tilda docs -o <file>` command, or the file [docs/WORKFLOW.md](docs/WORKFLOW.md).
+> [!NOTE]
+>
+> The best resource that describes it in detail is the result of running `tilda docs -o <file>` command, or the file [docs/WORKFLOW.md](docs/WORKFLOW.md).
 
 The gem offers a CLI command `tilda` (as well as `agentilda`) that performs a slew of commands aimed at producing, updating, keeping in sync any project's root directory `.plans`, that will initially contain just the `spec.md` and pull requests documents in the `.plans`, and drives a team of specialist agents over them. The agents implement the following workflow:
 
-```
+```text
 # Happy path
-⚪️ New ──▶
-    🔎 Researched ──▶
-        📋 Ready for Planning ──▶
-            ⭐️ Planned ──▶
-                🟡 Building ──▶
-                    🎨 Building UI ──▶
-                        🟢 Ready for Review ──▶
-                            👀 In Review ──▶
-                                ✅ Approved
+  ⚪️ New        ──▶ 🔎  Researched ──▶ 📋 Ready for Planning ──▶ 
+    ⭐️ Planned    ──▶ 🟡 Building     ──▶ 🎨 Building UI      ──▶ 
+      🟢 Reviewable ──▶ 👀 In Review    ──▶ ✅ Approved
 ```
 
-## Agents
+## Your Team of Agents
 
-There are a total of six individual agents that are named after the "StarWars®" theme. But before any of them can do their work you should probably drop a specification into one of the folders under `.plans` with the name of your feature. You do this with the help of the script `bin/create-plan-folder`:
+There are a total of six individual agents that are named after the "StarWars®" theme. 
+
+But before any of them can do their work you should probably drop a specification into one of the folders under `.plans` with the name of your feature. 
+
+You do this with the command `tilda create [ words about the feature ]`, for instance:
 
 ```bash
-bin/create-plan-folder -h
-
-USAGE:
-  create-plan-folder [-D <dir>] <status> <topic words...>
-
-WHERE:
-  -D <dir>   Enclosing directory (default: .)
-
-DESCRIPTION:
-  Status is a name or the emoji itself:
-
-  white  | spec               ⚪️   spec.md only, not yet planned
-  blue   | planned  | plan    🔵   spec.md + plan.md
-  yellow | open     | wip     🟡   PR raised, not yet merged
-  green  | done               🟢   all PRs merged
-  red    | declined           🔴   decided never
-  hole   | blocked            ⭕️   needs a human decision (write blockers.md)
-  brown  | later    | defer   🟤   deliberately deferred (state the trigger)
-  purple | merged             🟣   PR-level status; see note below
-
-EXAMPLES:
-  create-plan-folder spec implement login and logout functionality
-  create-plan-folder [ -D docs/plans ] spec implement agentic workflow CLI
+$ tilda create my first feature of this project
 ```
+
+The Gem will create a slug using your words, and seed a spec.md insideo of the new directory. The "brief" agent's job is to populate `spec.md` with seed level information, and open it up in an editor for you to edit.
+
+After you edit and save the file, you can repeat this process, creating multiple sequential specs under  the `.plans/` folder.
+
+You may notice the white circle  in the folder's name. It's the feature's status marker. 
 
 If you execute the two examples above ( without overriding the enclosing directory), you'll end up with `.plans` folder with the following directories inside:
 
@@ -58,11 +45,45 @@ If you execute the two examples above ( without overriding the enclosing directo
 
 The idea behind these colored circles is they effectively represent the state the folder is currently in, and make it easy to visually identify problematic stories, blocked stories, and so on.
 
+<details>
+  <summary>Here is one example 
+  from a web-based project</summary>
+<pre>
+000.00-🟡 → onboarding
+001.00-🟡 → payment-plans-stripe
+002.00-🟡 → custom-theme-builder
+003.00-🟡 → visual-flow-builder
+005.00-✅ → stripe-data-mirror
+006.00-🟡 → sending-domains
+007.00-🟡 → campaign-sender-and-leads-cleanup
+008.00-🟡 → resend-webhook-mirror
+009.00-🟡 → sent-email-history
+010.00-🟡 → cypress-e2e
+011.00-🟡 → marketing-strategy
+012.00-🟡 → marketing-demos
+013.00-⚪️ → plan-restructure
+014.00-🟡 → dsl-copilot
+015.00-🟡 → evals-cli
+016.00-⚪️ → plans-roles-and-tabs
+017.00-⚪️ → many-to-many-roles
+018.00-⚪️ → refactor-theme-extraction-engine-using-lab-color
+019.00-⚪️ → org-url-first-site-bootstrap
+020.00-🔎 → site-page-live-preview-rail
+</pre>
+</details>
+
 The gem implements a state machine internally using the `aasm` gem. The directories follow almost the entire graph, which you can review by running `tilda states`.
 
-Speaking of running `tilda` , a help screen, and then we'll move onto the agents.
+Speaking of running `tilda -h` — produces a help screen, showing the plethora of comands and subcommands. For this purpose we highly recommend you take advantage of auto-complete feature. Add the following to your shell initialization file, depending on which shell it is:
 
-![help-screen](./.img/help.avif)
+```bash
+eval "$(tilda completion zsh)"  # zsh
+eval "$(tilda completion bash)" # bash
+```
+
+Then typing `tilda<TAB><TAB>` will show you a bunch of options, subcommands and flags.
+
+![help-screen](./.img/help-screen.avif)
 
 ### Agents — Who Are They?
 

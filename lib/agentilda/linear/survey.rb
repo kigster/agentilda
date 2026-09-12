@@ -22,7 +22,7 @@ module Agentilda
       # wrong plan is worse than one nobody adopted at all.
       Match = Data.define(:project, :subject, :rule) do
         # @return [String]
-        def why = {ordinal: "its name carries the plan number", slug: "its name is the plan's slug"}.fetch(rule)
+        def why = { ordinal: "its name carries the plan number", slug: "its name is the plan's slug" }.fetch(rule)
       end
 
       # @param tree [Agentilda::Tree]
@@ -102,7 +102,8 @@ module Agentilda
         }
         return found if found
 
-        raise Error, "no project matches #{reference.inspect}. This team has:\n" +
+        raise Error,
+          "no project matches #{reference.inspect}. This team has:\n" +
           projects.map { |p| "  #{p["name"]}\n    #{p["url"]}" }.join("\n")
       end
 

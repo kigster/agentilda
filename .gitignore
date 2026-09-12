@@ -14,3 +14,5 @@
 .rspec_status
 mermaid.html
 **/*.gem
+/target
+/exe/tilda-rs

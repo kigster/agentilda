@@ -8,12 +8,18 @@ module Agentilda
       class Prs < Base
         desc "Add missing [NNN.MM] prefixes to pull request titles"
 
-        option :commit, type: :boolean, default: false,
-          desc: "Actually retitle the pull requests (default: dry run)"
-        option :state, default: "all", values: %w[open closed merged all],
-          desc: "Which pull requests to consider"
-        option :adopt, type: :boolean, default: true,
-          desc: "Mint a retroactive plan folder for every pull request that resolves to none. --no-adopt flags them for a human instead"
+        option :commit,
+          type:    :boolean,
+          default: false,
+          desc:    "Actually retitle the pull requests (default: dry run)"
+        option :state,
+          default: "all",
+          values:  %w[open closed merged all],
+          desc:    "Which pull requests to consider"
+        option :adopt,
+          type:    :boolean,
+          default: true,
+          desc:    "Mint a retroactive plan folder for every pull request that resolves to none. --no-adopt flags them for a human instead"
 
         example [
           "                # show what would be retitled, and what would be adopted",
@@ -27,9 +33,11 @@ module Agentilda
         def call(**options)
           github = GitHub.new
           tree = tree_for(options)
-          changes = Agentilda::Resync::Prs.new(tree:, github:,
-            adopt: options.fetch(:adopt, true), root: File.dirname(tree.dir))
-            .call(commit: commit?(options))
+          changes = Agentilda::Resync::Prs.new(tree:,
+            github:,
+            adopt: options.fetch(:adopt, true),
+            root: File.dirname(tree.dir))
+                                          .call(commit: commit?(options))
 
           if changes.empty?
             success("Every pull request title already carries a prefix.") unless quiet?(options)
@@ -58,10 +66,10 @@ module Agentilda
 
           applicable.each do |c|
             note = if c.adopted?
-              paint("   (new plan)", :magenta)
-            elsif c.assumed?
-              paint("   (assumed)", :yellow)
-            end
+                     paint("   (new plan)", :magenta)
+                   elsif c.assumed?
+                     paint("   (assumed)", :yellow)
+                   end
             say("##{c.number}  #{c.new_title}#{note}")
           end
 

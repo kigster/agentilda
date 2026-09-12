@@ -31,6 +31,10 @@ install:
 
 build: install
 
+build-rust:
+    cargo build --release
+    cp target/release/tilda-rs ./exe
+
 # standardrb
 lint:
     {{ rbenv }} standardrb

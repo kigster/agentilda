@@ -1,5 +1,10 @@
 # frozen_string_literal: true
 
+require "fileutils"
+require "parallel"
+
+require "agentilda/status"
+
 module Agentilda
   # Gives a plan folder to every pull request that has no plan to point at.
   #
@@ -185,8 +190,8 @@ module Agentilda
       pull = adoptee.pull
       github.pull_request(pull[:number].to_s)
     rescue Agentilda::Error
-      {number: pull[:number], title: pull[:title], url: pull[:url],
-       state: pull[:state] || "Unknown", body: ""}
+      { number: pull[:number], title: pull[:title], url: pull[:url],
+       state: pull[:state] || "Unknown", body: "" }
     end
   end
 end

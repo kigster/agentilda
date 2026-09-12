@@ -1,5 +1,7 @@
 # frozen_string_literal: true
 
+require "fileutils"
+
 module Agentilda
   # The side channel between a keypress and a running agent.
   #

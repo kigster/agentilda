@@ -1,5 +1,8 @@
 # frozen_string_literal: true
 
+require "tempfile"
+require "tty/command"
+
 module Agentilda
   # Turns a finished worktree into a pushed branch and a pull request.
   #
@@ -80,7 +83,7 @@ module Agentilda
       stderr = lines.find { |l| l.start_with?("stderr:") }
       complaint = stderr&.delete_prefix("stderr:")&.strip
 
-      (complaint.to_s.empty? || complaint == "Nothing written") ? lines.first.to_s : complaint
+      complaint.to_s.empty? || complaint == "Nothing written" ? lines.first.to_s : complaint
     end
 
     # The title a plan's next pull request should carry.
@@ -104,7 +107,7 @@ module Agentilda
 
     # @return [Hash]
     def base_fields(subject, checkout, title)
-      {ordinal: subject.feature.ordinal, branch: checkout.branch, title:}
+      { ordinal: subject.feature.ordinal, branch: checkout.branch, title: }
     end
 
     # @return [Agentilda::Publisher::Publication]

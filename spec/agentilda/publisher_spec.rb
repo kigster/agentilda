@@ -8,8 +8,10 @@ RSpec.describe Agentilda::Publisher, :tree do
 
   let!(:built) do
     plans do |t|
-      t.plan "000.00", :building, "folder-capitalized-not-downcased",
-        files: {"spec.md" => spec_body(goal: "Make the thing work.")}
+      t.plan "000.00",
+        :building,
+        "folder-capitalized-not-downcased",
+        files: { "spec.md" => spec_body(goal: "Make the thing work.") }
     end
   end
 
@@ -19,7 +21,7 @@ RSpec.describe Agentilda::Publisher, :tree do
   let(:checkout) do
     instance_double(Agentilda::Worktree::Checkout,
       branch: "kig/000.00-folder-capitalized-not-downcased",
-      path: File.dirname(plans_root),
+      path:   File.dirname(plans_root),
       dirty?: true)
   end
 
@@ -72,8 +74,18 @@ RSpec.describe Agentilda::Publisher, :tree do
         expect(command).to have_received(:run)
           .with("git", "push", "-u", "origin", checkout.branch, hash_including(:chdir))
         expect(command).to have_received(:run)
-          .with("gh", "pr", "create", "-a", "@me", "-B", "main", "-t",
-            "[000.00](A) Folder Capitalized Not Downcased", "-F", anything, hash_including(:chdir))
+          .with("gh",
+            "pr",
+            "create",
+            "-a",
+            "@me",
+            "-B",
+            "main",
+            "-t",
+            "[000.00](A) Folder Capitalized Not Downcased",
+            "-F",
+            anything,
+            hash_including(:chdir))
       end
     end
 
@@ -93,7 +105,9 @@ RSpec.describe Agentilda::Publisher, :tree do
     context "when the agent changed nothing" do
       let(:checkout) do
         instance_double(Agentilda::Worktree::Checkout,
-          branch: "kig/000.00-x", path: File.dirname(plans_root), dirty?: false)
+          branch: "kig/000.00-x",
+          path:   File.dirname(plans_root),
+          dirty?: false)
       end
 
       it "refuses rather than opening an empty pull request" do
@@ -131,8 +145,11 @@ RSpec.describe Agentilda::Publisher, :tree do
     context "when gh refuses" do
       before do
         allow(command).to receive(:run).with("gh", any_args)
-          .and_raise(TTY::Command::ExitError.new("gh pr create", instance_double(TTY::Command::Result,
-            exit_status: 1, out: "", err: "a pull request already exists for this branch")))
+                                       .and_raise(TTY::Command::ExitError.new("gh pr create",
+                                         instance_double(TTY::Command::Result,
+                                           exit_status: 1,
+                                           out:         "",
+                                           err:         "a pull request already exists for this branch")))
       end
 
       it "reports the refusal instead of raising" do

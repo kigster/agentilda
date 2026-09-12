@@ -23,16 +23,16 @@ module Agentilda
 
     # Documents that get a proper name rather than their filename.
     ARTIFACT_NAMES = {
-      "spec.md" => "Spec",
-      "plan.md" => "Plan",
+      "spec.md"          => "Spec",
+      "plan.md"          => "Plan",
       "pull-requests.md" => "Pull Requests",
-      "linear.md" => "Linear",
-      "blocked.md" => "Blocked",
-      "delayed.md" => "Deferred",
-      "rewrite.md" => "Rewrite",
-      "deployed.md" => "Deployed",
-      "rollback.md" => "Rollback",
-      "discarded.md" => "Discarded"
+      "linear.md"        => "Linear",
+      "blocked.md"       => "Blocked",
+      "delayed.md"       => "Deferred",
+      "rewrite.md"       => "Rewrite",
+      "deployed.md"      => "Deployed",
+      "rollback.md"      => "Rollback",
+      "discarded.md"     => "Discarded"
     }.freeze
 
     # @param tree [Agentilda::Tree]
@@ -189,9 +189,9 @@ module Agentilda
     # @return [String]
     def footer
       counts = tree.subjects.each_with_object(Hash.new(0)) { |s, h| h[s.status] += 1 }
-        .map { |status, n| "#{status.emoji} #{n}" }.join(" &nbsp; ")
+                   .map { |status, n| "#{status.emoji} #{n}" }.join(" &nbsp; ")
 
-      "\n---\n\n#{tree.subjects.size} #{(tree.subjects.size == 1) ? "plan" : "plans"} &nbsp; #{counts}\n"
+      "\n---\n\n#{tree.subjects.size} #{tree.subjects.size == 1 ? "plan" : "plans"} &nbsp; #{counts}\n"
     end
 
     # @param href [String]

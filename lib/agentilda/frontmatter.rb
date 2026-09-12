@@ -12,12 +12,14 @@ module Agentilda
   # `create` reported a missing `title:` on a file whose title was right there.
   # One parser, one list of permitted classes, so that cannot happen twice.
   module Frontmatter
+    # rubocop: disable Lint/OrAssignmentToConstant
     # Frontmatter, then body.
-    PATTERN = /\A---\s*\n(.*?)\n---\s*\n(.*)\z/m
+    PATTERN ||= /\A---\s*\n(.*?)\n---\s*\n(.*)\z/m
 
     # Dates and timestamps are ordinary frontmatter, so they load. Nothing else
     # does: the point of `safe_load` is that a seed file cannot name a class.
-    PERMITTED_CLASSES = [Date, Time].freeze
+    PERMITTED_CLASSES ||= [Date, Time].freeze
+    # rubocop: enable Lint/OrAssignmentToConstant
 
     class << self
       # @param content [String] a whole markdown file

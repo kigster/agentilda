@@ -7,13 +7,32 @@ RSpec.describe Agentilda::Console do
   let(:dispatcher) { instance_double(Agentilda::Dispatcher, kill: nil, extend: nil) }
   let(:rows) do
     %w[001.00/leah-researcher 002.00/yoda-writer 003.00/palpatine-planner].each_with_index.map do |key, i|
-      Agentilda::Board::Row.new(key:, at: Time.now, ordinal: key[0, 6], file: "spec.md", agent: key.split("/").last,
-        role: "x", round: 1, rounds: 1, model: "opus", up: 0, down: 0, message: nil, state: (i == 2) ? :done : :running)
+      Agentilda::Board::Row.new(key:,
+        at: Time.now,
+        ordinal: key[0, 6],
+        file: "spec.md",
+        agent: key.split("/").last,
+        role: "x",
+        round: 1,
+        rounds: 1,
+        model: "opus",
+        up: 0,
+        down: 0,
+        message: nil,
+        state: i == 2 ? :done : :running)
     end
   end
   let(:board) do
-    Agentilda::Board.new(started_at: 0.0, status: :running, plans: [], up: 0, down: 0, rows:, root: "/r",
-      running: 2, live_up: 0, live_down: 0)
+    Agentilda::Board.new(started_at: 0.0,
+      status: :running,
+      plans: [],
+      up: 0,
+      down: 0,
+      rows:,
+      root: "/r",
+      running: 2,
+      live_up: 0,
+      live_down: 0)
   end
 
   before do
@@ -86,6 +105,21 @@ RSpec.describe Agentilda::Console do
     console.toggle_help
     console.paint(board)
     expect(screen).to have_received(:draw).with(having_attributes(selected: "001.00/leah-researcher",
-      dialog: a_string_including("kill: yes"), help: a_string_including("kill")))
+      dialog: a_string_including("kill: yes"),
+      help: a_string_including("kill")))
+  end
+
+  it "paints the board with the about text once toggled, mentioning the version" do
+    console.toggle_about
+    console.paint(board)
+    expect(screen).to have_received(:draw).with(having_attributes(about: a_string_including(Agentilda::VERSION)))
+  end
+
+  it "escape closes the about screen before clearing the selection" do
+    console.select_next
+    console.toggle_about
+    console.escape
+    expect(console).not_to be_about
+    expect(console.selected).to eq("001.00/leah-researcher")
   end
 end
