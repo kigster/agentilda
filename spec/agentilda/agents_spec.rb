@@ -136,7 +136,9 @@ RSpec.describe Agentilda::Agents do
         expect(agents.find("luke-backend").ledger).to eq(%w[plan-backend.md pull-requests.md])
         expect(agents.find("rey-frontend").ledger).to eq(%w[plan-frontend.md pull-requests.md])
         expect(agents.find("hansolo-reviewer").ledger).to eq(%w[pull-requests.md])
-        expect(agents.find("lando-broker").ledger).to eq(%w[plan.md])
+        # Not plan.md: signing a spec-stage block into a new plan.md would
+        # justify 📋 and skip research and specification.
+        expect(agents.find("lando-broker").ledger).to eq(%w[spec.md])
       end
     end
 
