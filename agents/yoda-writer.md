@@ -5,7 +5,7 @@ handles: [researched, retroactive]
 advances_to: ready_for_planning
 model: sonnet
 effort: xhigh
-timeout: 300
+timeout: 900
 ledger: [spec.md]
 allowed_tools: [Read, Grep, Glob, Bash, Write, Edit, Task, Skill, WebSearch, WebFetch]
 writes: [spec.md, plan.md, blocked.md]
