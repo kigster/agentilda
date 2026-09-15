@@ -2,6 +2,8 @@
 
 require "spec_helper"
 require "tmpdir"
+require "agentilda/status"
+require "agentilda/state_machine"
 
 RSpec.describe Agentilda::Agents do
   subject(:agents) { described_class.new(dir: @dir) }
@@ -210,6 +212,26 @@ RSpec.describe Agentilda::Agents do
 
     it "tells yoda to leave a blank plan.md" do
       expect(agents.find("yoda-writer").prompt).to include("plan.md")
+    end
+  end
+
+  # The prompts promise moves; the machine decides whether they happen. Each
+  # example here is one way the two used to disagree.
+  describe "the real roster against the state machine" do
+    let(:agents) { described_class.new }
+
+    def status(key) = Agentilda::STATUS_BY_KEY.fetch(key)
+
+    it "lets every agent told how to block, block from every state it handles" do
+      aggregate_failures do
+        agents.all.select { |a| a.prompt.include?("Blocked, round N") }.each do |agent|
+          agent.handles.each do |key|
+            %i[blocked product_blocked].each do |to|
+              expect(Agentilda::StateMachine.edge?(key, to)).to be(true), "#{agent.name} may sign Blocked at #{key}, but #{key} cannot become #{to}"
+            end
+          end
+        end
+      end
     end
   end
 end

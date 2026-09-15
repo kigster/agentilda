@@ -99,6 +99,14 @@ module Agentilda
     # `approved -> deployed`, and today nothing does.
     SETTLED = %i[approved deployed discarded blocked product_blocked deferred].freeze
 
+    # Every state an agent that may sign `Blocked` works in. A block the
+    # machine refuses is reported as a failed attempt and parks nothing, so a
+    # state missing here turns an honest "I need a decision" into a failure.
+    # The agents spec checks every prompt that describes blocking against it.
+    #
+    # Review is absent: a reviewer rules, it does not ask.
+    BLOCKABLE = %i[new researched retroactive ready_for_planning planned building building_ui rejected].freeze
+
     # Rerouting a transition below makes the hand-drawn
     # `docs/img/plan-spec-build.png` stale — `just docs` will show you, because
     # the mermaid source in the generated document is derived from this block.
@@ -184,15 +192,15 @@ module Agentilda
       end
 
       event :block, guard: :justified? do
-        transitions from: %i[new planned ready_for_planning building], to: :blocked
+        transitions from: BLOCKABLE, to: :blocked
       end
 
       event :block_on_product, guard: :justified? do
-        transitions from: %i[new planned ready_for_planning building], to: :product_blocked
+        transitions from: BLOCKABLE, to: :product_blocked
       end
 
       event :defer, guard: :justified? do
-        transitions from: %i[new planned ready_for_planning building blocked product_blocked], to: :deferred
+        transitions from: BLOCKABLE + %i[blocked product_blocked], to: :deferred
       end
 
       # Anything, from anywhere, may be dropped for good.
