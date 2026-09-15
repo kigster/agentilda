@@ -111,6 +111,15 @@ RSpec.describe Agentilda::Executor, :tree do
       )
     end
 
+    # `alo` signs a lock with the process fingerprint, which every sub-agent
+    # of one `claude` shares, so the prompt names the holder explicitly.
+    it "tells the agent to claim files with alo, under its own name" do
+      prompt = executor.invocation(agents.find("luke-backend"), subject_plan)[2]
+
+      expect(prompt).to include("AGENT_ID=luke-backend alo acquire", "AGENT_ID=luke-backend alo release-all")
+      expect(prompt).not_to include("agent-lock.sh")
+    end
+
     it "adds no mailbox section for an agent working a plan alone" do
       expect(argv[2]).not_to include("Mailbox")
     end
