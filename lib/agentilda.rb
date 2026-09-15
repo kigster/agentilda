@@ -131,3 +131,10 @@ module Agentilda
 
   class Error < StandardError; end
 end
+
+# status.rb and feature.rb define methods on Agentilda itself (`status`,
+# `plan_dirname`, `titleize` and friends) beside the class each is named for.
+# Zeitwerk loads a file when its constant is first named, and a caller of
+# `Agentilda.status` names no constant, so without this those methods exist
+# or not depending on what happened to load first.
+%w[status feature].each { |name| loader.load_file("#{__dir__}/agentilda/#{name}.rb") }
