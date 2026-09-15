@@ -1,3 +1,21 @@
+GIT
+  remote: https://github.com/kigster/dry-cli-ui.git
+  revision: be25d5a7ee5b69585fbf697537c4fa95aa453ac6
+  branch: kig/live-spinner-handles
+  specs:
+    dry-cli-ui (0.2.0)
+      concurrent-ruby (~> 1.3)
+      dry-cli (>= 1.0)
+      pastel (~> 0.8)
+      strings (~> 0.2)
+      tty-box (~> 0.7)
+      tty-cursor (~> 0.7)
+      tty-progressbar (~> 0.18)
+      tty-prompt (~> 0.23)
+      tty-screen (~> 0.8)
+      tty-spinner (~> 0.9)
+      tty-table (~> 0.12)
+
 PATH
   remote: .
   specs:
@@ -7,19 +25,16 @@ PATH
       dry-cli
       dry-cli-autocomplete
       dry-cli-help (~> 0.1)
-      dry-cli-ui (>= 0.1)
+      dry-cli-ui (>= 0.2)
       dry-inflector
       dry-monads
       fuzzy-string-match
       parallel
       pastel
-      strings
       tty-box
       tty-command
       tty-cursor
-      tty-progressbar
       tty-screen
-      tty-spinner
       unicode-display_width
       zeitwerk
 
@@ -44,18 +59,6 @@ GEM
     dry-cli-help (0.1.0)
       dry-cli (>= 1.1.1, < 2)
       pastel (~> 0.8)
-    dry-cli-ui (0.1.0)
-      concurrent-ruby (~> 1.3)
-      dry-cli (>= 1.0)
-      pastel (~> 0.8)
-      strings (~> 0.2)
-      tty-box (~> 0.7)
-      tty-cursor (~> 0.7)
-      tty-progressbar (~> 0.18)
-      tty-prompt (~> 0.23)
-      tty-screen (~> 0.8)
-      tty-spinner (~> 0.9)
-      tty-table (~> 0.12)
     dry-core (1.2.0)
       concurrent-ruby (~> 1.0)
       logger
@@ -207,6 +210,7 @@ DEPENDENCIES
   agentilda!
   colored2
   coverage-badge
+  dry-cli-ui!
   irb
   json_schemer
   rake
@@ -236,7 +240,7 @@ CHECKSUMS
   dry-cli (1.4.1) sha256=b8015bb76c708aa8705a36faf694973e75eeeffca39b89c8e172dc6f66a7d874
   dry-cli-autocomplete (0.1.3) sha256=14f76447bda0000c71739b585c827dc0a0a763e30a68a8b4b2dff91f640768e4
   dry-cli-help (0.1.0) sha256=4babd1489f8b284859e00ec71f5c4bc50a8eab3a8c00a3cea8c6945ebfbf6965
-  dry-cli-ui (0.1.0) sha256=c6c916eeb5d1d63d9603a430f44bc9b48368cebbf3b27c165577b096c6a60a79
+  dry-cli-ui (0.2.0)
   dry-core (1.2.0) sha256=0cc5a7da88df397f153947eeeae42e876e999c1e30900f3c536fb173854e96a1
   dry-inflector (1.3.1) sha256=7fb0c2bb04f67638f25c52e7ba39ab435d922a3a5c3cd196120f63accb682dcc
   dry-monads (1.10.0) sha256=68c90d77617c6ce88d60704fc3b233907e6320974152fe75ad947f968006ca39
