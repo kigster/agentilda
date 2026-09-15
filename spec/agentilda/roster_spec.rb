@@ -35,6 +35,15 @@ RSpec.describe Agentilda::Roster do
         ---
         You are reviewing.
       MD
+      write(tmp, "lando-broker", <<~MD)
+        ---
+        name: lando-broker
+        description: Drains blocked.md.
+        handles: [blocked, product_blocked]
+        model: sonnet
+        ---
+        You are draining.
+      MD
       example.run
     end
   end
@@ -47,7 +56,7 @@ RSpec.describe Agentilda::Roster do
     let(:table) { plain(roster.list) }
 
     it "names every agent, in name order" do
-      expect(table.scan(/^\s+(\S+-\S+)\s/).flatten).to eq(%w[hansolo-reviewer luke-backend])
+      expect(table.scan(/^\s+(\S+-\S+)\s/).flatten).to eq(%w[hansolo-reviewer lando-broker luke-backend])
     end
 
     # The states are written the way the folder names write them, so what an
@@ -60,6 +69,12 @@ RSpec.describe Agentilda::Roster do
     # a blank there would read as "advances to nothing in particular".
     it "says read-only rather than leaving the destination blank" do
       expect(table).to match(/hansolo-reviewer.*read-only/)
+    end
+
+    # Only `unblock` starts an agent that handles nothing but settled states,
+    # and the folder's name afterwards comes from what its files justify.
+    it "says by contents for an agent only a command starts" do
+      expect(table).to match(/lando-broker.*by contents/)
     end
 
     it "says so plainly when there are no definitions to list" do

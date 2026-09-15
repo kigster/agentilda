@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require "agentilda/status"
+require "agentilda/state_machine"
 
 module Agentilda
   # `agentilda agents` — who the specialists are and what each is offered
@@ -22,6 +23,11 @@ module Agentilda
     # What an agent with no `advances_to` is, in the one word that explains why
     # `run` never offers it work.
     READ_ONLY = "read-only"
+
+    # What an agent that handles only {StateMachine::SETTLED} states advances
+    # to. `run` never starts it; a command does, and `resync` then names the
+    # folder by what its files justify.
+    BY_CONTENTS = "by contents"
 
     # @param agents [Agentilda::Agents]
     def initialize(agents: Agents.new)
@@ -59,7 +65,12 @@ module Agentilda
 
     # @param agent [Agentilda::Agent]
     # @return [String]
-    def advances(agent) = agent.advances_to ? state(agent.advances_to) : READ_ONLY
+    def advances(agent)
+      return state(agent.advances_to) if agent.advances_to
+      return BY_CONTENTS if agent.handles.any? && agent.handles.all? { |key| StateMachine::SETTLED.include?(key) }
+
+      READ_ONLY
+    end
 
     # @param all [Array<Agentilda::Agent>]
     # @return [Integer]

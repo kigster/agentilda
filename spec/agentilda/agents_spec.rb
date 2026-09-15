@@ -240,6 +240,14 @@ RSpec.describe Agentilda::Agents do
       end
     end
 
+    # The loop never offers work in a settled state, so a destination
+    # declared there is a promise nothing keeps.
+    it "declares no destination for an agent only a command can start" do
+      agents.all.select { |a| a.handles.all? { |k| Agentilda::StateMachine::SETTLED.include?(k) } }.each do |agent|
+        expect(agent.advances_to).to be_nil, "#{agent.name} declares advances_to, but run never starts it"
+      end
+    end
+
     it "counts the partner who finished and holds the plan as part of its team" do
       expect(names(agents.team_for(status(:building_ui)))).to contain_exactly("luke-backend", "rey-frontend")
       expect(names(agents.team_for(status(:building)))).to contain_exactly("luke-backend", "rey-frontend")
