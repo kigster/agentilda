@@ -41,6 +41,32 @@ module Agentilda
   module CLI
     extend Dry::CLI::Registry
 
+    # What `agentilda -h` prints above and below the command list. Rendering,
+    # wrapping and colour belong to dry-cli-help; only the words live here.
+    help do
+      title "agentilda — Agentic Specification-Driven Development v#{Agentilda::VERSION}"
+
+      description <<~TEXT
+        Drives the agentic flow: spec → plan → build → review → tune/fix → approve.
+
+        Keeps the .plans folders in step with GitHub pull requests and Linear issues.
+        The final merge and deploy stay manual.
+      TEXT
+
+      epilogue <<~TEXT.chomp
+        Global flags: -C, --no-color disables colour in every command.
+
+        Documentation: https://github.com/kigster/agentilda
+      TEXT
+
+      # The bare program prints this screen, and asking for help is not a failure.
+      exit_code_without_arguments 0
+
+      group "Plans", "create", "list-plans", "index", "resync", "unblock", "worktree"
+      group "Agents", "run", "agents", "describe", "mail"
+      group "Reference", "docs", "states", "linear", "completion", "version"
+    end
+
     register "create", Create, aliases: %w[new c]
     # Renamed from `status`, which read as "is the tool OK?" rather than "what
     # plans are there?". The old spellings stay registered: other repos, agent

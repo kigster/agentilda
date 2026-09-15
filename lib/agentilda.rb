@@ -1,6 +1,9 @@
 # frozen_string_literal: true
 
-require_relative "dry/cli/banner"
+# Help screens come from dry-cli-help, which prepends itself to Dry::CLI the
+# moment it loads, so it has to load before the registry's `help` block runs.
+require "dry/cli"
+require "dry/cli/help"
 
 require "dry/inflector"
 require "fileutils"
@@ -32,7 +35,6 @@ loader.collapse("#{__dir__}/agentilda/cli/resync/subcommands")
 loader.ignore("#{__dir__}/agentilda/cli/linear/linear.rb")
 loader.ignore("#{__dir__}/agentilda/cli/mail/mail.rb")
 loader.ignore("#{__dir__}/agentilda/linear/mapping.rb")
-loader.ignore("#{__dir__}/dry")
 loader.setup
 
 # Spec → Plan → Build.
