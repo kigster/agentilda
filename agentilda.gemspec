@@ -42,6 +42,8 @@ Gem::Specification.new do |spec|
   spec.add_dependency "concurrent-ruby"
   spec.add_dependency "dry-cli"
   spec.add_dependency "dry-cli-autocomplete"
+  spec.add_dependency "dry-cli-help", "~> 0.1"
+  spec.add_dependency "dry-cli-ui", ">= 0.1"
   spec.add_dependency "dry-inflector"
   spec.add_dependency "dry-monads"
   spec.add_dependency "fuzzy-string-match"
