@@ -28,7 +28,6 @@ RSpec.describe Agentilda::CLI::Create, :tree do
 
   # The boxes wrap on words at the terminal's width, so a sentence assertion
   # has to read them back unwrapped or it passes and fails by screen size.
-  def unwrapped(text) = text.tr("║╔╗╚╝═", " ").gsub(/\s+/, " ")
 
   # `--open` shells out to macOS `open`, which would put a real editor window
   # on the box running the suite. The stub also lets an example assert the

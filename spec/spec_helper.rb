@@ -63,6 +63,7 @@ $stderr = StringIO.new
 
 require_relative "support/plans_fixture"
 require_relative "support/captured_stream"
+require_relative "support/box_text"
 
 RSpec.configure do |config|
   config.example_status_persistence_file_path = ".rspec_status"
@@ -76,6 +77,7 @@ RSpec.configure do |config|
   Kernel.srand config.seed
 
   config.include PlansFixture
+  config.include BoxText
 
   # Pastel memoizes `enabled:` at construction, so an example that stubs
   # `tty?` or `color?` would otherwise poison every example that ran after it.

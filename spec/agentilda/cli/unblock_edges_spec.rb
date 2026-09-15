@@ -24,7 +24,6 @@ RSpec.describe Agentilda::CLI::Unblock, :tree do
     [strip_ansi(out.string), strip_ansi(err.string), status]
   end
 
-  def unwrapped(text) = text.tr("║╔╗╚╝═", " ").gsub(/\s+/, " ")
 
   def blocked_plan(ordinal)
     plans { |t| t.plan(ordinal, :blocked, "stuck-#{ordinal.tr(".", "-")}", files: { "blocked.md" => "# Blocked\n\n## B1. Which vendor\n" }) }

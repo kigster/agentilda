@@ -47,7 +47,6 @@ RSpec.describe Agentilda::CLI::Run, :tree do
     [strip_ansi(out.string), strip_ansi(err.string), status]
   end
 
-  def unwrapped(text) = text.tr("║╔╗╚╝═", " ").gsub(/\s+/, " ")
 
   # 🟡 Building is the cheapest *stable* assignable state: it sits inside a
   # {StateMachine::FAMILIES} group, so the resync each round runs cannot move

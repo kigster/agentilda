@@ -3,10 +3,9 @@
 require "concurrent/hash"
 require "etc"
 require "fileutils"
+require "dry/cli/ui"
 require "pastel"
-require "strings"
 require "tty/box"
-require "tty/progressbar"
 require "tty/screen"
 require "tty/spinner"
 require "tty/spinner/multi"
@@ -16,9 +15,9 @@ module Agentilda
   # Everything the user sees that is not the deliverable itself.
   #
   # Include it and you get `info`, `warn`, `error` and `success` as instance
-  # methods, each drawing a TTY::Box on **STDERR**. STDERR is deliberate: the
-  # documents and tables these commands produce own STDOUT, so every command
-  # composes in a pipe.
+  # methods, each drawing a dry-cli-ui box on **STDERR**. STDERR is deliberate:
+  # the documents and tables these commands produce own STDOUT, so every
+  # command composes in a pipe.
   #
   # @example
   #   class Thing
@@ -341,21 +340,30 @@ module Agentilda
         list = items.to_a
         return list.each(&) unless animate? && list.size >= PROGRESS_THRESHOLD
 
-        bar = TTY::ProgressBar.new(
-          "#{message} [:bar] :current/:total :percent",
-          total:      list.size,
-          output:     $stderr,
-          width:      24,
-          complete:   "█",
-          incomplete: "░",
-          head:       "█"
-        )
-        list.each do |item|
-          yield item
-          bar.advance
+        console.progress(message, total: list.size) do |bar|
+          list.each do |item|
+            yield item
+            bar.advance
+          end
         end
-        bar.finish
         list
+      end
+
+      # The dry-cli-ui console every box, spinner and bar here draws through.
+      #
+      # Both of its streams are STDERR, because dry-cli-ui sends `info` and
+      # `success` to its `out`, and STDOUT here belongs to the deliverable.
+      # Colour and animation are decided once, by {.color?} and {.animate?},
+      # rather than by the gem looking at the stream a second time and
+      # possibly disagreeing about --quiet.
+      #
+      # Built on every call rather than memoized: `$stderr` is swapped out by
+      # the specs and by `output(...).to_stderr`, and a console holding on to
+      # the stream it was born with would write past every one of them.
+      #
+      # @return [Dry::CLI::UI::Console]
+      def console
+        Dry::CLI::UI::Console.new(out: $stderr, err: $stderr, color: color?, animate: animate?, box_width: width)
       end
 
       # Run a block over many items at once, one spinner each.
@@ -605,26 +613,22 @@ module Agentilda
         text + (" " * (width - display_width(text)))
       end
 
-      # Everything the user sees goes through here, so it writes to `$stderr`
-      # directly rather than through `Kernel.warn`.
+      # Every box is drawn by dry-cli-ui, on STDERR, through {.console}.
       #
-      # That is not a style preference. `Kernel.warn` is a **no-op** when
-      # `$VERBOSE` is nil, which is what `-W0` sets — and `RUBYOPT=-W0` is
-      # common in CI images and agent harnesses. Routed through `Kernel.warn`,
-      # every box this tool draws silently disappears in exactly the
-      # environments where a failure most needs explaining.
+      # Not through `Kernel.warn`, which is a **no-op** when `$VERBOSE` is
+      # nil, which is what `-W0` sets — and `RUBYOPT=-W0` is common in CI
+      # images and agent harnesses. Routed through `Kernel.warn`, every box
+      # this tool draws silently disappears in exactly the environments where
+      # a failure most needs explaining. The console writes to its stream.
+      #
+      # dry-cli-ui wraps before it frames, so a long line no longer costs the
+      # box its last row, which is where the instruction lives. One run
+      # reported four of its ten failures and cut the fifth mid-sentence.
       #
       # @param kind [Symbol] :info, :warn, :error or :success
       # @param message [String]
       # @return [void]
-      # standard:disable Style/StderrPuts -- the cop's own rationale, "to allow
-      # such output to be disabled", is the behaviour being removed here.
-      def box(kind, message)
-        text = message.to_s
-        warn TTY::Box.public_send(kind, text, enable_color: color?, width:, height: box_height(text))
-      end
-
-      # standard:enable Style/StderrPuts
+      def box(kind, message) = console.public_send(kind, message.to_s)
 
       # A framed panel centered on the screen, for the keyboard help. Unlike
       # {.box} it positions itself absolutely, so it overlays whatever the
@@ -652,21 +656,6 @@ module Agentilda
       end
       # standard:enable Style/StderrPuts
 
-      # TTY::Box sizes itself from the number of lines you hand it, not from
-      # the number those lines occupy once wrapped to the box's width. So it
-      # draws any message containing a line longer than the box a row or two
-      # short, and what falls off is the bottom, which is where the instruction
-      # lives. The run that found this reported four of its ten failures and
-      # cut the fifth mid-sentence.
-      #
-      # This wraps with the same library TTY::Box wraps with rather than
-      # dividing by the width, because TTY::Box wraps on words. A rough
-      # estimate is wrong in exactly the cases this exists for.
-      #
-      # @param text [String]
-      # @return [Integer] rows the box needs: its content, two borders, one pad
-      def box_height(text) = Strings.wrap(text.to_s, width - 4).lines.size + 3
-
       # A single unadorned line, for per-item progress that does not deserve
       # a box of its own.
       #
@@ -674,7 +663,7 @@ module Agentilda
       # @param bullet [String]
       # @return [void]
       # standard:disable Style/StderrPuts -- see {.box}: `warn` is a no-op under -W0.
-      def line(message, bullet: "·") = warn("  #{paint(bullet, :bright_black)} #{message}")
+      def line(message, bullet: "·") = $stderr.puts("  #{paint(bullet, :bright_black)} #{message}")
 
       # standard:enable Style/StderrPuts
     end

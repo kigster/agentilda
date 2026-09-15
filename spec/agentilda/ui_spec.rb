@@ -2,6 +2,8 @@
 
 require "tmpdir"
 
+RSpec::Matchers.define_negated_matcher :not_to_output, :output
+
 RSpec.describe Agentilda::UI do
   # The suite never runs against a terminal, so `animate?` is false by default
   # and the examples that want animation say so explicitly.
@@ -114,31 +116,26 @@ RSpec.describe Agentilda::UI do
       end
     end
 
+    # Stubbed on the module rather than on `$stderr`: `output.to_stderr` swaps
+    # in a stream of its own, and the stub would stay behind on the old one.
     context "on a terminal" do
-      let(:bar) { instance_double(TTY::ProgressBar, advance: nil, finish: nil) }
+      before { allow(described_class).to receive(:tty?).and_return(true) }
 
-      before do
-        allow($stderr).to receive(:tty?).and_return(true)
-        allow(TTY::ProgressBar).to receive(:new).and_return(bar)
+      it "advances once per item and leaves the final count behind" do
+        expect { described_class.stepping(items, "working") { |_| nil } }.to output(%r{✓ working 5/5}).to_stderr
       end
 
-      it "advances once per item and finishes" do
-        described_class.stepping(items, "working") { |_| nil }
-
-        aggregate_failures do
-          expect(bar).to have_received(:advance).exactly(items.size).times
-          expect(bar).to have_received(:finish)
-        end
+      it "returns the items, so the call can be chained" do
+        expect(described_class.stepping(items, "working") { |_| nil }).to eq(items)
       end
 
       # A bar for two items appears and vanishes before the eye resolves it,
       # and the line it prints is longer than the work it describes.
       it "draws no bar below the threshold, but still does the work" do
         seen = []
-        described_class.stepping([1, 2], "working") { |i| seen << i }
 
         aggregate_failures do
-          expect(TTY::ProgressBar).not_to have_received(:new)
+          expect { described_class.stepping([1, 2], "working") { |i| seen << i } }.not_to output.to_stderr
           expect(seen).to eq([1, 2])
         end
       end
@@ -631,11 +628,31 @@ RSpec.describe Agentilda::UI do
       expect { described_class.box(:warn, "#{long}\nrun `unset ANTHROPIC_API_KEY` first") }.to output(/unset ANTHROPIC_API_KEY/).to_stderr
     end
 
-    it "grows the box by the rows the wrapping actually needs" do
-      one = described_class.box_height("short")
-      wrapped = described_class.box_height(long)
+    # dry-cli-ui sends `info` and `success` to its `out`. Here STDOUT is the
+    # deliverable, so a success box landing in it would end up in a pipe.
+    it "draws every kind on STDERR, success included" do
+      expect { described_class.box(:success, "linked 4 skills") }
+        .to output(/Success.*linked 4 skills/m).to_stderr.and(not_to_output.to_stdout)
+    end
 
-      expect(wrapped).to be > one
+    # `Kernel.warn` writes nothing under -W0, which CI images and agent
+    # harnesses set. A box is the explanation of a failure; it must survive.
+    it "still draws with warnings silenced" do
+      verbose = $VERBOSE
+      $VERBOSE = nil
+      expect { described_class.box(:error, "401 API key is invalid") }.to output(/401 API key is invalid/).to_stderr
+    ensure
+      $VERBOSE = verbose
+    end
+  end
+
+  describe ".line" do
+    it "still prints with warnings silenced" do
+      verbose = $VERBOSE
+      $VERBOSE = nil
+      expect { described_class.line("renamed 003.00") }.to output(/renamed 003\.00/).to_stderr
+    ensure
+      $VERBOSE = verbose
     end
   end
 
