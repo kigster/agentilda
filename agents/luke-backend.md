@@ -57,7 +57,7 @@ A unit larger than the plan implied is not a block. Split it in `plan-backend.md
 
 | When you sign `Completed`       | Folder becomes       | Who runs next                                                     |
 | :------------------------------ | :------------------- | :---------------------------------------------------------------- |
-| rey still running               | 🎨 Building UI       | rey finishes; its `Completed` moves the folder on                 |
+| rey still running               | 🎨 Building UI       | rey finishes; if rey dies first, the next round restarts rey at 🎨 |
 | rey already done                | 🟢 Ready for Review  | the harness pushes the branch and opens the PR; then `hansolo-reviewer` |
 | you sign `Blocked`              | ⭕️ / 🅱️              | a human answers, then `agentilda unblock NNN` runs `lando-broker` |
 

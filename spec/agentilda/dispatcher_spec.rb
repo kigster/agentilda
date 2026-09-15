@@ -133,6 +133,25 @@ RSpec.describe Agentilda::Dispatcher, :tree do
     end
   end
 
+  # luke finished and left the plan at 🎨; rey died before signing. Rey
+  # resumes it, and still hears from luke through the mailbox.
+  describe "a plan held at Building UI" do
+    let!(:built) do
+      plans { |t| t.plan "001.00", :building_ui, "held", files: { "spec.md" => spec_body, "plan.md" => "# P" } }
+    end
+
+    it "goes back to rey, with luke named as the partner" do
+      seen = {}
+      executor = lambda { |agent, _subject, partners: [], **|
+        seen[agent.name] = partners.map(&:name)
+        Agentilda::Executor::Result.new(ok: true, note: "noop", up: 0, down: 0, subagents: 0, delegated: 0, seconds: 0.0)
+      }
+      runner_with(executor).call
+
+      expect(seen).to eq("rey-frontend" => ["luke-backend"])
+    end
+  end
+
   describe "handoffs" do
     let!(:built) { plans { |t| t.plan "001.00", :new, "relay", files: { "spec.md" => spec_body } } }
 

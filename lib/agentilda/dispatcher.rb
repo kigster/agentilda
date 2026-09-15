@@ -292,7 +292,7 @@ module Agentilda
       successor = @runner.agents.for_status(STATUS_BY_KEY.fetch(agent.advances_to)).first&.name if agent.advances_to && STATUS_BY_KEY.key?(agent.advances_to)
       # Each member of a pair is told who the others are, so the executor
       # can name them beside the plan's mailbox.
-      partners = @runner.agents.for_status(Resync::Dirs.target(subject)) - [agent]
+      partners = @runner.agents.team_for(Resync::Dirs.target(subject)) - [agent]
       remember(ordinal, agent.name, job.state, "Started", round)
       @state&.record(ordinal,
         agent:      agent.name,

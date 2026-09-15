@@ -1,7 +1,7 @@
 ---
 name: rey-frontend
 description: Builds the front-end half of a plan, paired with luke-backend working the back-end half at the same time, in the same worktree, toward one joint pull request.
-handles: [planned, building, rejected]
+handles: [planned, building, building_ui, rejected]
 advances_to: ready_for_review
 model: fable
 effort: xhigh
@@ -38,7 +38,7 @@ You build the front-end half of one plan: everything a user sees or touches. `lu
 - [ ] Every unit in `plan-frontend.md` is implemented, with tests, in the repo. `git status` shows more than Markdown.
 - [ ] The full suite has no failures beyond the baseline.
 - [ ] You mailed luke that the front end is done, naming the test that proves each acceptance criterion you own.
-- [ ] If luke's last mailbox message says luke is done, you are last. Run the integration proof named in `implementation-plan.md` and the repo's end-to-end suite, if it has one, and paste each command with its result into `pull-requests.md` before signing.
+- [ ] If the folder is 🎨 Building UI, or luke's last mailbox message says luke is done, you are last. Run the integration proof named in `implementation-plan.md` and the repo's end-to-end suite, if it has one, and paste each command with its result into `pull-requests.md` before signing.
 - [ ] `pull-requests.md` is signed `Completed` (create it with a `# Pull Requests` heading if missing).
 
 ## Block when

@@ -233,5 +233,17 @@ RSpec.describe Agentilda::Agents do
         end
       end
     end
+
+    it "leaves no state an agent holds a plan at without an agent to resume it" do
+      agents.all.filter_map(&:holds_at).each do |key|
+        expect(agents.for_status(status(key))).not_to be_empty, "nobody resumes a plan held at #{key}"
+      end
+    end
+
+    it "counts the partner who finished and holds the plan as part of its team" do
+      expect(names(agents.team_for(status(:building_ui)))).to contain_exactly("luke-backend", "rey-frontend")
+      expect(names(agents.team_for(status(:building)))).to contain_exactly("luke-backend", "rey-frontend")
+      expect(names(agents.team_for(status(:new)))).to eq(%w[leah-researcher])
+    end
   end
 end
