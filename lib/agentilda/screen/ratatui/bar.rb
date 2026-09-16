@@ -24,18 +24,18 @@ module Agentilda
           bar = ("▓" * filled) + ("░" * (WIDTH - filled))
           clock = format(" %2d:%02d", seconds / 60, seconds % 60)
           tui.text_line(spans: [
-            tui.text_span(content: bar, style: tui.style(fg: color)),
-            tui.text_span(content: clock, style: tui.style(fg: :bright_black))
-          ])
+                          tui.text_span(content: bar, style: tui.style(fg: color)),
+                          tui.text_span(content: clock, style: tui.style(fg: :bright_black))
+                        ])
         end
 
         # @param tui [RatatuiRuby::TUI]
         # @return [RatatuiRuby::Text::Line]
         def self.empty(tui)
           tui.text_line(spans: [
-            tui.text_span(content: " " * WIDTH, style: tui.style(fg: :bright_black)),
-            tui.text_span(content: " --:--", style: tui.style(fg: :bright_black))
-          ])
+                          tui.text_span(content: " " * WIDTH, style: tui.style(fg: :bright_black)),
+                          tui.text_span(content: " --:--", style: tui.style(fg: :bright_black))
+                        ])
         end
 
         # @param elapsed [Integer]

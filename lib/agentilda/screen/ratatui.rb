@@ -134,9 +134,11 @@ module Agentilda
       # @return [void]
       def render(tui, frame, area, board, table_state)
         sync_selection(board, table_state)
-        top, table_area, bottom = tui.layout_split(area, direction: :vertical,
+        top, table_area, bottom = tui.layout_split(area,
+          direction:   :vertical,
           constraints: [tui.constraint_length(1), tui.constraint_fill(1), tui.constraint_length(1)])
-        bottom_text, bottom_spark = tui.layout_split(bottom, direction: :horizontal,
+        bottom_text, bottom_spark = tui.layout_split(bottom,
+          direction:   :horizontal,
           constraints: [tui.constraint_fill(3), tui.constraint_fill(1)])
 
         frame.render_widget(top_bar(tui, board), top)
@@ -177,8 +179,8 @@ module Agentilda
       # @return [RatatuiRuby::Widgets::Paragraph]
       def top_bar(tui, board)
         tui.paragraph(
-          text: "#{board.status} · plans: #{board.plans.join(", ")} " \
-                "· tokens ↑#{UI.abbreviate(board.up)} ↓#{UI.abbreviate(board.down)}",
+          text:  "#{board.status} · plans: #{board.plans.join(", ")} " \
+                 "· tokens ↑#{UI.abbreviate(board.up)} ↓#{UI.abbreviate(board.down)}",
           style: tui.style(fg: :black, bg: :white)
         )
       end
@@ -186,8 +188,8 @@ module Agentilda
       # @return [RatatuiRuby::Widgets::Paragraph]
       def bottom_bar(tui, board)
         tui.paragraph(
-          text: "working in #{board.root} · agents running: #{board.running} " \
-                "· live ↑#{UI.abbreviate(board.live_up)} ↓#{UI.abbreviate(board.live_down)}",
+          text:  "working in #{board.root} · agents running: #{board.running} " \
+                 "· live ↑#{UI.abbreviate(board.live_up)} ↓#{UI.abbreviate(board.live_down)}",
           style: tui.style(fg: :black, bg: :white)
         )
       end
@@ -204,24 +206,28 @@ module Agentilda
       # @return [RatatuiRuby::Widgets::Row]
       def table_row(tui, row)
         tui.row(cells: [
-          row.at.strftime("%H:%M:%S"),
-          row.ordinal,
-          row.file,
-          tui.text_span(content: row.agent, style: tui.style(fg: :yellow, modifiers: [:bold])),
-          "R:#{row.round}/#{row.rounds}",
-          row.model.to_s,
-          row.subagents.to_s,
-          "↑#{UI.abbreviate(row.up)} ↓#{UI.abbreviate(row.down)}",
-          Bar.cell(tui, row.elapsed, Bar.elapsed_color(row.elapsed)),
-          Bar.cell(tui, row.remaining, Bar.remaining_color(row.remaining)),
-          row.message.to_s
-        ])
+                  row.at.strftime("%H:%M:%S"),
+                  row.ordinal,
+                  row.file,
+                  tui.text_span(content: row.agent, style: tui.style(fg: :yellow, modifiers: [:bold])),
+                  "R:#{row.round}/#{row.rounds}",
+                  row.model.to_s,
+                  row.subagents.to_s,
+                  "↑#{UI.abbreviate(row.up)} ↓#{UI.abbreviate(row.down)}",
+                  Bar.cell(tui, row.elapsed, Bar.elapsed_color(row.elapsed)),
+                  Bar.cell(tui, row.remaining, Bar.remaining_color(row.remaining)),
+                  row.message.to_s
+                ])
       end
 
       # @return [void]
       def render_overlay(tui, frame, area, board)
         text = board.dialog || board.help || board.about or return
-        title = board.dialog ? "Agent" : (board.help ? "Keys" : "About")
+        title = if board.dialog
+                  "Agent"
+                else
+                  (board.help ? "Keys" : "About")
+                end
         lines = text.lines.size + 4
         width = [text.lines.map { |l| l.chomp.length }.max.to_i + 6, area.width].min
         overlay_area = tui.rect(x: [(area.width - width) / 2, 0].max,

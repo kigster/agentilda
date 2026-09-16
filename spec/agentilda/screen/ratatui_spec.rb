@@ -71,7 +71,7 @@ RSpec.describe Agentilda::Screen::Ratatui do
   end
 
   def widgets_of(klass)
-    frame.rendered_widgets.map { |w| w[:widget] }.select { |w| w.is_a?(klass) }
+    frame.rendered_widgets.map { |w| w[:widget] }.grep(klass)
   end
 
   it "renders exactly one table with the agent name bold yellow" do
@@ -102,14 +102,14 @@ RSpec.describe Agentilda::Screen::Ratatui do
     cells = widgets_of(RatatuiRuby::Widgets::Table).first.rows.first.cells
     elapsed_bar, elapsed_clock = cells[8].spans
     left_bar, left_clock = cells[9].spans
-    expect(elapsed_bar.style.fg).to eq(:green)   # 200s < 15min
+    expect(elapsed_bar.style.fg).to eq(:green) # 200s < 15min
     # Bar.cell formats the clock as " %2d:%02d" — a literal leading space
     # plus a space-padded 2-wide minutes field, so a single-digit minute
     # count (3, from 200s) prints with two leading spaces, not one (see
     # spec/agentilda/screen/ratatui/bar_spec.rb, which only exercises a
     # two-digit minute count and so never shows this).
     expect(elapsed_clock.content).to eq("  3:20")
-    expect(left_bar.style.fg).to eq(:yellow)     # 761s < 15min, >= 5min
+    expect(left_bar.style.fg).to eq(:yellow) # 761s < 15min, >= 5min
     expect(left_clock.content).to eq(" 12:41")
   end
 
@@ -167,7 +167,7 @@ RSpec.describe Agentilda::Screen::Ratatui do
 
       it "draws the latest board and forwards the translated key to the keyboard" do
         screen.draw(board)
-        allow(tui).to receive(:draw) { |&blk| blk.call(frame) }
+        allow(tui).to receive(:draw).and_yield(frame)
         allow(tui).to receive(:poll_event).and_return(RatatuiRuby::Event::Key.new(code: "k"))
 
         screen.tick(tui, table_state)
@@ -178,7 +178,7 @@ RSpec.describe Agentilda::Screen::Ratatui do
 
       it "ignores a non-key event without calling the keyboard" do
         screen.draw(board)
-        allow(tui).to receive(:draw) { |&blk| blk.call(frame) }
+        allow(tui).to receive(:draw).and_yield(frame)
         allow(tui).to receive(:poll_event).and_return(RatatuiRuby::Event::None.new)
 
         screen.tick(tui, table_state)

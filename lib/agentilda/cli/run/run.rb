@@ -123,8 +123,8 @@ module Agentilda
         # run has nothing to draw and a pipe has nowhere to draw it. Without a
         # screen the keys still work, so the one line says which.
         Control.reset!
-        if !options[:tui] && ENV["AGENTILDA_TUI"] && !%w[spinner ratatui].include?(ENV["AGENTILDA_TUI"])
-          refuse("AGENTILDA_TUI=#{ENV["AGENTILDA_TUI"]} is not spinner or ratatui.", 64)
+        if !options[:tui] && ENV.fetch("AGENTILDA_TUI", nil) && !%w[spinner ratatui].include?(ENV.fetch("AGENTILDA_TUI", nil))
+          refuse("AGENTILDA_TUI=#{ENV.fetch("AGENTILDA_TUI", nil)} is not spinner or ratatui.", 64)
         end
         tui_backend = (options[:tui] || ENV["AGENTILDA_TUI"] || "spinner").to_sym
         screen = if UI.animate? && commit?(options)

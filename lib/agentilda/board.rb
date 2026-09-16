@@ -61,7 +61,9 @@ module Agentilda
     :elapsed,
     :subagents) do
     def initialize(pr: nil, phase: nil, remaining: nil, frame: 0, bold: false, message: nil,
-      elapsed: 0, subagents: 0, **rest) = super
+      elapsed: 0, subagents: 0, **rest)
+      super
+    end
 
     # @return [Boolean]
     def running? = state == :running
