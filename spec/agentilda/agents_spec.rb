@@ -2,6 +2,8 @@
 
 require "spec_helper"
 require "tmpdir"
+require "agentilda/status"
+require "agentilda/state_machine"
 
 RSpec.describe Agentilda::Agents do
   subject(:agents) { described_class.new(dir: @dir) }
@@ -136,7 +138,9 @@ RSpec.describe Agentilda::Agents do
         expect(agents.find("luke-backend").ledger).to eq(%w[plan-backend.md pull-requests.md])
         expect(agents.find("rey-frontend").ledger).to eq(%w[plan-frontend.md pull-requests.md])
         expect(agents.find("hansolo-reviewer").ledger).to eq(%w[pull-requests.md])
-        expect(agents.find("lando-broker").ledger).to eq(%w[plan.md])
+        # Not plan.md: signing a spec-stage block into a new plan.md would
+        # justify 📋 and skip research and specification.
+        expect(agents.find("lando-broker").ledger).to eq(%w[spec.md])
       end
     end
 
@@ -161,7 +165,7 @@ RSpec.describe Agentilda::Agents do
 
     it "reads the timeouts as settled" do
       expect(agents.all.to_h { |a| [a.name, a.timeout] }).to include(
-        "yoda-writer"       => 300,
+        "yoda-writer"       => 900,
         "palpatine-planner" => 600,
         "luke-backend"      => 1200,
         "rey-frontend"      => 1200,
@@ -208,6 +212,46 @@ RSpec.describe Agentilda::Agents do
 
     it "tells yoda to leave a blank plan.md" do
       expect(agents.find("yoda-writer").prompt).to include("plan.md")
+    end
+  end
+
+  # The prompts promise moves; the machine decides whether they happen. Each
+  # example here is one way the two used to disagree.
+  describe "the real roster against the state machine" do
+    let(:agents) { described_class.new }
+
+    def status(key) = Agentilda::STATUS_BY_KEY.fetch(key)
+
+    it "lets every agent told how to block, block from every state it handles" do
+      aggregate_failures do
+        agents.all.select { |a| a.prompt.include?("Blocked, round N") }.each do |agent|
+          agent.handles.each do |key|
+            %i[blocked product_blocked].each do |to|
+              expect(Agentilda::StateMachine.edge?(key, to)).to be(true), "#{agent.name} may sign Blocked at #{key}, but #{key} cannot become #{to}"
+            end
+          end
+        end
+      end
+    end
+
+    it "leaves no state an agent holds a plan at without an agent to resume it" do
+      agents.all.filter_map(&:holds_at).each do |key|
+        expect(agents.for_status(status(key))).not_to be_empty, "nobody resumes a plan held at #{key}"
+      end
+    end
+
+    # The loop never offers work in a settled state, so a destination
+    # declared there is a promise nothing keeps.
+    it "declares no destination for an agent only a command can start" do
+      agents.all.select { |a| a.handles.all? { |k| Agentilda::StateMachine::SETTLED.include?(k) } }.each do |agent|
+        expect(agent.advances_to).to be_nil, "#{agent.name} declares advances_to, but run never starts it"
+      end
+    end
+
+    it "counts the partner who finished and holds the plan as part of its team" do
+      expect(names(agents.team_for(status(:building_ui)))).to contain_exactly("luke-backend", "rey-frontend")
+      expect(names(agents.team_for(status(:building)))).to contain_exactly("luke-backend", "rey-frontend")
+      expect(names(agents.team_for(status(:new)))).to eq(%w[leah-researcher])
     end
   end
 end

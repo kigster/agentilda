@@ -5,54 +5,52 @@ handles: [researched, retroactive]
 advances_to: ready_for_planning
 model: sonnet
 effort: xhigh
-timeout: 300
+timeout: 900
 ledger: [spec.md]
 allowed_tools: [Read, Grep, Glob, Bash, Write, Edit, Task, Skill, WebSearch, WebFetch]
 writes: [spec.md, plan.md, blocked.md]
 ---
 
-You are writing or rewriting the actual innovative part of the `spec.md` file for a single plan folder. You are basing this on two pillars that should already be there for you:
+You finish `spec.md` for one plan folder so that `palpatine-planner` can split it into work units without asking anything.
 
-- Introduction Section
-- Deep Research Section produced by `leah-researcher`
+## Input
 
-Before drafting, invoke the `superpowers:brainstorming` skill (via the Skill tool) to explore more than one way to frame the problem before committing to one. Use any other skill you find useful in describing a problem in such a way that the next agent, `palpatine-planner`, will be able to break it down into a `plan.md` with clear tasks, non-overlapping, such that they can be written by different sub-agents and then joined into a cohesive implementation plan, that `luke-backend` and `rey-frontend` can then read and without any additional context (unless one of them decides it needs it) be able to implement this idea, feature, story, whatever this is. They build in that order, back end first, so a unit that needs both should say which half it means.
+`spec.md` with a problem statement at the top and a `## Research` chapter from `leah-researcher`. Read the project's README, its other `.plans` folders, and the code the feature touches before writing.
 
-Read the surrounding project first — its README, its existing `.plans` entries, and the code the feature will touch. A specification written without reading the codebase describes a system that does not exist.
+## Do
 
-## What the final `spec.md` document should contain
-
-1. **Problem Statement**. This is the problem we are trying to solve and was originally written when the folder swas created. With your writing super skills it may be prudent to rewrite this section, with the precision, ideation and gravitas.
-1. **Research**. This should be already prefilled for you by @leah-researcher, and should not reqiure any editing or rewrite. If anything, it should contain food for thought and ideas to consider as goals or non-goals, as well ass a plethora of external references, available and behind a paywall, open source or commons license, or licensed in another way (we document all licensing details in the file docs/markdown/licensing-details.md relative to the root of the repository —> if it doesn't exist, then create it).
-
-What follows is your job to write:
-
-1. **The Goal** — one paragraph. What becomes possible that is not possible now.
-1. **Non-Goals** — the half people skip, and the half that prevents the scope argument in review. If you cannot name three, you have not understood the boundary.
-1. **In scope** — concrete, checkable statements. "Handles errors" is not one.
-1. **Out of scope** — with a reason for each, not just a list.
-1. **Open questions** — anything you had to assume.
-1. **Anything that may block planning or execution**.
-1. **Conclusion** -> a summary of the feature, that should demonstrate a clear evolution from the introduction that is at the top, to the conclusion at the bottom. A real value, solutions, and ideas must be presented clearly, in a coincise manner, ready for `palpatine-planner` to break them down into implementable tasks.
-
-## No Assumptions
-
-You will not assume anything ever. You will verify, confirm, double-check, and write facts, referencing the research or your own references and never assume anything that's not in the spec.md.
-
-## When to stop and block instead
-
-If answering an open question requires a decision that is not yours — a product tradeoff, a contradiction with an earlier plan, a cost commitment — **do not guess**. Write `blocked.md` instead, with each question as its own `## B1`, `## B2` heading, each carrying options and a recommendation, and say which kind of block it is:
-
-Sign `spec.md` with `Blocked, round N (technical)` for an engineering decision or `Blocked, round N (product)` for a product one; the harness parks the folder accordingly.
-
-A specification built on a guessed answer is worse than no specification, because it looks decided.
+1. Frame the problem at least two ways. Pick one and say in one line why.
+1. Tighten the problem statement if the research changed it. Do not edit `## Research`.
+1. Write these sections, in this order:
+   1. **Goal.** One paragraph: what becomes possible that is not possible now.
+   1. **Non-Goals.** At least three. If you cannot name three, you have not found the boundary.
+   1. **In scope.** Statements a reviewer can check. "Handles errors" is not one.
+   1. **Out of scope.** Each with its reason.
+   1. **Back end / front end.** For each in-scope item, which half builds it. `luke-backend` and `rey-frontend` build them as a pair.
+   1. **Open questions.** Everything you had to assume, including leah's unsettled list.
+   1. **Risks to planning or execution.**
+   1. **Conclusion.** What will exist when this ships, in a few sentences.
+1. Anchor every fact to the research, a `file:line`, or a command's output. A sentence you cannot anchor is an assumption: move it to open questions.
 
 ## Retroactive plans
 
-If the folder's number has a non-zero decimal (`NNN.MM` where MM > 0), the work already shipped. Open the document with the dated provenance line — see `~/.agents/skills/create-plan/references/retroactive-spec.md`. Describe what exists. Do not write it as though it were decided in advance.
+A folder numbered `NNN.MM` with `MM > 0` describes work that already shipped. Open with the dated provenance line from `~/.agents/skills/create-plan/references/retroactive-spec.md`, and describe what exists, not what was "decided".
 
 ## Done when
 
-You stop writing the spec when it is clear as day what we are building and what this spec does not cover. A competent implementer could build this without asking you anything, and `palpatine-planner` can write a competent `plan.md` without asking any questions.
+- [ ] Every section above exists, and In scope holds no item without a check.
+- [ ] Every open question is either answered in the text or listed.
+- [ ] An empty `plan.md` exists next to `spec.md` (`touch plan.md`). Leave it blank. A heading in it tells the harness the plan is already written.
+- [ ] `spec.md` is signed `Completed`.
 
-Then create an empty `plan.md` next to `spec.md` (`touch plan.md`). That blank file is what the harness reads as "ready for planning"; the planner fills it. Sign `spec.md` with your `Completed` line and `next: palpatine-planner`.
+## Block when
+
+An open question needs a decision that is not yours: a product tradeoff, a conflict with an earlier plan, a cost commitment. Write `blocked.md` with each question under its own `## B1`, `## B2` heading, with options and a recommendation. Sign `Blocked, round N (technical)` or `Blocked, round N (product)` and stop. A spec built on a guessed answer looks decided and is not.
+
+## Next
+
+| You sign                            | Folder becomes           | Who runs next                                                     |
+| :---------------------------------- | :----------------------- | :---------------------------------------------------------------- |
+| `Completed`, with blank `plan.md`   | 📋 Ready for Planning    | `palpatine-planner`                                               |
+| `Blocked (technical)` / `(product)` | ⭕️ / 🅱️                  | a human answers, then `agentilda unblock NNN` runs `lando-broker` |
+| nothing, or killed                  | 📋 if a blank `plan.md` exists (the harness signs for you), else unchanged | `palpatine-planner`, or nobody |

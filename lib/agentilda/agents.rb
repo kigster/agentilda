@@ -79,6 +79,14 @@ module Agentilda
     # @return [Array<Agentilda::Agent>]
     def for_status(status) = all.select { |a| a.handles?(status) && !a.read_only? }
 
+    # Everyone on a plan in this state: the agents that work it, plus any
+    # agent whose `holds_at` parks the plan here after it finished its half.
+    # Rey resuming a plan at 🎨 still needs luke's messages in the mailbox.
+    #
+    # @param status [Agentilda::Status]
+    # @return [Array<Agentilda::Agent>]
+    def team_for(status) = all.select { |a| !a.read_only? && (a.handles?(status) || a.holds_at == status.key) }
+
     private
 
     # @param path [String]

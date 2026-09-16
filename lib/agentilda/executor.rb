@@ -440,8 +440,17 @@ module Agentilda
         moved it is reported as a failure and rolled into the report. A prompt
         is a request; a check is a guarantee.
 
-        Claim what you are about to write with ~/.claude/agent-lock.sh first,
-        and release it when you are done.
+        Claim each directory or file before you write it, and release it when
+        that write is done. Name yourself on every call, since `alo` would
+        otherwise sign with a fingerprint your sub-agents share; give each
+        sub-agent its own suffix, e.g. `AGENT_ID=#{agent.name}-schema`:
+
+            AGENT_ID=#{agent.name} alo acquire <path> "<why>"
+            AGENT_ID=#{agent.name} alo release <path>
+
+        A refused `acquire` means another agent holds it: work on something
+        else, never write it anyway. Before your closing ledger line, run
+        `AGENT_ID=#{agent.name} alo release-all`.
       PROMPT
     end
 
