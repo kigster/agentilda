@@ -14,12 +14,17 @@ commands:
       google-chrome-stable, which the GitHub `test` job installed: the
       `-browsers` image variant already ships it, and layering a second Chrome
       over the top is how a browser and a driver stop agreeing.
+
+      clang and libclang-dev are for ratatui_ruby: rb-sys generates its Ruby
+      bindings with bindgen, which dlopens libclang at build time and panics
+      with "Unable to find libclang" without it. gcc is not a substitute.
     steps:
       - run:
           name: Install packages
           command: |
             sudo apt-get update
-            sudo apt-get install --no-install-recommends -y curl libjemalloc2 libvips
+            sudo apt-get install --no-install-recommends -y curl libjemalloc2 libvips \
+              clang libclang-dev
 
   install_rust:
     description: >-
