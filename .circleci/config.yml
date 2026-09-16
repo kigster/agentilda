@@ -21,6 +21,32 @@ commands:
             sudo apt-get update
             sudo apt-get install --no-install-recommends -y curl libjemalloc2 libvips
 
+  install_rust:
+    description: >-
+      ratatui_ruby is a Rust extension and cimg/ruby carries no toolchain, so
+      `bundle install` stops at `checking for cargo... no` and the gem fails to
+      build. rustup's own installer is the documented route and pins nothing
+      the image would argue with. Cached because compiling the extension from
+      scratch costs more than every other gem in the bundle put together.
+    steps:
+      - restore_cache:
+          keys:
+            - v1-cargo-{{ arch }}-{{ checksum "Gemfile.lock" }}
+            - v1-cargo-{{ arch }}-
+      - run:
+          name: Install Rust toolchain
+          command: |
+            if ! command -v cargo > /dev/null; then
+              curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs \
+                | sh -s -- -y --profile minimal --default-toolchain stable
+            fi
+            echo 'source "$HOME/.cargo/env"' >> "$BASH_ENV"
+      - save_cache:
+          key: v1-cargo-{{ arch }}-{{ checksum "Gemfile.lock" }}
+          paths:
+            - ~/.cargo
+            - ~/.rustup
+
   bundle_deps:
     description: >-
       Replaces `bundler-cache: true`. Same idea, spelled out: restore, install,
@@ -38,7 +64,7 @@ commands:
             bundle install --jobs=4 --retry=3
             bundle clean --force
       - save_cache:
-          key: v1-bundle-{{ arch }}-{{ checksum ".ruby-version" }}-{{ checksum "Gemfile.lock" }}
+          key: v2-bundle-{{ arch }}-{{ checksum ".ruby-version" }}-{{ checksum "Gemfile.lock" }}
           paths:
             - vendor/bundle
 
@@ -48,6 +74,7 @@ jobs:
     steps:
       - checkout
       - install_packages
+      - install_rust
       - bundle_deps
       # `-f github` emitted GitHub's command annotations, which mean
       # nothing to CircleCI's log renderer. Plain output; the offences are
@@ -67,6 +94,7 @@ jobs:
     steps:
       - checkout
       - install_packages
+      - install_rust
       - bundle_deps
       - run:
           name: Run tests
