@@ -65,8 +65,10 @@ module Agentilda
     # which is what makes it complete when the process dies mid-invocation.
     DELTA_NOISE = '"content_block_delta"'
 
-    # Longest phrase a spinner line can carry without wrapping into the next.
-    LIMIT = 56
+    # Longest phrase kept. A sanity cap, not a layout rule: each place that
+    # draws a phrase cuts it to the room it has, and the dashboard has most
+    # of a terminal's width.
+    LIMIT = 300
 
     # How each tool reads as something being done, rather than as a tool name.
     # A spinner says what is happening; "Edit" is a noun and says nothing.

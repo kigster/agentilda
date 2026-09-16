@@ -248,6 +248,24 @@ RSpec.describe Agentilda::Screen::Ratatui do
       it("draws them all yellow") { expect([newest.fg, older.fg]).to all(eq(:yellow)) }
     end
 
+    # The status gets the whole width but for a margin at the right edge.
+    context "when a status is longer than the terminal" do
+      let(:width) { 160 }
+      let(:long) { row.with(history: ["reading #{"x" * 300}"]) }
+      let(:status_line) do
+        with_test_terminal(width, 10) do
+          tui.draw { |frame| screen.render(tui, frame, frame.area, board.with(rows: [long]), table_state) }
+          buffer_content[5]
+        end
+      end
+
+      it("ends it with an ellipsis") { expect(status_line.rstrip).to end_with("…") }
+
+      it "stops 5 cells before the right edge" do
+        expect(status_line.rstrip.length).to eq(width - described_class::ACTIVITY_MARGIN)
+      end
+    end
+
     context "when a row has no history yet" do
       subject(:lines) do
         with_test_terminal(160, 10) do

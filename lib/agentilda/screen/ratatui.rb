@@ -34,6 +34,9 @@ module Agentilda
       # highlight symbol, time and plan, each column plus its 1-cell gap.
       ACTIVITY_INDENT = HIGHLIGHT_SYMBOL.length + COLUMNS[0] + 1 + COLUMNS[1] + 1
 
+      # Cells a status line stops short of the terminal's right edge.
+      ACTIVITY_MARGIN = 5
+
       # Seconds between samples for the running-agent-count sparkline.
       SAMPLE_INTERVAL = 10
 
@@ -231,11 +234,12 @@ module Agentilda
       # under its table row, newest first: the newest bold, the rest plain,
       # all yellow. A table cell cannot span columns, so a status would
       # otherwise be clipped to one column's width; drawn on top, it gets
-      # everything from the feature column to the right edge.
+      # everything from the feature column to {ACTIVITY_MARGIN} cells before
+      # the right edge, and a longer status ends in an ellipsis.
       #
       # @return [void]
       def render_activities(tui, frame, table_area, board, table_state)
-        width = table_area.width - ACTIVITY_INDENT
+        width = table_area.width - ACTIVITY_INDENT - ACTIVITY_MARGIN
         return if width <= 0
 
         bottom = table_area.y + table_area.height
@@ -250,12 +254,17 @@ module Agentilda
 
             modifiers = line.zero? ? [:bold] : []
             frame.render_widget(
-              tui.paragraph(text:, style: tui.style(fg: :yellow, modifiers:)),
+              tui.paragraph(text: ellipsize(text, width), style: tui.style(fg: :yellow, modifiers:)),
               tui.rect(x: table_area.x + ACTIVITY_INDENT, y:, width:, height: 1)
             )
           end
         end
       end
+
+      # @param text [String]
+      # @param width [Integer] cells available
+      # @return [String] the text, or its head and an ellipsis within +width+
+      def ellipsize(text, width) = text.length > width ? "#{text[0, width - 1]}…" : text
 
       # @param row [Agentilda::Board::Row]
       # @return [Array<String>] newest first, at most {#scroll_height}

@@ -147,8 +147,8 @@ RSpec.describe Agentilda::Transcript do
       expect(seen).to eq(["reading spec.md"])
     end
 
-    it "keeps a phrase short enough for one spinner line" do
-      transcript.push(assistant(text("x" * 200)))
+    it "caps a runaway phrase" do
+      transcript.push(assistant(text("x" * 1000)))
 
       expect(seen.first.length).to be <= described_class::LIMIT
     end

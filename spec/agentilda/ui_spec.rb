@@ -146,6 +146,29 @@ RSpec.describe Agentilda::UI do
   # The counter that sits between the spinner and the agent's name. It is
   # redrawn several times a second, so it is padded to a fixed width: sized to
   # its numbers, it would drag the rest of the line sideways as they grow.
+  # Outside the dashboard a phrase rides a one-line spinner, which is short.
+  describe ".said" do
+    subject { described_class.said(phrase) }
+
+    context "with a phrase that fits" do
+      let(:phrase) { "reading spec.md" }
+
+      it { is_expected.to eq(": reading spec.md") }
+    end
+
+    context "with a phrase longer than a spinner line" do
+      let(:phrase) { "x" * 200 }
+
+      it { is_expected.to eq(": #{"x" * (described_class::SAID_LIMIT - 1)}…") }
+    end
+
+    context "without a phrase" do
+      let(:phrase) { nil }
+
+      it { is_expected.to eq("") }
+    end
+  end
+
   describe ".meter" do
     def progress(up, down) = Agentilda::Transcript::Progress.new(activity: nil, up:, down:, subagents: 0)
 

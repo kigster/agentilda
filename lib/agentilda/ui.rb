@@ -55,6 +55,9 @@ module Agentilda
     # the round table under it said FAIL, was the contradiction this closes.
     NO_FAILURE = ->(_result) {}
 
+    # Longest phrase a spinner line can carry without wrapping into the next.
+    SAID_LIMIT = 56
+
     # No document to name on a dashboard row.
     NO_FILE = ->(_item) { "" }
 
@@ -321,8 +324,15 @@ module Agentilda
       end
 
       # @param phrase [String, nil]
-      # @return [String] the phrase as a spinner line carries it
-      def said(phrase) = phrase.to_s.empty? ? "" : paint(": #{phrase}", :green, :bold)
+      # @return [String] the phrase as a spinner line carries it, cut to
+      #   {SAID_LIMIT}
+      def said(phrase)
+        text = phrase.to_s
+        return "" if text.empty?
+
+        text = "#{text[0, SAID_LIMIT - 1]}…" if text.length > SAID_LIMIT
+        paint(": #{text}", :green, :bold)
+      end
 
       # @return [Boolean] whether STDERR is an interactive terminal
       def tty? = $stderr.tty?
