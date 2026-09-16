@@ -6,26 +6,36 @@ RSpec.describe Agentilda::Screen::Ratatui::Bar do
   let(:tui) { RatatuiRuby::TUI.new }
 
   describe ".cell" do
-    it "fills proportionally to the 30-minute cap and appends the clock" do
-      line = described_class.cell(tui, 900, :green) # 15 of 30 minutes = half full
-      bar, clock = line.spans
-      expect(bar.content).to eq(("▓" * 5) + ("░" * 5))
-      expect(bar.style.fg).to eq(:green)
-      expect(clock.content).to eq(" 15:00")
+    subject(:line) { described_class.cell(tui, duration, color) }
+
+    let(:color) { :green }
+    let(:bar) { line.spans.first }
+    let(:clock) { line.spans.last }
+
+    context "when 15 of 30 minutes have passed" do
+      let(:duration) { 900 }
+
+      it "fills proportionally to the 30-minute cap" do
+        expect(bar.content).to eq(("▓" * 5) + ("░" * 5))
+      end
+
+      it("colors the bar") { expect(bar.style.fg).to eq(:green) }
+      it("appends the clock") { expect(clock.content).to eq(" 15:00") }
     end
 
-    it "draws an empty, dim bar with no clock when there is no duration" do
-      line = described_class.cell(tui, nil, :green)
-      bar, clock = line.spans
-      expect(bar.content).to eq(" " * 10)
-      expect(clock.content).to eq(" --:--")
-      expect(bar.style.fg).to eq(:bright_black)
+    context "when there is no duration" do
+      let(:duration) { nil }
+
+      it("draws an empty bar") { expect(bar.content).to eq(" " * 10) }
+      it("draws it dim") { expect(bar.style.fg).to eq(:bright_black) }
+      it("shows no clock") { expect(clock.content).to eq(" --:--") }
     end
 
-    it "never exceeds a full bar past the 30-minute cap" do
-      line = described_class.cell(tui, 5000, :red)
-      bar, = line.spans
-      expect(bar.content).to eq("▓" * 10)
+    context "when past the 30-minute cap" do
+      let(:duration) { 5000 }
+      let(:color) { :red }
+
+      it("never exceeds a full bar") { expect(bar.content).to eq("▓" * 10) }
     end
   end
 

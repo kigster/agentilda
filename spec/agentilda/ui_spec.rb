@@ -550,88 +550,146 @@ RSpec.describe Agentilda::UI do
       allow(Agentilda::Screen::Ratatui).to receive(:new).and_return(screen)
     end
 
-    it "opens the dashboard, closes it again, and returns results in input order" do
-      result = described_class.concurrently(%i[a b], "round", jobs: 2) { |item, _line| item }
+    context "with every item succeeding" do
+      subject(:result) { described_class.concurrently(%i[a b], "round", jobs: 2) { |item, _line| item } }
 
-      expect(result).to eq(%i[a b])
-      expect(screen).to have_received(:open).once
-      expect(screen).to have_received(:close).once
+      it "returns results in input order" do
+        expect(result).to eq(%i[a b])
+      end
+
+      it "opens the dashboard once" do
+        result
+        expect(screen).to have_received(:open).once
+      end
+
+      it "closes the dashboard once" do
+        result
+        expect(screen).to have_received(:close).once
+      end
     end
 
-    it "keeps a failing item's error as its result without stopping the others" do
-      result = described_class.concurrently(%i[a b], "round", jobs: 2) { |item, _line|
-        raise "boom" if item == :a
+    context "with a failing item among several" do
+      subject(:result) {
+        described_class.concurrently(%i[a b], "round", jobs: 2) { |item, _line|
+          raise "boom" if item == :a
 
-        :ok
+          :ok
+        }
       }
 
-      expect(result[0]).to be_a(RuntimeError)
-      expect(result[1]).to eq(:ok)
-    end
-
-    it "lets a lone item's exception propagate, and still closes the screen" do
-      expect { described_class.concurrently([:a], "round", jobs: 1) { |_, _| raise "boom" } }.to raise_error("boom")
-      expect(screen).to have_received(:close)
-    end
-
-    it "never runs more than `jobs` items at once" do
-      lock = Mutex.new
-      running = 0
-      peak = 0
-      described_class.concurrently(%i[a b c d e], "round", jobs: 2) do |_item, _line|
-        lock.synchronize { peak = [peak, running += 1].max }
-        sleep(0.02)
-        lock.synchronize { running -= 1 }
+      it "keeps the failing item's error as its result" do
+        expect(result[0]).to be_a(RuntimeError)
       end
 
-      expect(peak).to eq(2)
+      it "does not stop the others" do
+        expect(result[1]).to eq(:ok)
+      end
     end
 
-    it "hands each item a dashboard row carrying an executor handle" do
-      seen = []
-      described_class.concurrently(%i[a b], "round", jobs: 2) { |_item, line| seen << line }
+    context "with a lone item that raises" do
+      subject(:run) { -> { described_class.concurrently([:a], "round", jobs: 1) { |_, _| raise "boom" } } }
 
-      expect(seen).to all(be_a(Agentilda::Dashboard::Tracker))
-      expect(seen.map(&:handle)).to all(be_a(Agentilda::Executor::Handle))
-    end
-
-    it "draws the final frame with each row's state, file and activity" do
-      boards = []
-      allow(screen).to receive(:draw) { |board| boards << board }
-      failure = ->(result) { result if result.is_a?(String) }
-      progress = Agentilda::Transcript::Progress.new(activity: "reading blocked.md", up: 10, down: 2, subagents: 0)
-
-      described_class.concurrently(%i[a b],
-        "round",
-        jobs:    2,
-        failure:,
-        fields:  ->(item) { { plan: "00#{item}", agent: "lando-broker" } },
-        file:    ->(_) { "blocked.md" }) do |item, line|
-        line.call(progress)
-        item == :a ? "timed out after 900s" : :ok
+      it "lets the exception propagate" do
+        expect(run).to raise_error("boom")
       end
 
-      rows = boards.last.rows.sort_by(&:ordinal)
-      expect(rows.map(&:state)).to eq(%i[failed done])
-      expect(rows.map(&:file)).to all(eq("blocked.md"))
-      expect(rows.map(&:message)).to eq(["timed out after 900s", "reading blocked.md"])
-      expect(rows.last.up).to eq(10)
+      it "still closes the screen" do
+        expect(run).to raise_error("boom")
+        expect(screen).to have_received(:close)
+      end
+    end
+
+    context "with more items than jobs" do
+      # Forced before the threads start, so no worker races to memoize them.
+      let!(:lock) { Mutex.new }
+      let!(:counts) { { running: 0, peak: 0 } }
+
+      before do
+        described_class.concurrently(%i[a b c d e], "round", jobs: 2) do |_item, _line|
+          lock.synchronize { counts[:peak] = [counts[:peak], counts[:running] += 1].max }
+          sleep(0.02)
+          lock.synchronize { counts[:running] -= 1 }
+        end
+      end
+
+      it "never runs more than `jobs` items at once" do
+        expect(counts[:peak]).to eq(2)
+      end
+    end
+
+    context "with each item's line collected" do
+      let!(:seen) { [] }
+
+      before { described_class.concurrently(%i[a b], "round", jobs: 2) { |_item, line| seen << line } }
+
+      it "hands each item a dashboard row" do
+        expect(seen).to all(be_a(Agentilda::Dashboard::Tracker))
+      end
+
+      it "gives each row an executor handle" do
+        expect(seen.map(&:handle)).to all(be_a(Agentilda::Executor::Handle))
+      end
+    end
+
+    context "when drawing the final frame" do
+      let!(:boards) { [] }
+      let(:failure) { ->(result) { result if result.is_a?(String) } }
+      let(:progress) { Agentilda::Transcript::Progress.new(activity: "reading blocked.md", up: 10, down: 2, subagents: 0) }
+      let(:rows) { boards.last.rows.sort_by(&:ordinal) }
+
+      before do
+        allow(screen).to receive(:draw) { |board| boards << board }
+        # Forced here, not inside the worker threads.
+        progress
+        described_class.concurrently(%i[a b],
+          "round",
+          jobs:    2,
+          failure:,
+          fields:  ->(item) { { plan: "00#{item}", agent: "lando-broker" } },
+          file:    ->(_) { "blocked.md" }) do |item, line|
+          line.call(progress)
+          item == :a ? "timed out after 900s" : :ok
+        end
+      end
+
+      it "shows each row's state" do
+        expect(rows.map(&:state)).to eq(%i[failed done])
+      end
+
+      it "shows each row's file" do
+        expect(rows.map(&:file)).to all(eq("blocked.md"))
+      end
+
+      it "shows each row's failure or activity" do
+        expect(rows.map(&:message)).to eq(["timed out after 900s", "reading blocked.md"])
+      end
+
+      it "carries the token counts" do
+        expect(rows.last.up).to eq(10)
+      end
     end
   end
 
   describe ".concurrently under --quiet on a terminal" do
-    before { allow(described_class).to receive(:tty?).and_return(true) }
+    subject(:result) { described_class.concurrently(%i[a b], "round", jobs: 2) { |item, _line| item } }
 
-    it "draws nothing, opens no dashboard, and still returns every result" do
-      described_class.quiet = true
+    before do
+      allow(described_class).to receive(:tty?).and_return(true)
       allow(Agentilda::Dashboard).to receive(:open)
-      result = nil
+      described_class.quiet = true
+    end
 
-      aggregate_failures do
-        expect { result = described_class.concurrently(%i[a b], "round", jobs: 2) { |item, _line| item } }.not_to output.to_stderr
-        expect(result).to eq(%i[a b])
-        expect(Agentilda::Dashboard).not_to have_received(:open)
-      end
+    it "draws nothing" do
+      expect { result }.not_to output.to_stderr
+    end
+
+    it "still returns every result" do
+      expect(result).to eq(%i[a b])
+    end
+
+    it "opens no dashboard" do
+      result
+      expect(Agentilda::Dashboard).not_to have_received(:open)
     end
   end
 

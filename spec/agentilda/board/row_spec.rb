@@ -2,19 +2,41 @@
 
 RSpec.describe Agentilda::Board::Row do
   describe ".remember" do
-    it "puts a new status on top" do
-      expect(described_class.remember(["reading spec.md"], "editing plan.md")).to eq(["editing plan.md", "reading spec.md"])
+    subject { described_class.remember(history, text) }
+
+    let(:history) { ["reading spec.md"] }
+
+    context "with a new status" do
+      let(:text) { "editing plan.md" }
+
+      it { is_expected.to eq(["editing plan.md", "reading spec.md"]) }
     end
 
-    it "drops an empty status and one that repeats the newest" do
-      expect(described_class.remember(["reading spec.md"], "reading spec.md")).to eq(["reading spec.md"])
-      expect(described_class.remember(["reading spec.md"], "  ")).to eq(["reading spec.md"])
-      expect(described_class.remember([], nil)).to eq([])
+    # An agent restating its activity is not news.
+    context "with the newest status repeated" do
+      let(:text) { "reading spec.md" }
+
+      it { is_expected.to eq(["reading spec.md"]) }
     end
 
-    it "keeps at most HISTORY statuses" do
-      history = (1..described_class::HISTORY).map(&:to_s)
-      expect(described_class.remember(history, "new").size).to eq(described_class::HISTORY)
+    context "with a blank status" do
+      let(:text) { "  " }
+
+      it { is_expected.to eq(["reading spec.md"]) }
+    end
+
+    context "with no status and no history" do
+      let(:history) { [] }
+      let(:text) { nil }
+
+      it { is_expected.to eq([]) }
+    end
+
+    context "with a full history" do
+      let(:history) { (1..described_class::HISTORY).map(&:to_s) }
+      let(:text) { "new" }
+
+      it { is_expected.to have_attributes(size: described_class::HISTORY, first: "new") }
     end
   end
 end

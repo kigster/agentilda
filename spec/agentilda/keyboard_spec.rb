@@ -62,12 +62,28 @@ RSpec.describe Agentilda::Keyboard do
 
     # The first Ctrl-C lets the agent write down where it got to, so the
     # next run resumes instead of redoing the work.
-    it "ctrl-c asks it for a resume note and quits the loop, without aborting yet" do
-      expect { keyboard.handle("\u0003") }.not_to raise_error
+    describe "ctrl-c" do
+      subject(:press) { -> { keyboard.handle("\u0003") } }
 
-      expect(File.read(file).strip).to eq("INTERRUPT")
-      expect(Agentilda::Control).to be_quit
-      expect(Agentilda::UI).to have_received(:line).with(a_string_including("resume notes", "again to abort"))
+      it "does not abort yet" do
+        expect(press).not_to raise_error
+      end
+
+      context "when pressed once" do
+        before { press.call }
+
+        it "asks it for a resume note" do
+          expect(File.read(file).strip).to eq("INTERRUPT")
+        end
+
+        it "quits the loop" do
+          expect(Agentilda::Control).to be_quit
+        end
+
+        it "says a second press aborts" do
+          expect(Agentilda::UI).to have_received(:line).with(a_string_including("resume notes", "again to abort"))
+        end
+      end
     end
   end
 

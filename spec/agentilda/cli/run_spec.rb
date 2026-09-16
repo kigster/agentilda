@@ -254,22 +254,31 @@ RSpec.describe Agentilda::CLI::Run, :tree do
         .with(hash_including(instructions: "Focus on the parser"))
     end
 
-    it "reads the instructions from a short --prompt that names an existing file" do
-      with_executor
-      File.write(File.join(plans_root, "steer.txt"), "Focus on the parser, from a file")
-      Dir.chdir(plans_root) { run(commit: true, agent: "luke-backend", prompt: "steer.txt") }
+    context "when a short --prompt names an existing file" do
+      before do
+        with_executor
+        File.write(File.join(plans_root, "steer.txt"), "Focus on the parser, from a file")
+        Dir.chdir(plans_root) { run(commit: true, agent: "luke-backend", prompt: "steer.txt") }
+      end
 
-      expect(Agentilda::Executor).to have_received(:new)
-        .with(hash_including(instructions: "Focus on the parser, from a file"))
+      it "reads the instructions from the file" do
+        expect(Agentilda::Executor).to have_received(:new)
+          .with(hash_including(instructions: "Focus on the parser, from a file"))
+      end
     end
 
-    it "takes a --prompt of 80 characters or more as the text, even when it names a file" do
-      with_executor
-      path = File.join(plans_root, "#{"x" * 80}.txt")
-      File.write(path, "from the file")
-      run(commit: true, agent: "luke-backend", prompt: path)
+    context "when a --prompt of 80 characters or more names an existing file" do
+      let(:long_path) { File.join(plans_root, "#{"x" * 80}.txt") }
 
-      expect(Agentilda::Executor).to have_received(:new).with(hash_including(instructions: path))
+      before do
+        with_executor
+        File.write(long_path, "from the file")
+        run(commit: true, agent: "luke-backend", prompt: long_path)
+      end
+
+      it "takes the prompt as the text" do
+        expect(Agentilda::Executor).to have_received(:new).with(hash_including(instructions: long_path))
+      end
     end
 
     # Without the restriction the steer would reach every agent in the round,
@@ -422,44 +431,69 @@ RSpec.describe Agentilda::CLI::Run, :tree do
   end
 
   describe "the dashboard" do
+    let(:fake_screen) { instance_double(Agentilda::Screen::Ratatui, attach_keyboard: nil, open: nil, close: nil, draw: nil) }
+
     before { allow(Agentilda::UI).to receive(:animate?).and_return(true) }
 
-    it "builds Screen::Ratatui and feeds it a non-started Keyboard on a committed run" do
-      fake_screen = instance_double(Agentilda::Screen::Ratatui, attach_keyboard: nil, open: nil, close: nil, draw: nil)
-      allow(Agentilda::Screen::Ratatui).to receive(:new).and_return(fake_screen)
-      allow(Agentilda::Keyboard).to receive(:new).and_call_original
+    context "when the run is committed" do
+      before do
+        allow(Agentilda::Screen::Ratatui).to receive(:new).and_return(fake_screen)
+        allow(Agentilda::Keyboard).to receive(:new).and_call_original
+        run(commit: true)
+      end
 
-      run(commit: true)
-
-      expect(Agentilda::Screen::Ratatui).to have_received(:new)
-      expect(Agentilda::Keyboard).to have_received(:new)
-      expect(Agentilda::Keyboard).not_to have_received(:listen)
-      expect(fake_screen).to have_received(:attach_keyboard)
+      it { expect(Agentilda::Screen::Ratatui).to have_received(:new) }
+      it { expect(Agentilda::Keyboard).to have_received(:new) }
+      it("never starts the keyboard listener") { expect(Agentilda::Keyboard).not_to have_received(:listen) }
+      it { expect(fake_screen).to have_received(:attach_keyboard) }
     end
 
-    it "hands --scroll-height to the screen" do
-      allow(Agentilda::Screen::Ratatui).to receive(:new).and_return(
-        instance_double(Agentilda::Screen::Ratatui, attach_keyboard: nil, open: nil, close: nil, draw: nil)
-      )
-      run(commit: true, scroll_height: "5")
-      expect(Agentilda::Screen::Ratatui).to have_received(:new).with(scroll_height: 5)
+    context "with --scroll-height" do
+      before do
+        allow(Agentilda::Screen::Ratatui).to receive(:new).and_return(fake_screen)
+        run(commit: true, scroll_height: "5")
+      end
+
+      it "hands it to the screen" do
+        expect(Agentilda::Screen::Ratatui).to have_received(:new).with(scroll_height: 5)
+      end
     end
 
-    it "refuses an --scroll-height that is not a positive whole number" do
-      _out, err, status = run(commit: true, scroll_height: "0")
-      expect(status).to eq(64)
-      expect(unwrapped(err)).to include("--scroll-height")
+    context "with an --scroll-height that is not a positive whole number" do
+      subject(:result) { run(commit: true, scroll_height: "0") }
+
+      let(:err) { result[1] }
+      let(:status) { result[2] }
+
+      it { expect(status).to eq(64) }
+      it { expect(unwrapped(err)).to include("--scroll-height") }
     end
 
-    it "builds a publisher by default and none under --no-git-push" do
-      expect(command.send(:publisher_for, plans_root, :worktree, { commit: true })).to be_a(Agentilda::Publisher)
-      expect(command.send(:publisher_for, plans_root, :worktree, { commit: true, git_push: false })).to be_nil
+    describe "the publisher" do
+      subject(:publisher) { command.send(:publisher_for, plans_root, :worktree, options) }
+
+      context "with the default options" do
+        let(:options) { { commit: true } }
+
+        it { is_expected.to be_a(Agentilda::Publisher) }
+      end
+
+      context "with --no-git-push" do
+        let(:options) { { commit: true, git_push: false } }
+
+        it { is_expected.to be_nil }
+      end
     end
 
-    it "draws nothing on a dry run" do
-      allow(Agentilda::Screen::Ratatui).to receive(:new)
-      run
-      expect(Agentilda::Screen::Ratatui).not_to have_received(:new)
+    context "when the run is dry" do
+      before do
+        allow(Agentilda::Screen::Ratatui).to receive(:new)
+        run
+      end
+
+      it "draws nothing" do
+        expect(Agentilda::Screen::Ratatui).not_to have_received(:new)
+      end
     end
   end
 

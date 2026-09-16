@@ -1,31 +1,51 @@
 # frozen_string_literal: true
 
 RSpec.describe Agentilda::CLI::Base do
-  subject(:command) { Class.new(described_class).new }
-
-  def commit?(options = {}, env: nil)
-    ENV["AGENTILDA_AUTOCOMMIT"] = env if env
-    command.send(:commit?, options)
-  ensure
-    ENV.delete("AGENTILDA_AUTOCOMMIT")
-  end
-
   describe "#commit?" do
-    it "is a dry run unless --commit is passed" do
-      expect(commit?).to be(false)
-      expect(commit?({ commit: false })).to be(false)
-      expect(commit?({ commit: true })).to be(true)
+    subject { Class.new(described_class).new.send(:commit?, options) }
+
+    let(:options) { {} }
+    let(:autocommit) { nil }
+
+    around do |example|
+      autocommit.nil? ? ENV.delete("AGENTILDA_AUTOCOMMIT") : ENV["AGENTILDA_AUTOCOMMIT"] = autocommit
+      example.run
+    ensure
+      ENV.delete("AGENTILDA_AUTOCOMMIT")
     end
 
-    it "treats AGENTILDA_AUTOCOMMIT=true as --commit on every command" do
-      expect(commit?({ commit: false }, env: "true")).to be(true)
-      expect(commit?({}, env: "YES")).to be(true)
-      expect(commit?({}, env: "1")).to be(true)
+    context "without --commit" do
+      it { is_expected.to be(false) }
     end
 
-    it "ignores AGENTILDA_AUTOCOMMIT set to anything else" do
-      expect(commit?({}, env: "false")).to be(false)
-      expect(commit?({}, env: "")).to be(false)
+    context "with --no-commit" do
+      let(:options) { { commit: false } }
+
+      it { is_expected.to be(false) }
+    end
+
+    context "with --commit" do
+      let(:options) { { commit: true } }
+
+      it { is_expected.to be(true) }
+    end
+
+    # `--commit` on every command, for someone who never wants the dry run.
+    %w[true YES 1].each do |value|
+      context "with AGENTILDA_AUTOCOMMIT=#{value}" do
+        let(:autocommit) { value }
+        let(:options) { { commit: false } }
+
+        it { is_expected.to be(true) }
+      end
+    end
+
+    ["false", ""].each do |value|
+      context "with AGENTILDA_AUTOCOMMIT=#{value.inspect}" do
+        let(:autocommit) { value }
+
+        it { is_expected.to be(false) }
+      end
     end
   end
 end

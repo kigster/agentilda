@@ -44,44 +44,77 @@ RSpec.describe Agentilda::Control do
     expect(described_class.quit?).to be(true)
   end
 
-  it "interrupt! asks for a resume note and quits the loop, on the same deadline as quit!" do
-    path = described_class.register(@dir, "a")
-    described_class.interrupt!
+  describe "interrupt!" do
+    let!(:path) { described_class.register(@dir, "a") }
 
-    expect(File.read(path).strip).to eq("INTERRUPT")
-    expect(described_class).to be_quit
-    expect(described_class).to be_interrupted
-    allow(Agentilda::UI).to receive(:monotonic).and_return(Agentilda::UI.monotonic + described_class::GRACE + 1)
-    expect(described_class).to be_overdue
+    before { described_class.interrupt! }
+
+    it "asks the agent for a resume note" do
+      expect(File.read(path).strip).to eq("INTERRUPT")
+    end
+
+    it "quits the loop" do
+      expect(described_class).to be_quit
+    end
+
+    it "remembers the interrupt" do
+      expect(described_class).to be_interrupted
+    end
+
+    context "when the grace period has passed" do
+      let(:later) { Agentilda::UI.monotonic + described_class::GRACE + 1 }
+
+      before { allow(Agentilda::UI).to receive(:monotonic).and_return(later) }
+
+      it "is overdue, on the same deadline as quit!" do
+        expect(described_class).to be_overdue
+      end
+    end
   end
 
-  it "reset! forgets an interrupt" do
-    described_class.interrupt!
-    described_class.reset!
-    expect(described_class).not_to be_interrupted
+  describe "reset! after interrupt!" do
+    before do
+      described_class.interrupt!
+      described_class.reset!
+    end
+
+    it "forgets the interrupt" do
+      expect(described_class).not_to be_interrupted
+    end
   end
 
   describe ".on_interrupt" do
-    it "turns the first SIGINT into interrupt! and the second into an Interrupt" do
-      raised = nil
-      described_class.on_interrupt do
-        Process.kill("INT", Process.pid)
-        sleep 0.05 until described_class.interrupted?
-        begin
+    context "when SIGINT arrives twice" do
+      let!(:outcome) { { raised: false } }
+
+      before do
+        described_class.on_interrupt do
           Process.kill("INT", Process.pid)
-          sleep 1
-        rescue Interrupt
-          raised = true
+          sleep 0.05 until described_class.interrupted?
+          begin
+            Process.kill("INT", Process.pid)
+            sleep 1
+          rescue Interrupt
+            outcome[:raised] = true
+          end
         end
       end
 
-      expect(raised).to be(true)
+      it "turns the first into interrupt! and the second into an Interrupt" do
+        expect(outcome[:raised]).to be(true)
+      end
     end
 
-    it "puts the previous handler back" do
-      previous = Signal.trap("INT") { nil }
-      described_class.on_interrupt { :ok }
-      expect(Signal.trap("INT", previous)).to be_a(Proc)
+    context "with a handler already installed" do
+      subject(:restored) { Signal.trap("INT", previous) }
+
+      let!(:previous) { Signal.trap("INT") { nil } }
+
+      before { described_class.on_interrupt { :ok } }
+
+      it "puts the previous handler back" do
+        expect(restored).to be_a(Proc)
+      end
     end
   end
 
