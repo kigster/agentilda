@@ -18,6 +18,10 @@ module Agentilda
     WRAP_UP = "WRAP_UP"
     STOP = "STOP"
 
+    # Ctrl-C: STOP, and the run will be started again, so the agent leaves
+    # a resume note before it goes. The prompt says what that note is.
+    INTERRUPT = "INTERRUPT"
+
     # The clock's warnings start with this; the agent's prompt explains them.
     WARN = "WARN"
 
@@ -29,6 +33,7 @@ module Agentilda
     @mutex = Mutex.new
     @files = []
     @quit = false
+    @interrupted = false
     @deadline = nil
 
     class << self
@@ -95,8 +100,48 @@ module Agentilda
         }
       end
 
+      # Ctrl-C, the first time: {#quit!}, except that every running agent is
+      # told the run is being interrupted rather than stopped, so it writes
+      # down where it got to. A restart then reads that note instead of
+      # redoing, or half-redoing, the work.
+      #
+      # @return [void]
+      def interrupt!
+        broadcast(INTERRUPT)
+        @mutex.synchronize {
+          @quit = true
+          @interrupted = true
+          @deadline ||= UI.monotonic + GRACE
+        }
+      end
+
       # @return [Boolean] whether `q` has been pressed
       def quit? = @mutex.synchronize { @quit }
+
+      # @return [Boolean] whether Ctrl-C has been pressed
+      def interrupted? = @mutex.synchronize { @interrupted }
+
+      # Ctrl-C where no keyboard reads it: a run with no terminal to put in
+      # raw mode still gets the graceful first press and the hard second.
+      #
+      # A trap handler may not take a mutex, so the first press hands
+      # {#interrupt!} to a thread; the second raises, as Ctrl-C always has.
+      #
+      # @yieldreturn [Object]
+      # @return [Object] the block's value
+      def on_interrupt
+        previous = Signal.trap("INT") do
+          # A plain read, not {#interrupted?}: a trap handler may not lock.
+          raise Interrupt if @interrupted || @pending_interrupt
+
+          @pending_interrupt = true
+          Thread.new { interrupt! }
+        end
+        yield
+      ensure
+        @pending_interrupt = false
+        Signal.trap("INT", previous || "DEFAULT")
+      end
 
       # @return [Boolean] whether the grace period after `q` has run out
       def overdue?
@@ -112,6 +157,7 @@ module Agentilda
           @files.each { |f| FileUtils.rm_f(f) }
           @files.clear
           @quit = false
+          @interrupted = false
           @deadline = nil
         }
       end

@@ -31,7 +31,8 @@ module Agentilda
       :result,
       :from,
       :state,
-      :frame) do
+      :frame,
+      :history) do
       # @return [Boolean]
       def finished? = !thread.alive?
     end
@@ -87,7 +88,7 @@ module Agentilda
     def tick
       reap
       poll
-      @running.each { |job| job.handle.kill!(grace: 0) } if Control.overdue?
+      @running.each { |job| job.handle.kill!(grace: 0, reason: :quit) } if Control.overdue?
       dispatch unless Control.quit?
       persist
       @on_board&.call(board)
@@ -171,7 +172,8 @@ module Agentilda
         pr: pr_for(task),
         frame: job.frame,
         elapsed: (UI.monotonic - job.started_at).round,
-        subagents: job.subagents.to_i)
+        subagents: job.subagents.to_i,
+        history: job.history || [])
     end
 
     # @param task [Agentilda::Runner::Task]
@@ -315,6 +317,7 @@ module Agentilda
             job.down = progress.down
             job.subagents = progress.subagents
             job.message = progress.message || progress.activity
+            job.history = Board::Row.remember(job.history || [], job.message)
           }
         rescue StandardError => e
           e
@@ -370,8 +373,10 @@ module Agentilda
         @running.delete(job)
         attempt = settle(job)
         @attempts << attempt
-        @recent << { at: UI.monotonic, row: row_for(job).with(state: attempt.ok ? :done : :failed,
+        row = row_for(job)
+        @recent << { at: UI.monotonic, row: row.with(state: attempt.ok ? :done : :failed,
           message: attempt.note,
+          history: Board::Row.remember(row.history, attempt.note),
           remaining: nil,
           phase: nil,
           bold: !attempt.ok) }
@@ -427,7 +432,8 @@ module Agentilda
       case result.killed
       when :key then "killed by harness after #{KILL_GRACE}s grace"
       when :timeout then "timed out, killed #{Clock::GRACE}s after STOP"
-      else "no closing ledger line"
+      when :quit then "interrupted, killed #{Control::GRACE}s after #{Control.interrupted? ? "ctrl-c" : "q"}"
+      else Control.interrupted? ? "interrupted by ctrl-c" : "no closing ledger line"
       end
     end
 

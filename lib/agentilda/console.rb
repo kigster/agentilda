@@ -11,7 +11,7 @@ module Agentilda
     # Seconds each `x` adds.
     EXTENSION = 600
 
-    # @param screen [Agentilda::Screen]
+    # @param screen [Agentilda::Screen::Ratatui]
     def initialize(screen:)
       @screen = screen
       @dispatcher = nil
@@ -30,7 +30,7 @@ module Agentilda
     # @return [Hash] `{kill: Boolean, extend: Integer}`
     attr_reader :pending
 
-    # @return [Agentilda::Screen]
+    # @return [Agentilda::Screen::Ratatui]
     attr_reader :screen
 
     # @return [Boolean]

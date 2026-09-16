@@ -203,10 +203,14 @@ module Agentilda
           return path
         root = options[:root] || File.dirname(path, 2)
 
-        ok, note =
-          UI.spinning("Writing spec.md from #{UI.paint(File.basename(path).to_s, :yellow)}") do
-            Executor.new(root:).call(agent, Subject.new(Feature.parse(path)))
-          end
+        feature = Feature.parse(path)
+        ok, note = on_agent_row("Writing spec.md from #{UI.paint(File.basename(path).to_s, :yellow)}",
+          agent: agent.name,
+          plan:  feature.ordinal.to_s,
+          root:) do |line|
+          handle = line.handle if line.is_a?(Dashboard::Tracker)
+          Executor.new(root:).call(agent, Subject.new(feature), handle:, &line)
+        end
         warn_about(note) unless ok
 
         settle(path)
@@ -236,12 +240,33 @@ module Agentilda
           # half-agent reads as one of them on the terminal.
           label =
             "#{UI.paint(Brief::AGENT_NAME, :yellow, :bold)} drafting spec.md from #{seed}"
-          ok, note = UI.spinning(label) { brief.attempt! }
+          ok, note = on_agent_row(label, agent: Brief::AGENT_NAME, plan: feature.ordinal.to_s, root:) { brief.attempt! }
           warn_about_draft(note) unless ok
         end
 
         open_spec(brief.spec_path) if options.fetch(:open, true)
         path
+      end
+
+      # One agent writing spec.md, drawn as a row on the ratatui dashboard on
+      # a terminal and as a spinner line anywhere else.
+      #
+      # @param label [String] the spinner line's text
+      # @param agent [String]
+      # @param plan [String]
+      # @param root [String]
+      # @yieldparam line [Agentilda::UI::Line]
+      # @return [Object] the block's value
+      def on_agent_row(label, agent:, plan:, root:, &block)
+        Control.on_interrupt do
+          UI.concurrently([plan],
+            label,
+            jobs:   1,
+            label:  ->(_) { label },
+            fields: ->(_) { { plan:, agent: } },
+            file:   ->(_) { "spec.md" },
+            root:) { |_, line| block.call(line) }.first
+        end
       end
 
       # @param spec_path [String]

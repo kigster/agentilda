@@ -76,7 +76,7 @@ RSpec.describe Agentilda::UI do
       it "marks the line failed and re-raises when the work blows up" do
         expect {
           expect { described_class.spinning("working") { raise "boom" } }.to raise_error("boom")
-        }.to output(/✗ working/).to_stderr
+        }.to output(/𝘅 working/).to_stderr
       end
     end
 
@@ -293,7 +293,7 @@ RSpec.describe Agentilda::UI do
           jobs:    1,
           label:   ->(_) { "000.00" },
           failure:) { |_| "timed out after 900s" }
-      }.to output(/✗.*000\.00.*timed out after 900s/m).to_stderr
+      }.to output(/𝘅.*000\.00.*timed out after 900s/m).to_stderr
     end
 
     it "still marks a clean result as done" do
@@ -415,7 +415,7 @@ RSpec.describe Agentilda::UI do
 
       it "prints a header line and one completion line per item" do
         expect { described_class.concurrently(%i[a b], "round 1 — 2 plans", jobs: 2, label: ->(i) { i.to_s }) { |i| i } }
-          .to output(a_string_including("round 1", "✓ a", "✓ b")).to_stderr
+          .to output(a_string_including("round 1", "[✓] a", "[✓] b")).to_stderr
       end
 
       it "captures a failing item as its error rather than aborting the others" do
@@ -433,7 +433,12 @@ RSpec.describe Agentilda::UI do
     end
 
     context "on a terminal" do
-      before { allow(described_class).to receive(:tty?).and_return(true) }
+      before do
+        allow(described_class).to receive(:tty?).and_return(true)
+        allow(Agentilda::Screen::Ratatui).to receive(:new).and_return(
+          instance_double(Agentilda::Screen::Ratatui, attach_keyboard: nil, open: nil, close: nil, draw: nil)
+        )
+      end
 
       it "still returns every result for a single item" do
         expect(described_class.concurrently([:plan], "round", jobs: 1) { |_| :done }).to eq([:done])
@@ -535,44 +540,38 @@ RSpec.describe Agentilda::UI do
     end
   end
 
-  # The task-list path: several items, several jobs, a terminal to draw on.
-  # dry-cli-ui draws it for real, into the captured stream.
-  describe ".concurrently, several items on a terminal" do
-    before { allow(described_class).to receive(:tty?).and_return(true) }
+  # On a terminal the work is drawn on the ratatui dashboard. The screen is
+  # a double: the suite has no terminal for ratatui to take over.
+  describe ".concurrently on a terminal" do
+    let(:screen) { instance_double(Agentilda::Screen::Ratatui, attach_keyboard: nil, open: nil, close: nil, draw: nil) }
 
-    it "returns results in input order with one line per item" do
-      result = nil
-
-      aggregate_failures do
-        expect { result = described_class.concurrently(%i[a b], "round", jobs: 2) { |item, _line| item } }
-          .to output(a_string_including("✓ a", "✓ b")).to_stderr
-        expect(result).to eq(%i[a b])
-      end
+    before do
+      allow(described_class).to receive(:tty?).and_return(true)
+      allow(Agentilda::Screen::Ratatui).to receive(:new).and_return(screen)
     end
 
-    it "marks a failing item's own line failed and keeps the error as its result" do
-      result = nil
-      run = lambda {
-        result = described_class.concurrently(%i[a b], "round", jobs: 2) { |item, _line|
-          raise "boom" if item == :a
+    it "opens the dashboard, closes it again, and returns results in input order" do
+      result = described_class.concurrently(%i[a b], "round", jobs: 2) { |item, _line| item }
 
-          :ok
-        }
+      expect(result).to eq(%i[a b])
+      expect(screen).to have_received(:open).once
+      expect(screen).to have_received(:close).once
+    end
+
+    it "keeps a failing item's error as its result without stopping the others" do
+      result = described_class.concurrently(%i[a b], "round", jobs: 2) { |item, _line|
+        raise "boom" if item == :a
+
+        :ok
       }
 
-      aggregate_failures do
-        expect(&run).to output(a_string_including("✗ a: boom", "✓ b")).to_stderr
-        expect(result[0]).to be_a(RuntimeError)
-        expect(result[1]).to eq(:ok)
-      end
+      expect(result[0]).to be_a(RuntimeError)
+      expect(result[1]).to eq(:ok)
     end
 
-    it "marks a returned failure as one without holding up the others" do
-      failure = ->(result) { result if result.is_a?(String) }
-
-      expect {
-        described_class.concurrently(%i[a b], "round", jobs: 2, failure:) { |item, _line| item == :a ? "timed out after 900s" : :ok }
-      }.to output(a_string_including("✗ a: timed out after 900s", "✓ b")).to_stderr
+    it "lets a lone item's exception propagate, and still closes the screen" do
+      expect { described_class.concurrently([:a], "round", jobs: 1) { |_, _| raise "boom" } }.to raise_error("boom")
+      expect(screen).to have_received(:close)
     end
 
     it "never runs more than `jobs` items at once" do
@@ -588,20 +587,50 @@ RSpec.describe Agentilda::UI do
       expect(peak).to eq(2)
     end
 
-    it "hands each item a live Line it can stream progress through" do
+    it "hands each item a dashboard row carrying an executor handle" do
       seen = []
       described_class.concurrently(%i[a b], "round", jobs: 2) { |_item, line| seen << line }
 
-      expect(seen).to all(be_a(described_class::Line))
+      expect(seen).to all(be_a(Agentilda::Dashboard::Tracker))
+      expect(seen.map(&:handle)).to all(be_a(Agentilda::Executor::Handle))
     end
 
-    it "draws nothing under --quiet, and still returns every result" do
+    it "draws the final frame with each row's state, file and activity" do
+      boards = []
+      allow(screen).to receive(:draw) { |board| boards << board }
+      failure = ->(result) { result if result.is_a?(String) }
+      progress = Agentilda::Transcript::Progress.new(activity: "reading blocked.md", up: 10, down: 2, subagents: 0)
+
+      described_class.concurrently(%i[a b],
+        "round",
+        jobs:    2,
+        failure:,
+        fields:  ->(item) { { plan: "00#{item}", agent: "lando-broker" } },
+        file:    ->(_) { "blocked.md" }) do |item, line|
+        line.call(progress)
+        item == :a ? "timed out after 900s" : :ok
+      end
+
+      rows = boards.last.rows.sort_by(&:ordinal)
+      expect(rows.map(&:state)).to eq(%i[failed done])
+      expect(rows.map(&:file)).to all(eq("blocked.md"))
+      expect(rows.map(&:message)).to eq(["timed out after 900s", "reading blocked.md"])
+      expect(rows.last.up).to eq(10)
+    end
+  end
+
+  describe ".concurrently under --quiet on a terminal" do
+    before { allow(described_class).to receive(:tty?).and_return(true) }
+
+    it "draws nothing, opens no dashboard, and still returns every result" do
       described_class.quiet = true
+      allow(Agentilda::Dashboard).to receive(:open)
       result = nil
 
       aggregate_failures do
         expect { result = described_class.concurrently(%i[a b], "round", jobs: 2) { |item, _line| item } }.not_to output.to_stderr
         expect(result).to eq(%i[a b])
+        expect(Agentilda::Dashboard).not_to have_received(:open)
       end
     end
   end

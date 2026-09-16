@@ -17,3 +17,4 @@ mermaid.html
 **/*.gem
 /target
 /exe/tilda-rs
+.plans/tmp/

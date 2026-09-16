@@ -27,8 +27,8 @@ eval "$(alock completion zsh)"
 
 ### Building on a jemalloc-linked Ruby
 
-`ratatui_ruby` backs `tilda run`'s opt-in `--tui ratatui` dashboard. `--tui spinner`, the
-built-in ANSI one, stays the default, and `AGENTILDA_TUI` is read when the flag is not passed.
+`ratatui_ruby` draws the dashboard for every command that runs agents: `run --commit`, `unblock` and `create`.
+Ctrl-C once asks each running agent to leave a resume note in its plan's `mailbox.md` and sign `Interrupted`, so a restart picks up where it stopped; press it again to abort at once.
 
 If `bundle install` fails compiling `ratatui_ruby` with `fatal error: 'jemalloc/jemalloc.h'
 file not found`, your Ruby was built `--with-jemalloc` and `rb-sys`'s bindgen step is not
@@ -149,7 +149,7 @@ tilda linear import TAX -p 'Tax DSL'   # mirror the plans into Linear
 ```
 
 > [!IMPORTANT]
-> **Every command that writes is a dry run until you add `--commit`.** Read what it would do first.
+> **Every command that writes is a dry run until you add `--commit`.** Read what it would do first. Set `AGENTILDA_AUTOCOMMIT=true` to have every command behave as if `--commit` were passed.
 
 ## Running the agents
 
@@ -162,10 +162,11 @@ tilda run --commit --agent yoda-writer --prompt "Rework the risks section first"
 tilda run --commit --skip hansolo-reviewer # everyone but the reviewer; its plans wait
 tilda run --commit --model opus            # one model for every agent
 tilda run --commit --timeout 600           # at most ten minutes per agent
+tilda run --commit --scroll-height 5       # each agent's last five statuses under its row
+tilda run --commit --agent luke-backend --prompt steer.md  # a short --prompt naming a file is read
 tilda run --commit --rounds 1              # at most one round per agent per plan
 tilda run --commit --max-tokens 200000     # token budget per agent invocation
 tilda run --isolation shared               # one checkout, one agent at a time, no git needed
-tilda run --commit --tui ratatui           # the ratatui dashboard instead of the built-in spinner one
 ```
 
 If you just created several plans, run them with a single `--plan` list. Separate bare `run` calls each loop over the whole tree, so their worktrees would overlap.
@@ -176,7 +177,7 @@ The loop stops when a full round changes no plan's state. It also stops when eve
 
 - **Isolation.** By default every plan gets its own git worktree and branch, `<user>/NNN.MM-slug`, so agents on different plans share nothing. Parallel runs require it: `--isolation shared` runs one agent at a time.
 - **Agents cannot publish.** They may write source, tests and their plan's documents, but may not commit, push or touch a pull request. The tool enforces this twice: it withholds those commands from the agent, and afterwards checks that `HEAD` did not move.
-- **The harness publishes.** When a plan finishes, the harness commits the branch, pushes it and opens a pull request titled like `[002.00](A) Tenancy Households`. Pass `--dont-push-anything` to leave the work uncommitted in its worktree.
+- **The harness publishes.** When a plan finishes, the harness commits the branch, pushes it and opens a pull request titled like `[002.00](A) Tenancy Households`. Pass `--no-git-push` to leave the work uncommitted in its worktree.
 - **Nothing merges automatically.** An approval leaves the plan at 👀 until you merge.
 - **Disk over claims.** A plan moves only when the files its new state requires exist. If an agent reports success but wrote nothing, the tool records it as interrupted.
 

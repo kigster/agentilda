@@ -84,6 +84,38 @@ RSpec.describe Agentilda::Dispatcher, :tree do
       expect(row.elapsed).to eq(42)
       expect(row.subagents).to eq(0)
     end
+
+    # What `run --scroll-height` draws: every distinct status, newest
+    # first, on the running row and on the finished one it leaves behind.
+    it "keeps the agent's statuses newest first, repeats dropped, the outcome on top once done" do
+      said = Queue.new
+      release = Queue.new
+      executor = lambda { |_agent, _subject, **, &progress|
+        ["reading spec.md", "reading spec.md", "editing plan.md"].each do |activity|
+          progress.call(Agentilda::Transcript::Progress.new(activity:, up: 1, down: 1, subagents: 0))
+        end
+        said << true
+        release.pop
+        Agentilda::Executor::Result.new(ok: false, note: "stopped early", up: 1, down: 1, subagents: 0, delegated: 0, seconds: 1.0)
+      }
+      dispatcher = described_class.new(runner: runner_with(executor), sleeper: ->(_) {})
+      dispatcher.tick
+      said.pop
+
+      running = dispatcher.board.rows.find(&:running?)
+      expect(running.history).to eq(["editing plan.md", "reading spec.md"])
+
+      10.times { release << true }
+      200.times do
+        dispatcher.tick
+        break if dispatcher.board.rows.none?(&:running?)
+
+        sleep 0.01
+      end
+      done = dispatcher.board.rows.find { |r| r.key == running.key }
+      expect(done.history.drop(1)).to eq(["editing plan.md", "reading spec.md"])
+      expect(done.history.first).to eq(done.message)
+    end
   end
 
   # The 001.00 transcript, the other way round: a folder still named ⚪️

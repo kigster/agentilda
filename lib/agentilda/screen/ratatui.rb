@@ -3,7 +3,7 @@
 require "ratatui_ruby"
 
 module Agentilda
-  class Screen
+  module Screen
     # A ratatui_ruby-backed alternative to {Screen}, selected with `--tui
     # ratatui`. Unlike {Screen}, whose #draw renders synchronously from the
     # dispatcher's own tick, ratatui_ruby owns a blocking render+input loop
@@ -11,9 +11,8 @@ module Agentilda
     # class carries the parts of that loop with no terminal dependency: the
     # widget tree built from a {Board}.
     class Ratatui
-      # Cells each fixed-width column takes; the last column is not listed
-      # here because it is built with `tui.constraint_fill(1)` — see
-      # {#table}. The elapsed/time-left columns (indices 8 and 9) are 17,
+      # Cells each column takes. The last one is stretched to the edge by
+      # ratatui's legacy flex. The elapsed/time-left columns (indices 8 and 9) are 17,
       # not 13: {Bar.cell} emits a 10-cell bar plus a clock suffix up to 7
       # characters wide (e.g. " 12:41"), and a narrower column clips the
       # clock digits once ratatui actually lays the table out (see
@@ -22,7 +21,18 @@ module Agentilda
       # that — the rest inspect the pre-layout `Text::Line` object).
       COLUMNS = [9, 7, 16, 18, 8, 8, 5, 13, 17, 17].freeze
 
-      HEADER = %w[time plan feature agent round model subs tokens elapsed left activity].freeze
+      HEADER = %w[time plan feature agent round model subs tokens elapsed left].freeze
+
+      # Blank lines between two agents.
+      ROW_GAP = 1
+
+      # The highlight symbol's column. Reserved even with nothing selected,
+      # so the activity line's x never shifts when a selection appears.
+      HIGHLIGHT_SYMBOL = "> "
+
+      # The activity line starts under the feature column: past the
+      # highlight symbol, time and plan, each column plus its 1-cell gap.
+      ACTIVITY_INDENT = HIGHLIGHT_SYMBOL.length + COLUMNS[0] + 1 + COLUMNS[1] + 1
 
       # Seconds between samples for the running-agent-count sparkline.
       SAMPLE_INTERVAL = 10
@@ -33,11 +43,17 @@ module Agentilda
       # @return [Array<Integer>] running-agent-count samples, oldest first
       attr_reader :history
 
+      # @return [Integer] status lines drawn under each agent's row
+      attr_reader :scroll_height
+
       # @param runner [#call] `RatatuiRuby.method(:run)` by default; a fake
       #   in tests, so this class never needs a real terminal to exercise
       #   its own orchestration
-      def initialize(runner: RatatuiRuby.method(:run))
+      # @param scroll_height [Integer] how many of an agent's latest statuses
+      #   show under its row, newest at the top
+      def initialize(runner: RatatuiRuby.method(:run), scroll_height: 1)
         @runner = runner
+        @scroll_height = Integer(scroll_height).clamp(1, Board::Row::HISTORY)
         @board = nil
         @keyboard = nil
         @history = []
@@ -134,15 +150,17 @@ module Agentilda
       # @return [void]
       def render(tui, frame, area, board, table_state)
         sync_selection(board, table_state)
-        top, table_area, bottom = tui.layout_split(area,
+        _, top, _, table_area, bottom = tui.layout_split(area,
           direction:   :vertical,
-          constraints: [tui.constraint_length(1), tui.constraint_fill(1), tui.constraint_length(1)])
+          constraints: [tui.constraint_length(1), tui.constraint_length(1), tui.constraint_length(1),
+                        tui.constraint_fill(1), tui.constraint_length(1)])
         bottom_text, bottom_spark = tui.layout_split(bottom,
           direction:   :horizontal,
           constraints: [tui.constraint_fill(3), tui.constraint_fill(1)])
 
         frame.render_widget(top_bar(tui, board), top)
         frame.render_stateful_widget(table(tui, board), table_area, table_state)
+        render_activities(tui, frame, table_area, board, table_state)
         frame.render_widget(bottom_bar(tui, board), bottom_text)
         frame.render_widget(tui.sparkline(data: @history, style: tui.style(fg: :cyan)), bottom_spark)
         render_overlay(tui, frame, area, board)
@@ -196,28 +214,72 @@ module Agentilda
 
       # @return [RatatuiRuby::Widgets::Table]
       def table(tui, board)
-        widths = COLUMNS.map { |w| tui.constraint_length(w) } + [tui.constraint_fill(1)]
         tui.table(header: HEADER,
           rows: board.rows.map { |row| table_row(tui, row) },
-          widths:,
+          widths: COLUMNS.map { |w| tui.constraint_length(w) },
+          highlight_symbol: HIGHLIGHT_SYMBOL,
+          highlight_spacing: :always,
           row_highlight_style: tui.style(modifiers: [:reversed]))
+      end
+
+      # Lines one agent takes: its table row, then its statuses.
+      #
+      # @return [Integer]
+      def row_height = 1 + scroll_height
+
+      # Paints each visible agent's latest statuses over the empty lines
+      # under its table row, newest first: the newest bold, the rest plain,
+      # all yellow. A table cell cannot span columns, so a status would
+      # otherwise be clipped to one column's width; drawn on top, it gets
+      # everything from the feature column to the right edge.
+      #
+      # @return [void]
+      def render_activities(tui, frame, table_area, board, table_state)
+        width = table_area.width - ACTIVITY_INDENT
+        return if width <= 0
+
+        bottom = table_area.y + table_area.height
+        board.rows.drop(table_state.offset.to_i).each_with_index do |row, index|
+          # +1 for the header line, +1 more to land under the row's own line.
+          top = table_area.y + 1 + (index * (row_height + ROW_GAP)) + 1
+          break if top >= bottom
+
+          statuses(row).each_with_index do |text, line|
+            y = top + line
+            break if y >= bottom
+
+            modifiers = line.zero? ? [:bold] : []
+            frame.render_widget(
+              tui.paragraph(text:, style: tui.style(fg: :yellow, modifiers:)),
+              tui.rect(x: table_area.x + ACTIVITY_INDENT, y:, width:, height: 1)
+            )
+          end
+        end
+      end
+
+      # @param row [Agentilda::Board::Row]
+      # @return [Array<String>] newest first, at most {#scroll_height}
+      def statuses(row)
+        lines = row.history.empty? ? [row.message.to_s] : row.history
+        lines.first(scroll_height)
       end
 
       # @return [RatatuiRuby::Widgets::Row]
       def table_row(tui, row)
-        tui.row(cells: [
-                  row.at.strftime("%H:%M:%S"),
-                  row.ordinal,
-                  row.file,
-                  tui.text_span(content: row.agent, style: tui.style(fg: :yellow, modifiers: [:bold])),
-                  "R:#{row.round}/#{row.rounds}",
-                  row.model.to_s,
-                  row.subagents.to_s,
-                  "↑#{UI.abbreviate(row.up)} ↓#{UI.abbreviate(row.down)}",
-                  Bar.cell(tui, row.elapsed, Bar.elapsed_color(row.elapsed)),
-                  Bar.cell(tui, row.remaining, Bar.remaining_color(row.remaining)),
-                  row.message.to_s
-                ])
+        tui.row(height: row_height,
+          bottom_margin: ROW_GAP,
+          cells: [
+            row.at.strftime("%H:%M:%S"),
+            row.ordinal,
+            row.file,
+            tui.text_span(content: row.agent, style: tui.style(fg: :yellow, modifiers: [:bold])),
+            "R:#{row.round}/#{row.rounds}",
+            row.model.to_s,
+            row.subagents.to_s,
+            "↑#{UI.abbreviate(row.up)} ↓#{UI.abbreviate(row.down)}",
+            Bar.cell(tui, row.elapsed, Bar.elapsed_color(row.elapsed)),
+            Bar.cell(tui, row.remaining, Bar.remaining_color(row.remaining))
+          ])
       end
 
       # @return [void]

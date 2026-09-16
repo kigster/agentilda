@@ -254,6 +254,24 @@ RSpec.describe Agentilda::CLI::Run, :tree do
         .with(hash_including(instructions: "Focus on the parser"))
     end
 
+    it "reads the instructions from a short --prompt that names an existing file" do
+      with_executor
+      File.write(File.join(plans_root, "steer.txt"), "Focus on the parser, from a file")
+      Dir.chdir(plans_root) { run(commit: true, agent: "luke-backend", prompt: "steer.txt") }
+
+      expect(Agentilda::Executor).to have_received(:new)
+        .with(hash_including(instructions: "Focus on the parser, from a file"))
+    end
+
+    it "takes a --prompt of 80 characters or more as the text, even when it names a file" do
+      with_executor
+      path = File.join(plans_root, "#{"x" * 80}.txt")
+      File.write(path, "from the file")
+      run(commit: true, agent: "luke-backend", prompt: path)
+
+      expect(Agentilda::Executor).to have_received(:new).with(hash_including(instructions: path))
+    end
+
     # Without the restriction the steer would reach every agent in the round,
     # which is never what a sentence aimed at one specialist means.
     it "refuses --prompt without --agent" do
@@ -403,67 +421,45 @@ RSpec.describe Agentilda::CLI::Run, :tree do
     end
   end
 
-  describe "--tui" do
+  describe "the dashboard" do
     before { allow(Agentilda::UI).to receive(:animate?).and_return(true) }
 
-    it "builds the spinner Screen by default" do
-      allow(Agentilda::Screen).to receive(:new).and_call_original
-      allow(Agentilda::Screen::Ratatui).to receive(:new)
-      run(commit: true)
-      expect(Agentilda::Screen).to have_received(:new)
-      expect(Agentilda::Screen::Ratatui).not_to have_received(:new)
-    end
-
-    it "builds Screen::Ratatui and a non-started Keyboard when --tui ratatui is passed" do
+    it "builds Screen::Ratatui and feeds it a non-started Keyboard on a committed run" do
       fake_screen = instance_double(Agentilda::Screen::Ratatui, attach_keyboard: nil, open: nil, close: nil, draw: nil)
       allow(Agentilda::Screen::Ratatui).to receive(:new).and_return(fake_screen)
       allow(Agentilda::Keyboard).to receive(:new).and_call_original
 
-      run(commit: true, tui: "ratatui")
+      run(commit: true)
 
       expect(Agentilda::Screen::Ratatui).to have_received(:new)
       expect(Agentilda::Keyboard).to have_received(:new)
+      expect(Agentilda::Keyboard).not_to have_received(:listen)
       expect(fake_screen).to have_received(:attach_keyboard)
     end
 
-    it "falls back to AGENTILDA_TUI when the flag is not passed" do
+    it "hands --scroll-height to the screen" do
       allow(Agentilda::Screen::Ratatui).to receive(:new).and_return(
         instance_double(Agentilda::Screen::Ratatui, attach_keyboard: nil, open: nil, close: nil, draw: nil)
       )
-      begin
-        ENV["AGENTILDA_TUI"] = "ratatui"
-        run(commit: true)
-      ensure
-        ENV.delete("AGENTILDA_TUI")
-      end
-
-      expect(Agentilda::Screen::Ratatui).to have_received(:new)
+      run(commit: true, scroll_height: "5")
+      expect(Agentilda::Screen::Ratatui).to have_received(:new).with(scroll_height: 5)
     end
 
-    it "prefers the flag over AGENTILDA_TUI when both are set" do
-      allow(Agentilda::Screen).to receive(:new).and_call_original
-      allow(Agentilda::Screen::Ratatui).to receive(:new)
-      begin
-        ENV["AGENTILDA_TUI"] = "ratatui"
-        run(commit: true, tui: "spinner")
-      ensure
-        ENV.delete("AGENTILDA_TUI")
-      end
-
-      expect(Agentilda::Screen).to have_received(:new)
-      expect(Agentilda::Screen::Ratatui).not_to have_received(:new)
-    end
-
-    it "refuses an unrecognized AGENTILDA_TUI instead of silently falling back to spinner" do
-      begin
-        ENV["AGENTILDA_TUI"] = "bogus"
-        _out, err, status = run(commit: true)
-      ensure
-        ENV.delete("AGENTILDA_TUI")
-      end
-
+    it "refuses an --scroll-height that is not a positive whole number" do
+      _out, err, status = run(commit: true, scroll_height: "0")
       expect(status).to eq(64)
-      expect(unwrapped(err)).to include("AGENTILDA_TUI=bogus", "spinner or ratatui")
+      expect(unwrapped(err)).to include("--scroll-height")
+    end
+
+    it "builds a publisher by default and none under --no-git-push" do
+      expect(command.send(:publisher_for, plans_root, :worktree, { commit: true })).to be_a(Agentilda::Publisher)
+      expect(command.send(:publisher_for, plans_root, :worktree, { commit: true, git_push: false })).to be_nil
+    end
+
+    it "draws nothing on a dry run" do
+      allow(Agentilda::Screen::Ratatui).to receive(:new)
+      run
+      expect(Agentilda::Screen::Ratatui).not_to have_received(:new)
     end
   end
 

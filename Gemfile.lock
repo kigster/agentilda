@@ -1,7 +1,7 @@
 PATH
   remote: .
   specs:
-    agentilda (2.0.0.pre.alpha)
+    agentilda (2.0.0)
       aasm
       concurrent-ruby
       dry-cli
@@ -42,7 +42,7 @@ GEM
     dry-cli-help (0.2.1)
       dry-cli (>= 1.1.1, < 2)
       pastel (~> 0.8)
-    dry-cli-ui (0.3.1)
+    dry-cli-ui (0.4.0)
       concurrent-ruby (~> 1.3)
       dry-cli (>= 1.0)
       pastel (~> 0.8)
@@ -232,7 +232,7 @@ CHECKSUMS
   RubyInline (3.14.4) sha256=75aec9bb7626a56a6c443922d1d299e1f062795f1d7b7195b0b863ca3776d9ab
   ZenTest (4.12.2) sha256=814e7478a28f631df8f802aee40bd1faa2a53df1fb50e086eb8655f9ee5d60b9
   aasm (6.0.0) sha256=c96ce60ea9574eb194e33f29d801be430b8cade2f31c8a5d137a9870ee39d404
-  agentilda (2.0.0.pre.alpha)
+  agentilda (2.0.0)
   ast (2.4.3) sha256=954615157c1d6a382bc27d690d973195e79db7f55e9765ac7c481c60bdb4d383
   bigdecimal (4.1.3) sha256=61ebe1e5e559bdc3cc6f2c0ee7f427321fc838f59611c294356eb04d6e21cf66
   bundler (4.1.0.beta1) sha256=8a2dac8ca276ff4eff5efc2c6457b0044080fc1e431534ad7c5cc6187232b800
@@ -243,7 +243,7 @@ CHECKSUMS
   dry-cli (1.4.1) sha256=b8015bb76c708aa8705a36faf694973e75eeeffca39b89c8e172dc6f66a7d874
   dry-cli-autocomplete (0.1.3) sha256=14f76447bda0000c71739b585c827dc0a0a763e30a68a8b4b2dff91f640768e4
   dry-cli-help (0.2.1) sha256=eaaaf6edb787ffe810425b4e4bb1a675d89397ccc759102d70b5b26e7bc692da
-  dry-cli-ui (0.3.1) sha256=49925ce72f9f0cea5e4d877deff77c85a22c2a321843a502571bd22f56092b7b
+  dry-cli-ui (0.4.0) sha256=5ade3efd8268563f33e95136c800cb1b57f99f3a4a7e41c9f8d0837167fd3917
   dry-core (1.2.0) sha256=0cc5a7da88df397f153947eeeae42e876e999c1e30900f3c536fb173854e96a1
   dry-inflector (1.3.1) sha256=7fb0c2bb04f67638f25c52e7ba39ab435d922a3a5c3cd196120f63accb682dcc
   dry-monads (1.11.0) sha256=ffc188512bf90c8ace135a1171a6791e561d5e3a1de6195ce5f9bc190c81e31b

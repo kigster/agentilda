@@ -3,7 +3,7 @@
 require "ratatui_ruby"
 
 module Agentilda
-  class Screen
+  module Screen
     class Ratatui
       module Bar
         # Cells the fill portion occupies.

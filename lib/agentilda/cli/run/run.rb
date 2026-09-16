@@ -19,7 +19,12 @@ module Agentilda
         desc: "Seconds before one agent is abandoned; only tightens an agent's own clock " \
               "(default: the agent's own, else 900)"
       option :agent, desc: "Only run this one agent"
-      option :prompt, desc: "Extra instructions appended to the agent's prompt (only with --agent)"
+      # `--prompt` shorter than this that names an existing file is read.
+      PROMPT_PATH_LIMIT = 80
+
+      option :prompt,
+        desc: "Extra instructions appended to the agent's prompt (only with --agent); " \
+              "a path to an existing text file under #{PROMPT_PATH_LIMIT} characters is read instead"
       option :skip,
         desc: "Never assign this agent; its plans wait, the rest of the pipeline runs. " \
               "Comma separated for several"
@@ -41,16 +46,15 @@ module Agentilda
       option :jobs,
         aliases: ["-j"],
         desc:    "Agents to run at once (default: cores - 2, capped at 12)"
-      option :dont_push_anything,
+      option :git_push,
         type:    :boolean,
-        default: false,
+        default: true,
         desc:    "With --commit and --isolation worktree, a finished branch is pushed and its pull request " \
-                 "opened as soon as it lands, titled [NNN.MM](X). Pass this to turn that off and leave it uncommitted."
+                 "opened as soon as it lands, titled [NNN.MM](X). --no-git-push turns that off and leaves it uncommitted."
+      option :scroll_height,
+        aliases: ["-s"],
+        desc:    "Lines of each agent's latest statuses shown under its row, newest first (default: 1)"
       option :log, desc: "Append progress to this file (default: a per-project file under the system temp dir)"
-      option :tui,
-        values: %w[spinner ratatui],
-        desc:   "spinner (default): the built-in ANSI dashboard. ratatui: an alternate renderer built " \
-                "on ratatui_ruby. AGENTILDA_TUI is a fallback when this flag is not passed"
 
       example [
         "                       # show which agent would take which plan",
@@ -59,7 +63,7 @@ module Agentilda
         "--isolation shared     # one tree, serial — no git required",
         "--commit --rounds 3    # …capping every agent at three rounds per plan",
         "--commit --plan 005,006,007  # only the plans a batch step just created",
-        "--commit --tui ratatui # …drawn with the ratatui_ruby-backed dashboard"
+        "--commit -s 5          # …each agent's last five statuses under its row"
       ]
 
       # Option precedence, quietest to loudest: the built-in default, then
@@ -122,16 +126,16 @@ module Agentilda
         # The screen only on a terminal that is actually running agents: a dry
         # run has nothing to draw and a pipe has nowhere to draw it. Without a
         # screen the keys still work, so the one line says which.
+        # With a screen, ratatui owns the terminal's input, so the keyboard is
+        # fed from its loop rather than started on STDIN of its own.
         Control.reset!
-        if !options[:tui] && ENV.fetch("AGENTILDA_TUI", nil) && !%w[spinner ratatui].include?(ENV.fetch("AGENTILDA_TUI", nil))
-          refuse("AGENTILDA_TUI=#{ENV.fetch("AGENTILDA_TUI", nil)} is not spinner or ratatui.", 64)
+        scroll_height = options.fetch(:scroll_height, 1)
+        unless scroll_height.to_s.match?(/\A[1-9]\d*\z/)
+          refuse("--scroll-height must be a whole number of lines, 1 or more, not #{scroll_height.inspect}.", 64)
         end
-        tui_backend = (options[:tui] || ENV["AGENTILDA_TUI"] || "spinner").to_sym
-        screen = if UI.animate? && commit?(options)
-                   tui_backend == :ratatui ? Screen::Ratatui.new : Screen.new
-                 end
+        screen   = (Screen::Ratatui.new(scroll_height: scroll_height.to_i) if UI.animate? && commit?(options))
         console  = (Console.new(screen:) if screen)
-        keyboard = if screen && tui_backend == :ratatui
+        keyboard = if screen
                      Keyboard.new(sink: console).tap { |kb| screen.attach_keyboard(kb) }
                    else
                      Keyboard.listen(sink: console)
@@ -150,7 +154,7 @@ module Agentilda
           executor:  Executor.new(root:,
             timeout:,
             dry_run:      !commit?(options),
-            instructions: options[:prompt],
+            instructions: instructions_from(options[:prompt]),
             model:        options[:model],
             max_tokens:   (options[:max_tokens] || config[:max_tokens])&.to_i,
             interactive:  !keyboard.nil? && commit?(options)),
@@ -164,7 +168,7 @@ module Agentilda
         started  = UI.monotonic
         attempts = begin
           screen&.open
-          runner.call { |dispatcher| console&.attach(dispatcher) }
+          Control.on_interrupt { runner.call { |dispatcher| console&.attach(dispatcher) } }
         ensure
           screen&.close
           keyboard&.stop
@@ -174,6 +178,20 @@ module Agentilda
       end
 
       private
+
+      # `--prompt` takes the instructions themselves or a file holding them.
+      # A short argument naming an existing file is read; anything else is
+      # the text, so a sentence that happens to match a filename in the
+      # project is not silently swapped for that file once it is long enough
+      # to be a sentence.
+      #
+      # @param prompt [String, nil]
+      # @return [String, nil]
+      def instructions_from(prompt)
+        return prompt unless prompt && prompt.length < PROMPT_PATH_LIMIT && File.file?(prompt)
+
+        File.read(prompt)
+      end
 
       # @param agents [Agentilda::Agents]
       # @param name [String]
@@ -273,7 +291,7 @@ module Agentilda
       # isolation has to actually give each plan a branch of its own too.
       #
       # `nil` is how {Runner} is told to leave a finished worktree alone; it
-      # is what `--dont-push-anything` asks for, and what a shared tree gets
+      # is what `--no-git-push` asks for, and what a shared tree gets
       # by construction, since there is no separate branch there to push.
       #
       # @param root [String]
@@ -281,7 +299,7 @@ module Agentilda
       # @param options [Hash]
       # @return [Agentilda::Publisher, nil]
       def publisher_for(root, isolation, options)
-        return nil if isolation != :worktree || options[:dont_push_anything]
+        return nil if isolation != :worktree || options[:git_push] == false
 
         Publisher.new(root:, dry_run: !commit?(options))
       end

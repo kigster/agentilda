@@ -59,11 +59,22 @@ RSpec.describe Agentilda::Keyboard do
       expect(File.read(file).strip).to eq("STOP")
       expect(Agentilda::Control.quit?).to be(true)
     end
+
+    # The first Ctrl-C lets the agent write down where it got to, so the
+    # next run resumes instead of redoing the work.
+    it "ctrl-c asks it for a resume note and quits the loop, without aborting yet" do
+      expect { keyboard.handle("\u0003") }.not_to raise_error
+
+      expect(File.read(file).strip).to eq("INTERRUPT")
+      expect(Agentilda::Control).to be_quit
+      expect(Agentilda::UI).to have_received(:line).with(a_string_including("resume notes", "again to abort"))
+    end
   end
 
   # The listener must never make a run harder to kill: raw mode swallowed
-  # the Ctrl-C, so the listener forwards the Interrupt it would have been.
-  it "forwards Ctrl-C as the Interrupt raw mode swallowed" do
+  # the Ctrl-C, so a second press is the Interrupt it would have been.
+  it "forwards a second Ctrl-C as the Interrupt raw mode swallowed" do
+    keyboard.handle("\u0003")
     expect { keyboard.handle("\u0003") }.to raise_error(Interrupt)
   end
 

@@ -49,6 +49,7 @@ require "tmpdir"
 # Forcing it off makes every content assertion test content. The coloured path
 # is still covered — deliberately, by examples that stub `UI.color?` — rather
 # than by accident, differently, on each machine.
+ENV.delete("AGENTILDA_AUTOCOMMIT") # a developer shell must not turn every dry-run example into a commit
 ENV["NO_COLOR"] = "1"
 ENV["GIT_CONFIG_COUNT"] = "1"
 ENV["GIT_CONFIG_KEY_0"] = "commit.gpgsign"

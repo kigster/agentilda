@@ -27,7 +27,7 @@ module Agentilda
       ["w", "ask every running agent to wrap up as fast as possible"],
       ["n", "ask agents to write out what they have and stop; the loop continues"],
       ["q", "write out, stop everything, and quit after a #{Control::GRACE}s grace"],
-      ["ctrl-c", "interrupt the run, as ever"]
+      ["ctrl-c", "agents leave a resume note and stop, then quit; press again to abort now"]
     ].freeze
 
     # @param input [IO]
@@ -80,7 +80,7 @@ module Agentilda
       when "w" then acted("w — agents asked to wrap up") { Control.wrap_up! }
       when "n" then acted("n — agents asked to write out and stop") { Control.stop! }
       when "q" then acted("q — quitting; #{Control::GRACE}s grace to write out") { Control.quit! }
-      when "\u0003" then Thread.main.raise(Interrupt)
+      when "\u0003" then interrupt
       end
     end
 
@@ -110,6 +110,16 @@ module Agentilda
       key
     end
 
+    # Raw mode swallows the signal, so the key stands in for it: the first
+    # press lets agents write down where they got to, the second aborts.
+    #
+    # @return [void]
+    def interrupt
+      return Thread.main.raise(Interrupt) if Control.interrupted?
+
+      acted("ctrl-c — agents leaving resume notes; #{Control::GRACE}s grace, ctrl-c again to abort") { Control.interrupt! }
+    end
+
     # A keypress with no acknowledgement looks like a keypress that did
     # nothing, so each one says what it just asked for.
     #
@@ -118,13 +128,11 @@ module Agentilda
     def acted(note)
       yield
       UI.log(note)
-      # Under `--tui ratatui`, RatatuiRuby.run owns the alternate screen and
+      # Under the dashboard, RatatuiRuby.run owns the alternate screen and
       # repaints it continuously, so this raw `$stderr` write either never
-      # appears or is immediately overwritten — `UI.log` above is this
-      # backend's only guaranteed record of w/n/q. Surfacing it on-screen
-      # too would mean threading a notifier through this shared class,
-      # which is also the default `spinner` backend's keyboard: a bigger,
-      # riskier change than a known, documented limitation.
+      # appears or is immediately overwritten — `UI.log` above is the only
+      # guaranteed record of w/n/q there. The line still matters without a
+      # screen (a dry run, a pipe), where this is all the feedback there is.
       UI.line(note)
     end
   end

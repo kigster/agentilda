@@ -153,6 +153,67 @@ RSpec.describe Agentilda::Screen::Ratatui do
     end
   end
 
+  describe "the two-line agent layout, in a real terminal" do
+    include RatatuiRuby::TestHelper
+
+    let(:second) do
+      row.with(key: "002.00/luke-backend",
+        ordinal: "002.00",
+        file: "plan-frontend.md",
+        agent: "luke-backend",
+        message: "writing lib/agentilda/screen/ratatui.rb and its spec")
+    end
+
+    it "puts the status bar on line 2, a blank line 3, and each agent on two lines plus a gap" do
+      with_test_terminal(160, 14) do
+        tui.draw { |frame| screen.render(tui, frame, frame.area, board.with(rows: [row, second]), table_state) }
+
+        lines = buffer_content
+        expect(lines[0].strip).to be_empty
+        expect(lines[1]).to include("running", "plans: 001.00")
+        expect(lines[2].strip).to be_empty
+        expect(lines[3]).to include("time", "feature")
+        expect(lines[4]).to include("001.00", "spec.md", "leah-researcher")
+        expect(lines[4]).not_to include("reading plan.md")
+        expect(lines[5].index("reading plan.md")).to eq(lines[4].index("spec.md"))
+        expect(lines[6].strip).to be_empty
+        expect(lines[7]).to include("002.00", "plan-frontend.md")
+        expect(lines[8].index("writing lib/agentilda")).to eq(lines[7].index("plan-frontend.md"))
+      end
+    end
+  end
+
+  describe "--scroll-height, in a real terminal" do
+    include RatatuiRuby::TestHelper
+
+    subject(:screen) { described_class.new(scroll_height: 3) }
+
+    it "shows the latest statuses under the row, newest first and bold, the rest plain" do
+      talkative = row.with(history: ["writing plan.md", "reading spec.md", "listing .plans", "starting"])
+      with_test_terminal(160, 14) do
+        tui.draw { |frame| screen.render(tui, frame, frame.area, board.with(rows: [talkative]), table_state) }
+
+        lines = buffer_content
+        expect(lines[4]).to include("001.00", "leah-researcher")
+        column = lines[4].index("spec.md")
+        expect(lines[5..7].map { |l| l[column..].strip }).to eq(["writing plan.md", "reading spec.md", "listing .plans"])
+        expect(lines[8].strip).to be_empty
+        expect(buffer_content.join).not_to include("starting")
+
+        expect(get_cell(column, 5).modifiers).to include(:bold)
+        expect(get_cell(column, 6).modifiers).not_to include(:bold)
+        expect([get_cell(column, 5).fg, get_cell(column, 6).fg]).to all(eq(:yellow))
+      end
+    end
+
+    it "falls back to the message when a row has no history yet" do
+      with_test_terminal(160, 10) do
+        tui.draw { |frame| screen.render(tui, frame, frame.area, board, table_state) }
+        expect(buffer_content[5]).to include("reading plan.md")
+      end
+    end
+  end
+
   describe "lifecycle" do
     let(:keyboard) { instance_double(Agentilda::Keyboard, handle: nil) }
 

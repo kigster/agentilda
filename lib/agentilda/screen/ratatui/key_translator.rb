@@ -3,7 +3,7 @@
 require "ratatui_ruby"
 
 module Agentilda
-  class Screen
+  module Screen
     class Ratatui
       # RatatuiRuby::Event -> the exact string Keyboard#handle already
       # expects, so every key binding (select, kill, extend, wrap-up, quit,
