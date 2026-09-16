@@ -118,6 +118,13 @@ module Agentilda
     def acted(note)
       yield
       UI.log(note)
+      # Under `--tui ratatui`, RatatuiRuby.run owns the alternate screen and
+      # repaints it continuously, so this raw `$stderr` write either never
+      # appears or is immediately overwritten — `UI.log` above is this
+      # backend's only guaranteed record of w/n/q. Surfacing it on-screen
+      # too would mean threading a notifier through this shared class,
+      # which is also the default `spinner` backend's keyboard: a bigger,
+      # riskier change than a known, documented limitation.
       UI.line(note)
     end
   end

@@ -27,6 +27,7 @@ module Agentilda
       :message,
       :up,
       :down,
+      :subagents,
       :result,
       :from,
       :state,
@@ -168,7 +169,9 @@ module Agentilda
         message: job.message,
         state: :running,
         pr: pr_for(task),
-        frame: job.frame)
+        frame: job.frame,
+        elapsed: (UI.monotonic - job.started_at).round,
+        subagents: job.subagents.to_i)
     end
 
     # @param task [Agentilda::Runner::Task]
@@ -288,6 +291,7 @@ module Agentilda
         state: subject.status.key,
         up: 0,
         down: 0,
+        subagents: 0,
         frame: 0)
       successor = @runner.agents.for_status(STATUS_BY_KEY.fetch(agent.advances_to)).first&.name if agent.advances_to && STATUS_BY_KEY.key?(agent.advances_to)
       # Each member of a pair is told who the others are, so the executor
@@ -309,6 +313,7 @@ module Agentilda
           @runner.executor.call(agent, subject, root: task.root, round:, successor:, handle:, partners:) { |progress|
             job.up = progress.up
             job.down = progress.down
+            job.subagents = progress.subagents
             job.message = progress.message || progress.activity
           }
         rescue StandardError => e

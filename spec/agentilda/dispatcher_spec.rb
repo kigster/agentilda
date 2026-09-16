@@ -72,6 +72,18 @@ RSpec.describe Agentilda::Dispatcher, :tree do
       yoda = attempts.find { |a| a.agent == "yoda-writer" }
       expect([yoda.from, yoda.to]).to eq(%i[researched ready_for_planning])
     end
+
+    it "carries elapsed seconds and the live sub-agent count on a running row" do
+      travel_to = ->(seconds) { allow(Agentilda::UI).to receive(:monotonic).and_return(seconds) }
+      travel_to.call(1000.0)
+      dispatcher = described_class.new(runner: runner_with(executor_with { |*| nil }), sleeper: ->(_) {})
+      dispatcher.tick # dispatches whatever the fixture tree makes eligible
+
+      travel_to.call(1042.0)
+      row = dispatcher.board.rows.find(&:running?)
+      expect(row.elapsed).to eq(42)
+      expect(row.subagents).to eq(0)
+    end
   end
 
   # The 001.00 transcript, the other way round: a folder still named ⚪️

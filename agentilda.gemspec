@@ -49,6 +49,7 @@ Gem::Specification.new do |spec|
   spec.add_dependency "fuzzy-string-match"
   spec.add_dependency "parallel"
   spec.add_dependency "pastel"
+  spec.add_dependency "ratatui_ruby"
   spec.add_dependency "tty-box"
   spec.add_dependency "tty-command"
   spec.add_dependency "tty-cursor"

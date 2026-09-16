@@ -403,6 +403,70 @@ RSpec.describe Agentilda::CLI::Run, :tree do
     end
   end
 
+  describe "--tui" do
+    before { allow(Agentilda::UI).to receive(:animate?).and_return(true) }
+
+    it "builds the spinner Screen by default" do
+      allow(Agentilda::Screen).to receive(:new).and_call_original
+      allow(Agentilda::Screen::Ratatui).to receive(:new)
+      run(commit: true)
+      expect(Agentilda::Screen).to have_received(:new)
+      expect(Agentilda::Screen::Ratatui).not_to have_received(:new)
+    end
+
+    it "builds Screen::Ratatui and a non-started Keyboard when --tui ratatui is passed" do
+      fake_screen = instance_double(Agentilda::Screen::Ratatui, attach_keyboard: nil, open: nil, close: nil, draw: nil)
+      allow(Agentilda::Screen::Ratatui).to receive(:new).and_return(fake_screen)
+      allow(Agentilda::Keyboard).to receive(:new).and_call_original
+
+      run(commit: true, tui: "ratatui")
+
+      expect(Agentilda::Screen::Ratatui).to have_received(:new)
+      expect(Agentilda::Keyboard).to have_received(:new)
+      expect(fake_screen).to have_received(:attach_keyboard)
+    end
+
+    it "falls back to AGENTILDA_TUI when the flag is not passed" do
+      allow(Agentilda::Screen::Ratatui).to receive(:new).and_return(
+        instance_double(Agentilda::Screen::Ratatui, attach_keyboard: nil, open: nil, close: nil, draw: nil)
+      )
+      begin
+        ENV["AGENTILDA_TUI"] = "ratatui"
+        run(commit: true)
+      ensure
+        ENV.delete("AGENTILDA_TUI")
+      end
+
+      expect(Agentilda::Screen::Ratatui).to have_received(:new)
+    end
+
+    it "prefers the flag over AGENTILDA_TUI when both are set" do
+      allow(Agentilda::Screen).to receive(:new).and_call_original
+      allow(Agentilda::Screen::Ratatui).to receive(:new)
+      begin
+        ENV["AGENTILDA_TUI"] = "ratatui"
+        run(commit: true, tui: "spinner")
+      ensure
+        ENV.delete("AGENTILDA_TUI")
+      end
+
+      expect(Agentilda::Screen).to have_received(:new)
+      expect(Agentilda::Screen::Ratatui).not_to have_received(:new)
+    end
+
+    it "refuses an unrecognized AGENTILDA_TUI instead of silently falling back to spinner" do
+      begin
+        ENV["AGENTILDA_TUI"] = "bogus"
+        _out, err, status = run(commit: true)
+      ensure
+        ENV.delete("AGENTILDA_TUI")
+      end
+
+      expect(status).to eq(64)
+      expect(unwrapped(err)).to include("AGENTILDA_TUI=bogus", "spinner or ratatui")
+    end
+  end
+
   describe "the state file" do
     before { building_plan }
 

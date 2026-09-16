@@ -429,7 +429,7 @@ git commit -m "Add Screen::Ratatui::Bar, a colored text bar standing in for Line
 
 ### Task 4: `Screen::Ratatui.translate_key` — event to keyboard string
 
-Maps a `RatatuiRuby::Event` to the exact string `Keyboard#handle` already expects (`"h"`, `"?"`, `"s"`, `"\e[A"`, `"\e[B"`, `"k"`, `"x"`, `"\r"`, `"\e"`, `"w"`, `"n"`, `"q"`, `""`), verified against the gem's actual `KeyCode` string mapping (`ext/ratatui_ruby/src/events.rs`) and `Event::Key::Dwim#interrupt?` (`lib/ratatui_ruby/event/key/dwim.rb`).
+Maps a `RatatuiRuby::Event` to the exact string `Keyboard#handle` already expects (`"h"`, `"?"`, `"s"`, `"\e[A"`, `"\e[B"`, `"k"`, `"x"`, `"\r"`, `"\e"`, `"w"`, `"n"`, `"q"`, `"\u0003"`), verified against the gem's actual `KeyCode` string mapping (`ext/ratatui_ruby/src/events.rs`) and `Event::Key::Dwim#interrupt?` (`lib/ratatui_ruby/event/key/dwim.rb`).
 
 **Files:**
 - Create: `lib/agentilda/screen/ratatui/key_translator.rb`
@@ -467,7 +467,7 @@ RSpec.describe Agentilda::Screen::Ratatui::KeyTranslator do
   end
 
   it "maps Ctrl+C to ETX, ahead of the plain-character case" do
-    expect(described_class.call(key("c", modifiers: ["ctrl"]))).to eq("")
+    expect(described_class.call(key("c", modifiers: ["ctrl"]))).to eq("\u0003")
   end
 
   it "ignores non-key events" do
@@ -502,7 +502,7 @@ module Agentilda
         # @return [String, nil] nil for anything that is not a key press
         def self.call(event)
           return nil unless event.key?
-          return "" if event.interrupt?
+          return "\u0003" if event.interrupt?
 
           case event.code
           when "up" then "\e[A"

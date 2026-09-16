@@ -47,6 +47,10 @@ module Agentilda
         desc:    "With --commit and --isolation worktree, a finished branch is pushed and its pull request " \
                  "opened as soon as it lands, titled [NNN.MM](X). Pass this to turn that off and leave it uncommitted."
       option :log, desc: "Append progress to this file (default: a per-project file under the system temp dir)"
+      option :tui,
+        values: %w[spinner ratatui],
+        desc:   "spinner (default): the built-in ANSI dashboard. ratatui: an alternate renderer built " \
+                "on ratatui_ruby. AGENTILDA_TUI is a fallback when this flag is not passed"
 
       example [
         "                       # show which agent would take which plan",
@@ -54,7 +58,8 @@ module Agentilda
         "--commit -j 4          # …with four at a time",
         "--isolation shared     # one tree, serial — no git required",
         "--commit --rounds 3    # …capping every agent at three rounds per plan",
-        "--commit --plan 005,006,007  # only the plans a batch step just created"
+        "--commit --plan 005,006,007  # only the plans a batch step just created",
+        "--commit --tui ratatui # …drawn with the ratatui_ruby-backed dashboard"
       ]
 
       # Option precedence, quietest to loudest: the built-in default, then
@@ -118,9 +123,19 @@ module Agentilda
         # run has nothing to draw and a pipe has nowhere to draw it. Without a
         # screen the keys still work, so the one line says which.
         Control.reset!
-        screen   = (Screen.new if UI.animate? && commit?(options))
+        if !options[:tui] && ENV["AGENTILDA_TUI"] && !%w[spinner ratatui].include?(ENV["AGENTILDA_TUI"])
+          refuse("AGENTILDA_TUI=#{ENV["AGENTILDA_TUI"]} is not spinner or ratatui.", 64)
+        end
+        tui_backend = (options[:tui] || ENV["AGENTILDA_TUI"] || "spinner").to_sym
+        screen = if UI.animate? && commit?(options)
+                   tui_backend == :ratatui ? Screen::Ratatui.new : Screen.new
+                 end
         console  = (Console.new(screen:) if screen)
-        keyboard = Keyboard.listen(sink: console)
+        keyboard = if screen && tui_backend == :ratatui
+                     Keyboard.new(sink: console).tap { |kb| screen.attach_keyboard(kb) }
+                   else
+                     Keyboard.listen(sink: console)
+                   end
         UI.line("keys: h for help - s select, k kill, x extend, w wrap up, n stop, q quit") if keyboard && console.nil? && !quiet?(options)
 
         runner = Runner.new(

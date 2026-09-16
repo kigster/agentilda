@@ -25,6 +25,21 @@ eval "$(alock completion zsh)"
 
 ![help-screen](./.img/help-screen.avif)
 
+### Building on a jemalloc-linked Ruby
+
+`ratatui_ruby` backs `tilda run`'s opt-in `--tui ratatui` dashboard. `--tui spinner`, the
+built-in ANSI one, stays the default, and `AGENTILDA_TUI` is read when the flag is not passed.
+
+If `bundle install` fails compiling `ratatui_ruby` with `fatal error: 'jemalloc/jemalloc.h'
+file not found`, your Ruby was built `--with-jemalloc` and `rb-sys`'s bindgen step is not
+inheriting your compiler's include path:
+
+```bash
+BINDGEN_EXTRA_CLANG_ARGS="-I$(brew --prefix jemalloc)/include" bundle install
+```
+
+Put it in `.envrc` if you hit it more than once.
+
 ## Quick start
 
 Run these from the root of your project:
@@ -150,6 +165,7 @@ tilda run --commit --timeout 600           # at most ten minutes per agent
 tilda run --commit --rounds 1              # at most one round per agent per plan
 tilda run --commit --max-tokens 200000     # token budget per agent invocation
 tilda run --isolation shared               # one checkout, one agent at a time, no git needed
+tilda run --commit --tui ratatui           # the ratatui dashboard instead of the built-in spinner one
 ```
 
 If you just created several plans, run them with a single `--plan` list. Separate bare `run` calls each loop over the whole tree, so their worktrees would overlap.
