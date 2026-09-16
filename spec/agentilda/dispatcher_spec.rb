@@ -84,6 +84,10 @@ RSpec.describe Agentilda::Dispatcher, :tree do
         allow(Agentilda::UI).to receive(:monotonic).and_return(1042.0)
       end
 
+      # The tick started real agent threads that write ledger lines into the
+      # fixture tree; the tree is deleted after the example, so wait for them.
+      after { dispatcher.running.each { |job| job.thread.join(5) } }
+
       it("carries elapsed seconds") { expect(row.elapsed).to eq(42) }
       it("carries the live sub-agent count") { expect(row.subagents).to eq(0) }
     end
@@ -117,7 +121,10 @@ RSpec.describe Agentilda::Dispatcher, :tree do
         running_key
       end
 
-      after { 10.times { release << true } }
+      after do
+        10.times { release << true }
+        dispatcher.running.each { |job| job.thread.join(5) }
+      end
 
       context "when the agent is still running" do
         it { expect(row.history).to eq(["editing plan.md", "reading spec.md"]) }
