@@ -17,7 +17,7 @@ Gem::Specification.new do |spec|
   TEXT
   spec.homepage = "https://github.com/kigster/agentilda"
 
-  spec.required_ruby_version = ">= 4.0"
+  spec.required_ruby_version = ">= 3"
 
   spec.metadata = {
     "homepage_uri" => spec.homepage,
@@ -29,7 +29,7 @@ Gem::Specification.new do |spec|
   # require a git checkout — the same reason the executables resolve their own
   # bundle rather than trusting the caller's working directory.
   spec.files = Dir.chdir(__dir__) do
-    Dir.glob(["*.gemspec", "Gemfile*", "lib/**/*.rb", "agents/*.md", "exe/*", "bin/*"]).select { |f| File.file?(f) }
+    Dir.glob(["*.gemspec", "lib/**/*.rb", "agents/*.md", "exe/*", "bin/*"]).select { |f| File.file?(f) }
   end
 
   spec.bindir = "exe"
