@@ -10,6 +10,10 @@ gemspec
 gem "rake"
 gem "yard"
 
+# 0.2.0 adds the Line handle UI.concurrently draws through. Until it is on
+# RubyGems, bundle it from its pull request branch.
+gem "dry-cli-ui", github: "kigster/dry-cli-ui", branch: "kig/live-spinner-handles"
+
 group :development do
   gem "colored2"
   gem "irb"

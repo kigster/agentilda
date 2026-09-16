@@ -49,7 +49,6 @@ RSpec.describe Agentilda::CLI::Unblock, :tree do
 
   # The boxes wrap on words at the terminal's width, so a sentence assertion
   # has to read them back unwrapped or it passes and fails by screen size.
-  def unwrapped(text) = text.tr("║╔╗╚╝═", " ").gsub(/\s+/, " ")
 
   # `--commit` is the path that was silent, and it is the path that shells out.
   # The executor is replaced so the suite never invokes `claude`.

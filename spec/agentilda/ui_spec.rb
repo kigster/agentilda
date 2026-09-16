@@ -2,6 +2,8 @@
 
 require "tmpdir"
 
+RSpec::Matchers.define_negated_matcher :not_to_output, :output
+
 RSpec.describe Agentilda::UI do
   # The suite never runs against a terminal, so `animate?` is false by default
   # and the examples that want animation say so explicitly.
@@ -55,43 +57,44 @@ RSpec.describe Agentilda::UI do
       end
     end
 
+    # Stubbed on the module rather than on `$stderr`: `output.to_stderr` swaps
+    # in a stream of its own, and the stub would stay behind on the old one.
     context "on a terminal" do
-      let(:spinner) { instance_double(TTY::Spinner, auto_spin: nil, success: nil, error: nil, update: nil) }
+      before { allow(described_class).to receive(:tty?).and_return(true) }
 
-      before do
-        allow($stderr).to receive(:tty?).and_return(true)
-        allow(TTY::Spinner).to receive(:new).and_return(spinner)
-      end
-
-      it "spins while the work runs and marks it done" do
-        expect(described_class.spinning("working") { :done }).to eq(:done)
+      it "spins while the work runs and leaves a done line behind" do
+        result = nil
 
         aggregate_failures do
-          expect(spinner).to have_received(:auto_spin)
-          expect(spinner).to have_received(:success)
+          expect { result = described_class.spinning("working") { :done } }.to output(/✓ working/).to_stderr
+          expect(result).to eq(:done)
         end
       end
 
       # Without this the spinner keeps spinning over the backtrace, and the
       # terminal is left with a half-drawn frame.
-      it "marks the spinner failed and re-raises when the work blows up" do
-        expect { described_class.spinning("working") { raise "boom" } }.to raise_error("boom")
-
-        expect(spinner).to have_received(:error)
+      it "marks the line failed and re-raises when the work blows up" do
+        expect {
+          expect { described_class.spinning("working") { raise "boom" } }.to raise_error("boom")
+        }.to output(/✗ working/).to_stderr
       end
+    end
 
-      # A fifteen minute agent invocation and a hung one look identical until
-      # the spinner says what the agent is doing.
+    # A fifteen minute agent invocation and a hung one look identical until
+    # the spinner says what the agent is doing.
+    describe ".activity_for" do
+      let(:line) { Dry::CLI::UI::Line.new }
+
       it "lets the work rewrite the tail of its own line while it runs" do
-        described_class.spinning("working") { |activity| activity.call("reading spec.md") }
+        described_class.activity_for(line).call("reading spec.md")
 
-        expect(spinner).to have_received(:update).with(activity: a_string_including("reading spec.md"))
+        expect(line.detail).to include("reading spec.md")
       end
 
-      it "starts the line with an empty tail, so it reads as it always did until there is news" do
-        described_class.spinning("working") { |activity| activity.call("reading spec.md") }
+      it "leaves the tail empty until there is news" do
+        described_class.activity_for(line).call(nil)
 
-        expect(spinner).to have_received(:update).with(activity: "").at_least(:once)
+        expect(line.detail).to eq("")
       end
     end
   end
@@ -114,31 +117,26 @@ RSpec.describe Agentilda::UI do
       end
     end
 
+    # Stubbed on the module rather than on `$stderr`: `output.to_stderr` swaps
+    # in a stream of its own, and the stub would stay behind on the old one.
     context "on a terminal" do
-      let(:bar) { instance_double(TTY::ProgressBar, advance: nil, finish: nil) }
+      before { allow(described_class).to receive(:tty?).and_return(true) }
 
-      before do
-        allow($stderr).to receive(:tty?).and_return(true)
-        allow(TTY::ProgressBar).to receive(:new).and_return(bar)
+      it "advances once per item and leaves the final count behind" do
+        expect { described_class.stepping(items, "working") { |_| nil } }.to output(%r{✓ working 5/5}).to_stderr
       end
 
-      it "advances once per item and finishes" do
-        described_class.stepping(items, "working") { |_| nil }
-
-        aggregate_failures do
-          expect(bar).to have_received(:advance).exactly(items.size).times
-          expect(bar).to have_received(:finish)
-        end
+      it "returns the items, so the call can be chained" do
+        expect(described_class.stepping(items, "working") { |_| nil }).to eq(items)
       end
 
       # A bar for two items appears and vanishes before the eye resolves it,
       # and the line it prints is longer than the work it describes.
       it "draws no bar below the threshold, but still does the work" do
         seen = []
-        described_class.stepping([1, 2], "working") { |i| seen << i }
 
         aggregate_failures do
-          expect(TTY::ProgressBar).not_to have_received(:new)
+          expect { described_class.stepping([1, 2], "working") { |i| seen << i } }.not_to output.to_stderr
           expect(seen).to eq([1, 2])
         end
       end
@@ -196,12 +194,12 @@ RSpec.describe Agentilda::UI do
   end
 
   describe "Line's countdown" do
-    let(:spinner) { instance_spy(TTY::Spinner) }
+    let(:handle) { Dry::CLI::UI::Line.new }
 
     # The executor's kill and the ticker's wake-up race by up to a second;
     # a clock must floor at zero rather than accuse the line of overdraft.
     it "counts down from the timeout and never below zero" do
-      line = described_class::Line.new(spinner:, timeout: 300)
+      line = described_class::Line.new(handle:, timeout: 300)
 
       aggregate_failures do
         expect(line.remaining).to eq(300)
@@ -211,17 +209,20 @@ RSpec.describe Agentilda::UI do
     end
 
     it "keeps no clock when no timeout was given" do
-      expect(described_class::Line.new(spinner:).remaining).to be_nil
+      expect(described_class::Line.new(handle:).remaining).to be_nil
     end
 
-    it "puts the timer on the spinner as soon as the line starts" do
-      described_class::Line.new(spinner:, timeout: 300).start
+    it "puts the timer on the line as soon as the line starts" do
+      line = described_class::Line.new(handle:, timeout: 300)
+      line.start
 
-      expect(spinner).to have_received(:update).with(timer: a_string_including("5:00"))
+      expect(handle.detail).to include("5:00")
+    ensure
+      line.done
     end
 
     it "stops ticking once the line is done" do
-      line = described_class::Line.new(spinner:, timeout: 300)
+      line = described_class::Line.new(handle:, timeout: 300)
       line.start
       line.done
 
@@ -413,7 +414,8 @@ RSpec.describe Agentilda::UI do
       end
 
       it "prints a header line and one completion line per item" do
-        expect { described_class.concurrently(%i[a b], "round 1 — 2 plans", jobs: 2, label: ->(i) { i.to_s }) { |i| i } }.to output(/round 1.*\ba\b.*\bb\b/m).to_stderr
+        expect { described_class.concurrently(%i[a b], "round 1 — 2 plans", jobs: 2, label: ->(i) { i.to_s }) { |i| i } }
+          .to output(a_string_including("round 1", "✓ a", "✓ b")).to_stderr
       end
 
       it "captures a failing item as its error rather than aborting the others" do
@@ -431,28 +433,23 @@ RSpec.describe Agentilda::UI do
     end
 
     context "on a terminal" do
-      before do
-        allow($stderr).to receive(:tty?).and_return(true)
-      end
+      before { allow(described_class).to receive(:tty?).and_return(true) }
 
       it "still returns every result for a single item" do
-        spinner = instance_double(TTY::Spinner, auto_spin: nil, success: nil, error: nil, update: nil)
-        allow(TTY::Spinner).to receive(:new).and_return(spinner)
-
         expect(described_class.concurrently([:plan], "round", jobs: 1) { |_| :done }).to eq([:done])
       end
     end
   end
 
   # `Line#call` arrives several times a second from an agent's stream. The
-  # spinner is redrawn every time, but the log takes a line only when the
+  # line is redrawn every time, but the log takes a line only when the
   # phrase itself changes — otherwise an animated run writes nothing about
   # what any agent was doing, and a quiet run writes the same phrase hundreds
   # of times.
   describe "Line" do
-    subject(:line) { described_class::Line.new(fields: { plan: "003.00" }, spinner:) }
+    subject(:line) { described_class::Line.new(fields: { plan: "003.00" }, handle:) }
 
-    let(:spinner) { instance_double(TTY::Spinner, update: nil, success: nil, error: nil) }
+    let(:handle) { Dry::CLI::UI::Line.new }
 
     def progress(activity, up: 10, down: 2)
       Agentilda::Transcript::Progress.new(activity:, up:, down:, subagents: 0)
@@ -471,11 +468,10 @@ RSpec.describe Agentilda::UI do
     # runs between the two and nils whatever log_path the around had set.
     before { described_class.log_path = File.join(@log_dir, "run.log") }
 
-    it "redraws the spinner's meter and phrase on every update" do
+    it "redraws the meter and phrase on every update" do
       line.call(progress("reading spec.md"))
 
-      expect(spinner).to have_received(:update)
-        .with(meter: a_string_including("↑10"), activity: a_string_including("reading spec.md"))
+      expect(handle.detail).to include("↑10", "reading spec.md")
     end
 
     it "logs a phrase once, however many times the stream repeats it" do
@@ -501,12 +497,20 @@ RSpec.describe Agentilda::UI do
       line.call(progress(nil, up: 999))
 
       aggregate_failures do
-        expect(spinner).to have_received(:update).with(meter: a_string_including("↑999"), activity: "")
+        expect(handle.detail).to eq(described_class.meter(progress(nil, up: 999)).rstrip)
         expect(File.exist?(described_class.log_path)).to be(false)
       end
     end
 
-    it "runs with no spinner at all — a piped run still logs" do
+    # Before the first number arrives the meter already reads zero, so the
+    # phrase after it does not jump sideways when the count appears.
+    it "starts with a zeroed meter" do
+      line.start
+
+      expect(handle.detail).to include("↑0", "↓0")
+    end
+
+    it "runs with no handle at all — a piped run still logs" do
       bare = described_class::Line.new(fields: { plan: "003.00" })
       bare.call(progress("reading spec.md"))
 
@@ -517,63 +521,71 @@ RSpec.describe Agentilda::UI do
     it "converts to a proc that behaves exactly like #call" do
       line.to_proc.call(progress("reading spec.md"))
 
-      expect(spinner).to have_received(:update).with(hash_including(activity: a_string_including("reading spec.md")))
+      expect(handle.detail).to include("reading spec.md")
+    end
+
+    # The executor reports a timed-out agent by returning, not by raising.
+    it "fails its handle without raising, reason and all" do
+      line.failed("timed out after 900s")
+
+      aggregate_failures do
+        expect(handle).to be_failed
+        expect(handle.reason).to eq("timed out after 900s")
+      end
     end
   end
 
-  # The multi-spinner path: several items, several jobs, a terminal to draw
-  # on. TTY::Spinner::Multi is stubbed — the suite has no terminal — but the
-  # registration blocks are real, and they are where results are collected
-  # and failures caught.
+  # The task-list path: several items, several jobs, a terminal to draw on.
+  # dry-cli-ui draws it for real, into the captured stream.
   describe ".concurrently, several items on a terminal" do
-    let(:child) { instance_double(TTY::Spinner, update: nil, success: nil, error: nil) }
-    let(:multi) { instance_double(TTY::Spinner::Multi, auto_spin: nil) }
+    before { allow(described_class).to receive(:tty?).and_return(true) }
 
-    before do
-      allow($stderr).to receive(:tty?).and_return(true)
-      allow(TTY::Spinner::Multi).to receive(:new).and_return(multi)
-      # The real Multi runs each registered block on its own thread once
-      # auto_spin starts; running them at registration keeps the same
-      # observable contract — every block runs, every result lands.
-      allow(multi).to receive(:register) do |_format, &block|
-        block.call(child)
-        child
-      end
-    end
-
-    it "returns results in input order with one spinner line per item" do
-      result = described_class.concurrently(%i[a b], "round", jobs: 2) { |item, _line| item }
+    it "returns results in input order with one line per item" do
+      result = nil
 
       aggregate_failures do
+        expect { result = described_class.concurrently(%i[a b], "round", jobs: 2) { |item, _line| item } }
+          .to output(a_string_including("✓ a", "✓ b")).to_stderr
         expect(result).to eq(%i[a b])
-        expect(multi).to have_received(:register).twice
-        expect(multi).to have_received(:auto_spin)
       end
-    end
-
-    # Every line must start with a zeroed meter and an empty phrase: an unset
-    # token renders as the literal ":activity", and a meter that appears once
-    # the first number arrives shifts the whole line sideways.
-    it "primes each line so no template token ever shows" do
-      described_class.concurrently(%i[a b], "round", jobs: 2) { |item, _line| item }
-
-      expect(child).to have_received(:update)
-        .with(timer: "", meter: a_string_including("↑0"), activity: "", pid: "").at_least(:twice)
     end
 
     it "marks a failing item's own line failed and keeps the error as its result" do
-      result = described_class.concurrently(%i[a b], "round", jobs: 2) { |item, _line|
-        raise "boom" if item == :a
+      result = nil
+      run = lambda {
+        result = described_class.concurrently(%i[a b], "round", jobs: 2) { |item, _line|
+          raise "boom" if item == :a
 
-        :ok
+          :ok
+        }
       }
 
       aggregate_failures do
+        expect(&run).to output(a_string_including("✗ a: boom", "✓ b")).to_stderr
         expect(result[0]).to be_a(RuntimeError)
         expect(result[1]).to eq(:ok)
-        expect(child).to have_received(:error).once
-        expect(child).to have_received(:success).once
       end
+    end
+
+    it "marks a returned failure as one without holding up the others" do
+      failure = ->(result) { result if result.is_a?(String) }
+
+      expect {
+        described_class.concurrently(%i[a b], "round", jobs: 2, failure:) { |item, _line| item == :a ? "timed out after 900s" : :ok }
+      }.to output(a_string_including("✗ a: timed out after 900s", "✓ b")).to_stderr
+    end
+
+    it "never runs more than `jobs` items at once" do
+      lock = Mutex.new
+      running = 0
+      peak = 0
+      described_class.concurrently(%i[a b c d e], "round", jobs: 2) do |_item, _line|
+        lock.synchronize { peak = [peak, running += 1].max }
+        sleep(0.02)
+        lock.synchronize { running -= 1 }
+      end
+
+      expect(peak).to eq(2)
     end
 
     it "hands each item a live Line it can stream progress through" do
@@ -581,6 +593,16 @@ RSpec.describe Agentilda::UI do
       described_class.concurrently(%i[a b], "round", jobs: 2) { |_item, line| seen << line }
 
       expect(seen).to all(be_a(described_class::Line))
+    end
+
+    it "draws nothing under --quiet, and still returns every result" do
+      described_class.quiet = true
+      result = nil
+
+      aggregate_failures do
+        expect { result = described_class.concurrently(%i[a b], "round", jobs: 2) { |item, _line| item } }.not_to output.to_stderr
+        expect(result).to eq(%i[a b])
+      end
     end
   end
 
@@ -631,11 +653,31 @@ RSpec.describe Agentilda::UI do
       expect { described_class.box(:warn, "#{long}\nrun `unset ANTHROPIC_API_KEY` first") }.to output(/unset ANTHROPIC_API_KEY/).to_stderr
     end
 
-    it "grows the box by the rows the wrapping actually needs" do
-      one = described_class.box_height("short")
-      wrapped = described_class.box_height(long)
+    # dry-cli-ui sends `info` and `success` to its `out`. Here STDOUT is the
+    # deliverable, so a success box landing in it would end up in a pipe.
+    it "draws every kind on STDERR, success included" do
+      expect { described_class.box(:success, "linked 4 skills") }
+        .to output(/Success.*linked 4 skills/m).to_stderr.and(not_to_output.to_stdout)
+    end
 
-      expect(wrapped).to be > one
+    # `Kernel.warn` writes nothing under -W0, which CI images and agent
+    # harnesses set. A box is the explanation of a failure; it must survive.
+    it "still draws with warnings silenced" do
+      verbose = $VERBOSE
+      $VERBOSE = nil
+      expect { described_class.box(:error, "401 API key is invalid") }.to output(/401 API key is invalid/).to_stderr
+    ensure
+      $VERBOSE = verbose
+    end
+  end
+
+  describe ".line" do
+    it "still prints with warnings silenced" do
+      verbose = $VERBOSE
+      $VERBOSE = nil
+      expect { described_class.line("renamed 003.00") }.to output(/renamed 003\.00/).to_stderr
+    ensure
+      $VERBOSE = verbose
     end
   end
 

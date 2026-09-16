@@ -1,5 +1,7 @@
 # frozen_string_literal: true
 
+require "tmpdir"
+
 module Agentilda
   module CLI
     # `agentilda run` — drive the specialist agents until the tree settles.

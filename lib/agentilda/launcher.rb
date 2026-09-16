@@ -1,11 +1,9 @@
 module Agentilda
-  # Names dry-cli can resolve, so a leading word that is not one of these is a
-  # typo and must fail rather than quietly run something else.
-  # TODO: get this list from Dry::CLI
-  KNOWN = %w[create new c list-plans status st resync docs worktree version --version -v -h --help].freeze
-
   class Launcher
-    include ::Dry::CLI::Banner::ColorMethods
+    # The one flag every command takes, so no command declares it. Removed
+    # from the arguments before dry-cli sees them, which would otherwise
+    # reject it as an argument the command never asked for.
+    NO_COLOR_FLAGS = %w[--no-color -C].freeze
 
     attr_accessor :argv,
       :stdin,
@@ -50,48 +48,22 @@ module Agentilda
       end
     end
 
+    # `--no-color` becomes NO_COLOR rather than a setting of its own: the help
+    # screens, the runtime UI and every child process already honour it, so
+    # one variable switches all three off together.
+    #
+    # @return [void] never returns; exits with the command's status
     def execute!
-      no_color = %w[--no-color -C].intersect?(argv)
-      Dry::CLI::Banner.disable_color! if no_color
-      # # dry-cli prints the command list for an unresolved command and exits 1, and
-      # it treats a bare `--help` as exactly that. Asking for help is not a failure,
-      # so the status is forced back to 0 for the help forms only.
-      help = %w[-h --help help].intersect?(argv) && argv.first[0] == "-"
-      ProgramBanner.banner if help
+      ENV["NO_COLOR"] = "1" if NO_COLOR_FLAGS.intersect?(argv)
       code = 0
-      Dry::CLI.new(::Agentilda::CLI).call(arguments: help ? [] : argv)
+      Dry::CLI.new(::Agentilda::CLI).call(arguments: argv - NO_COLOR_FLAGS)
     rescue SystemExit => e
       code = e.status
     rescue StandardError => e
-      warn red("Error: #{e.message}")
+      stderr.puts UI.paint("Error: #{e.message}", :red)
       code = 1
     ensure
       kernel.exit(code)
-    end
-  end
-
-  module ProgramBanner
-    extend ::Dry::CLI::Banner::ColorMethods
-
-    def self.banner
-      puts %(
-      #{yellow.bold("agentilda")}
-        #{blue("Agentic Specification-Driven Development")} #{green("v#{Agentilda::VERSION}")}
-
-        This is the key executable that facilitates Agentic Flow:
-
-        #{green.bold("spec → plan → build → review → tune/fix → approve")}
-
-        For now the final merge and deploy is manual. It also provides sync
-        of the .plans folders with Github PRs and Linear Issues. See the file
-        #{::Agentilda::PROJECT_ROOT}/context/workflow.md for the details.
-
-      #{yellow.bold("GLOBAL FLAGS")}
-        -h, --help        Show this help message and exit
-        -C, --no-color    Disable color output
-
-    ).gsub(/^ {6}/, "").strip
-      puts
     end
   end
 end

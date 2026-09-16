@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require "dry/cli/autocomplete/command"
+require "tty-screen"
 
 # One file per command, `subcommands/` under the prefixed ones. Base carries
 # the shared flags and plumbing, so it loads first; the rest only meet each
@@ -40,6 +41,37 @@ module Agentilda
   #     is how a plan ends up filed under work it did not do.
   module CLI
     extend Dry::CLI::Registry
+
+    # What `agentilda -h` prints above and below the command list. Rendering,
+    # wrapping and colour belong to dry-cli-help; only the words live here.
+    # dry-cli-help 0.2 configures once per process, not per registry, which
+    # suits a gem with exactly one registry.
+    Dry::CLI::Help.configure do
+      title "agentilda — Agentic Specification-Driven Development v#{Agentilda::VERSION}"
+
+      description <<~TEXT
+        Drives the agentic flow: spec → plan → build → review → tune/fix → approve.
+
+        Keeps the .plans folders in step with GitHub pull requests and Linear issues.
+        The final merge and deploy stay manual.
+      TEXT
+
+      epilogue <<~TEXT.chomp
+        Global flags: -C, --no-color disables colour in every command.
+
+        Documentation: https://github.com/kigster/agentilda
+      TEXT
+
+      # The bare program prints this screen, and asking for help is not a failure.
+      exit_code_without_arguments 0
+
+      # Wrap at column 90, or two short of the terminal when it is narrower.
+      width [90, TTY::Screen.width - 2].min
+
+      group "Plans", "create", "list-plans", "index", "resync", "unblock", "worktree"
+      group "Agents", "run", "agents", "describe", "mail"
+      group "Reference", "docs", "states", "linear", "completion", "version"
+    end
 
     register "create", Create, aliases: %w[new c]
     # Renamed from `status`, which read as "is the tool OK?" rather than "what

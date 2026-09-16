@@ -87,7 +87,6 @@ A status answers to its key and its emoji, and to nothing else. The synonym tabl
 
 ```
 exe/agentilda          resolves its own BUNDLE_GEMFILE, so the binary works from any project root
-lib/dry/cli/banner.rb  vendored dry-cli banner, patched for color control
 lib/agentilda/
   status.rb            STATUSES, the invariants, the block-notation regexes (B1/A1)
   state_machine.rb     aasm topology, SPINE, PREFERENCE, FAMILIES
@@ -110,8 +109,8 @@ lib/agentilda/
   documentation.rb     `agentilda docs`, the conventions, derived
   diagram.rb           `agentilda states`, the same machine drawn for a terminal
   index.rb, reporter.rb, tally.rb   INDEX.md, the status table, the token bill
-  ui.rb                boxes, spinners, concurrency, color
-  cli.rb               the dry-cli registry; nothing but requires and register
+  ui.rb                boxes, spinners, concurrency, color, drawn through dry-cli-ui on STDERR
+  cli.rb               the dry-cli registry, and the dry-cli-help `help` block that titles it
   cli/base.rb          shared flags, tree_for, refuse, the dry-run footer
   cli/<command>/       one file per command (create/create.rb, run/run.rb, …),
                        subcommands/ under the prefixed groups (agents, resync,

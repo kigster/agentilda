@@ -3,22 +3,19 @@
 require "concurrent/hash"
 require "etc"
 require "fileutils"
+require "dry/cli/ui"
 require "pastel"
-require "strings"
-require "tty/box"
-require "tty/progressbar"
+require "stringio"
 require "tty/screen"
-require "tty/spinner"
-require "tty/spinner/multi"
 require "unicode/display_width"
 
 module Agentilda
   # Everything the user sees that is not the deliverable itself.
   #
   # Include it and you get `info`, `warn`, `error` and `success` as instance
-  # methods, each drawing a TTY::Box on **STDERR**. STDERR is deliberate: the
-  # documents and tables these commands produce own STDOUT, so every command
-  # composes in a pipe.
+  # methods, each drawing a dry-cli-ui box on **STDERR**. STDERR is deliberate:
+  # the documents and tables these commands produce own STDOUT, so every
+  # command composes in a pipe.
   #
   # @example
   #   class Thing
@@ -58,29 +55,36 @@ module Agentilda
     # the round table under it said FAIL, was the contradiction this closes.
     NO_FAILURE = ->(_result) {}
 
-    # One item's spinner line, and the same news written to the log.
+    # One item's line on the screen, and the same news written to the log.
     #
     # These are two readers of one story and used to be told it separately:
     # the spinner got the phrase, the log got a start and a finish, and an
     # animated run wrote nothing about what any agent was actually doing. A
     # {Agentilda::Transcript::Progress} arrives here several times a
-    # second; the spinner is redrawn every time, and the log takes a line only
+    # second; the line is redrawn every time, and the log takes a line only
     # when the phrase itself changes, which is a few dozen times an agent.
+    #
+    # The drawing belongs to dry-cli-ui. This keeps the parts the text after
+    # the agent's name is made of — identity, countdown, meter, phrase — and
+    # hands the whole of it to the {Dry::CLI::UI::Line} whenever one changes.
     class Line
       # @param fields [Hash] plan, status and agent, for the log's columns
-      # @param spinner [TTY::Spinner, nil] nil where nothing is being drawn
-      # @param mark [String] what the spinner says once the work succeeds
+      # @param handle [Dry::CLI::UI::Line, nil] what dry-cli-ui draws this
+      #   item's line from; nil where nothing is being drawn
       # @param timeout [Integer, nil] seconds until the executor abandons
       #   this agent; drawn as a countdown on the line, nil draws nothing
-      def initialize(fields: {}, spinner: nil, mark: "", timeout: nil)
+      def initialize(fields: {}, handle: nil, timeout: nil)
         @fields = fields
-        @spinner = spinner
-        @mark = mark
+        @handle = handle
         @timeout = timeout
         @started = UI.monotonic
         @phrase = nil
         @pid = nil
         @ticker = nil
+        # The meter starts at zero rather than appearing with the first
+        # number, which would shift everything after it sideways.
+        @parts = { pid: "", timer: "", meter: UI.meter(nil), activity: "" }
+        @lock = Mutex.new
       end
 
       # @return [Float] seconds this agent has been alive
@@ -95,7 +99,7 @@ module Agentilda
 
       # @return [void]
       def start
-        @spinner&.update(pid: identity)
+        redraw(pid: identity)
         tick
         note("started")
       end
@@ -117,18 +121,18 @@ module Agentilda
       #
       # @return [void]
       def tick
-        return unless @spinner && @timeout
+        return unless @handle && @timeout
 
-        @spinner.update(timer: UI.countdown(remaining))
+        redraw(timer: UI.countdown(remaining))
         @ticker ||= Thread.new do
           loop do
             sleep(1)
             left = remaining
-            @spinner.update(timer: UI.countdown(left))
+            redraw(timer: UI.countdown(left))
             break unless left.positive?
           end
         rescue StandardError
-          # A dying spinner must not take the round down with it.
+          # A dying line must not take the round down with it.
         end
       end
 
@@ -153,18 +157,28 @@ module Agentilda
         UI.paint("[#{inner}]", :bright_black)
       end
 
+      # What the line shows after the agent's name.
+      #
+      # @return [String] e.g. `[36123, round 01] 14:59 ↑4.9k ↓512: reading spec.md`
+      def detail
+        parts = @lock.synchronize { @parts.dup }
+        [parts[:pid], parts[:timer] + parts[:meter]].map(&:rstrip).reject(&:empty?).join(" ") + parts[:activity]
+      end
+
       # @return [void]
       def done
         stop_ticker
-        @spinner&.success(@mark)
         note("finished after #{alive}")
       end
 
+      # Ends the line as a failure without raising: the executor reports a
+      # timed-out agent by returning, and the line must still say ✗.
+      #
       # @param reason [String]
       # @return [void]
       def failed(reason)
         stop_ticker
-        @spinner&.error(UI.paint(reason, :red))
+        @handle&.fail(reason)
         note("failed after #{alive}: #{reason}")
       end
 
@@ -173,10 +187,10 @@ module Agentilda
       def call(update)
         if update.respond_to?(:pid) && update.pid && update.pid != @pid
           @pid = update.pid
-          @spinner&.update(pid: identity)
+          redraw(pid: identity)
           note("claude is pid #{@pid}")
         end
-        @spinner&.update(meter: UI.meter(update), activity: UI.said(update.activity))
+        redraw(meter: UI.meter(update), activity: UI.said(update.activity))
         return if update.activity.nil? || update.activity == @phrase
 
         @phrase = update.activity
@@ -188,6 +202,18 @@ module Agentilda
       #
       # @return [Proc]
       def to_proc = method(:call).to_proc
+
+      private
+
+      # Called from the reader thread and the ticker at once, which is why
+      # the parts are replaced under a lock rather than assembled in place.
+      #
+      # @param parts [Hash{Symbol => String}]
+      # @return [void]
+      def redraw(**parts)
+        @lock.synchronize { @parts.merge!(parts) }
+        @handle&.detail = detail
+      end
     end
 
     class << self
@@ -308,26 +334,13 @@ module Agentilda
       # as a network round trip. The spinner runs until the block returns.
       #
       # @param message [String] what is being waited on
+      # @yieldparam activity [Proc] phrase -> void, for news about the work
       # @yieldreturn [Object] whatever the work produces
       # @return [Object] the block's value, untouched
       def spinning(message)
         return yield(logging_activity(message)) unless animate?
 
-        spinner = TTY::Spinner.new("[:spinner] #{message}:activity",
-          format:       :dots,
-          output:       $stderr,
-          success_mark: paint("✓", :green),
-          error_mark:   paint("✖", :red))
-        spinner.update(activity: "")
-        spinner.auto_spin
-        begin
-          result = yield(activity_for(spinner))
-          spinner.success(paint("done", :bright_black))
-          result
-        rescue StandardError
-          spinner.error(paint("failed", :red))
-          raise
-        end
+        console.spinner(message) { |line| yield(activity_for(line)) }
       end
 
       # Determinate work — N items of roughly equal cost. Yields each item and
@@ -341,24 +354,33 @@ module Agentilda
         list = items.to_a
         return list.each(&) unless animate? && list.size >= PROGRESS_THRESHOLD
 
-        bar = TTY::ProgressBar.new(
-          "#{message} [:bar] :current/:total :percent",
-          total:      list.size,
-          output:     $stderr,
-          width:      24,
-          complete:   "█",
-          incomplete: "░",
-          head:       "█"
-        )
-        list.each do |item|
-          yield item
-          bar.advance
+        console.progress(message, total: list.size) do |bar|
+          list.each do |item|
+            yield item
+            bar.advance
+          end
         end
-        bar.finish
         list
       end
 
-      # Run a block over many items at once, one spinner each.
+      # The dry-cli-ui console every box, spinner and bar here draws through.
+      #
+      # Both of its streams are STDERR, because dry-cli-ui sends `info` and
+      # `success` to its `out`, and STDOUT here belongs to the deliverable.
+      # Colour and animation are decided once, by {.color?} and {.animate?},
+      # rather than by the gem looking at the stream a second time and
+      # possibly disagreeing about --quiet.
+      #
+      # Built on every call rather than memoized: `$stderr` is swapped out by
+      # the specs and by `output(...).to_stderr`, and a console holding on to
+      # the stream it was born with would write past every one of them.
+      #
+      # @return [Dry::CLI::UI::Console]
+      def console
+        Dry::CLI::UI::Console.new(out: $stderr, err: $stderr, color: color?, animate: animate?, box_width: width)
+      end
+
+      # Run a block over many items at once, one line each.
       #
       # This is the shape for work that is independent and slow: each item gets
       # its own line, its own thread and its own success or failure mark, so a
@@ -374,6 +396,10 @@ module Agentilda
       # NNN.MM` round takes: one plan, one agent, nothing printed until the
       # whole thing finished and it was too late to tell "working" from "hung."
       #
+      # Several items are a dry-cli-ui task list, capped at `jobs` at once. A
+      # failing item is caught inside its own task, so its line reads ✗ and
+      # its siblings carry on.
+      #
       # @param items [Array]
       # @param message [String] the header line
       # @param jobs [Integer] how many run at once
@@ -385,9 +411,10 @@ module Agentilda
       #   line announcing a round carries the same round number as the agent
       #   lines under it rather than a blank cell
       # @yieldparam item [Object]
+      # @yieldparam line [Line]
       # @return [Array] one result per item, in input order
       def concurrently(items, message, jobs:, label: :to_s.to_proc, fields: NO_FIELDS,
-        failure: NO_FAILURE, header: {}, timeout: NO_TIMEOUT, &block)
+        failure: NO_FAILURE, header: {}, timeout: NO_TIMEOUT, &)
         list = items.to_a
         return [] if list.empty?
 
@@ -395,43 +422,20 @@ module Agentilda
 
         if jobs <= 1 || list.size <= 1
           report_line(message) unless animate?
-          return list.map { |item| once(item, label, fields, failure:, timeout:, &block) }
+          return list.map { |item| once(item, label, fields, failure:, timeout:, &) }
         end
-
-        return threaded(list, jobs, message, label:, fields:, failure:, &block) unless animate?
 
         results = Concurrent::Hash.new
-        spinners = TTY::Spinner::Multi.new(
-          ":spinner #{paint(message, :bold)}",
-          format:       :dots,
-          output:       $stderr,
-          success_mark: paint("✓", :green),
-          error_mark:   paint("✖", :red)
-        )
-
-        list.each_with_index do |item, index|
-          text = label.call(item)
-          child = spinners.register("[:spinner] :timer:meter#{text}:pid:activity") do |spinner|
-            line = Line.new(fields: fields.call(item), spinner:, timeout: timeout.call(item))
-            line.start
-            result = results[index] = block.call(item, line)
-            if (reason = failure.call(result))
-              line.failed(reason)
-            else
-              line.done
+        progress.tasks(message, concurrent: jobs) do |tasks|
+          list.each_with_index do |item, index|
+            tasks.task(label.call(item)) do |handle|
+              line = Line.new(fields: fields.call(item), handle:, timeout: timeout.call(item))
+              results[index] = attempt(item, line, failure, &)
+            rescue StandardError => e
+              results[index] = e
             end
-          rescue StandardError => e
-            results[index] = e
-            line&.failed(e.message.lines.first.to_s.strip)
           end
-          # An unset token renders as the literal `:activity`, so every line
-          # says so until its agent gets far enough to have news. The meter
-          # starts at zero for the same reason, and because a counter that
-          # appears once the first number arrives shifts the whole line.
-          child.update(timer: "", meter: meter(nil), activity: "", pid: "")
         end
-
-        spinners.auto_spin
         list.each_index.map { |i| results[i] }
       end
 
@@ -442,19 +446,12 @@ module Agentilda
       # @return [Proc] phrase -> void
       def logging_activity(text) = ->(phrase) { log("#{text}: #{phrase}") }
 
-      # A callable that writes what an agent is doing onto its own spinner line.
+      # A callable that writes what the work is doing after its spinner's label.
       #
-      # The `:activity` token is empty until something calls this, so a line
-      # reads as it always did until there is news. It is written from the
-      # reader thread the command's output arrives on, which is why the token
-      # is replaced whole rather than appended to.
-      #
-      # @param spinner [TTY::Spinner]
+      # @param line [Dry::CLI::UI::Line]
       # @return [Proc] phrase -> void
-      def activity_for(spinner)
-        lambda { |phrase|
-          spinner.update(activity: phrase.to_s.empty? ? "" : paint(": #{phrase}", :green, :bold))
-        }
+      def activity_for(line)
+        ->(phrase) { line.detail = phrase.to_s.empty? ? "" : paint("— #{phrase}", :green, :bold) }
       end
 
       # One item, no concurrency to speak of: a serial round (`--isolation
@@ -465,82 +462,44 @@ module Agentilda
       # @param label [Proc]
       # @yieldparam item [Object]
       # @return [Object]
-      def once(item, label, fields = NO_FIELDS, failure: NO_FAILURE, timeout: NO_TIMEOUT, &block)
-        text = label.call(item)
-        line = Line.new(fields: fields.call(item),
-          mark: paint("done", :bright_black),
-          timeout: timeout.call(item),
-          spinner: (solo_spinner(text) if animate?))
+      # @raise [StandardError] whatever the block raised, once its line says so
+      def once(item, label, fields = NO_FIELDS, failure: NO_FAILURE, timeout: NO_TIMEOUT, &)
+        progress.spinner(label.call(item)) do |handle|
+          attempt(item, Line.new(fields: fields.call(item), handle:, timeout: timeout.call(item)), failure, &)
+        end
+      end
+
+      # Runs one item and says how it went, on its line and in the log.
+      #
+      # @param item [Object]
+      # @param line [Line]
+      # @param failure [Proc]
+      # @return [Object] the block's value
+      def attempt(item, line, failure)
         line.start
         begin
-          result = block.call(item, line)
+          result = yield(item, line)
         rescue StandardError => e
-          reason = e.message.lines.first.to_s.strip
-          line.failed(reason)
-          report_line("#{text}: #{reason}", bullet: "✗") unless animate?
+          line.failed(e.message.lines.first.to_s.strip)
           raise
         end
         if (reason = failure.call(result))
           line.failed(reason)
-          report_line("#{text}: #{reason}", bullet: "✗") unless animate?
         else
           line.done
-          report_line("#{text} (#{line.alive})", bullet: "✓") unless animate?
         end
         result
       end
 
-      # The spinner a lone agent gets. Registered nowhere, because there is no
-      # second line for it to line up with.
+      # The console per-item lines go through: {.console}, or one that
+      # writes nowhere under --quiet, so a quiet run really is quiet while
+      # the work, the log and the results stay exactly the same.
       #
-      # @param text [String]
-      # @return [TTY::Spinner]
-      def solo_spinner(text)
-        spinner = TTY::Spinner.new("[:spinner] :timer:meter#{text}:pid:activity",
-          format:       :dots,
-          output:       $stderr,
-          success_mark: paint("✓", :green),
-          error_mark:   paint("✖", :red))
-        spinner.update(timer: "", meter: meter(nil), activity: "", pid: "")
-        spinner.auto_spin
-        spinner
-      end
+      # @return [Dry::CLI::UI::Console]
+      def progress
+        return console unless quiet
 
-      # Parallelism with no spinner to draw: a pipe, a CI log, or a headless
-      # agent's own tool call. Still reports a start and a finish line per
-      # item, because "no terminal" is not the same question as "no one is
-      # reading this."
-      #
-      # @param list [Array]
-      # @param jobs [Integer]
-      # @param message [String]
-      # @param label [Proc]
-      # @return [Array]
-      def threaded(list, jobs, message, label: :to_s.to_proc, fields: NO_FIELDS,
-        failure: NO_FAILURE, &)
-        report_line(message)
-        results = Concurrent::Hash.new
-        queue = Queue.new
-        list.each_with_index { |item, index| queue << [item, index] }
-
-        [jobs, list.size].min.times.map {
-          Thread.new do
-            while (pair = begin
-              queue.pop(true)
-            rescue ThreadError
-              nil
-            end)
-              item, index = pair
-              results[index] = begin
-                once(item, label, fields, failure:, &)
-              rescue StandardError => e
-                e
-              end
-            end
-          end
-        }.each(&:join)
-
-        list.each_index.map { |i| results[i] }
+        Dry::CLI::UI::Console.new(out: StringIO.new, err: StringIO.new, color: false, animate: false)
       end
 
       # @return [Float] a monotonic clock reading, immune to wall-clock changes
@@ -605,26 +564,22 @@ module Agentilda
         text + (" " * (width - display_width(text)))
       end
 
-      # Everything the user sees goes through here, so it writes to `$stderr`
-      # directly rather than through `Kernel.warn`.
+      # Every box is drawn by dry-cli-ui, on STDERR, through {.console}.
       #
-      # That is not a style preference. `Kernel.warn` is a **no-op** when
-      # `$VERBOSE` is nil, which is what `-W0` sets — and `RUBYOPT=-W0` is
-      # common in CI images and agent harnesses. Routed through `Kernel.warn`,
-      # every box this tool draws silently disappears in exactly the
-      # environments where a failure most needs explaining.
+      # Not through `Kernel.warn`, which is a **no-op** when `$VERBOSE` is
+      # nil, which is what `-W0` sets — and `RUBYOPT=-W0` is common in CI
+      # images and agent harnesses. Routed through `Kernel.warn`, every box
+      # this tool draws silently disappears in exactly the environments where
+      # a failure most needs explaining. The console writes to its stream.
+      #
+      # dry-cli-ui wraps before it frames, so a long line no longer costs the
+      # box its last row, which is where the instruction lives. One run
+      # reported four of its ten failures and cut the fifth mid-sentence.
       #
       # @param kind [Symbol] :info, :warn, :error or :success
       # @param message [String]
       # @return [void]
-      # standard:disable Style/StderrPuts -- the cop's own rationale, "to allow
-      # such output to be disabled", is the behaviour being removed here.
-      def box(kind, message)
-        text = message.to_s
-        warn TTY::Box.public_send(kind, text, enable_color: color?, width:, height: box_height(text))
-      end
-
-      # standard:enable Style/StderrPuts
+      def box(kind, message) = console.public_send(kind, message.to_s)
 
       # A framed panel centered on the screen, for the keyboard help. Unlike
       # {.box} it positions itself absolutely, so it overlays whatever the
@@ -634,38 +589,17 @@ module Agentilda
       # @param title [String]
       # @param text [String]
       # @return [void]
-      # standard:disable Style/StderrPuts -- see {.box}: `warn` is a no-op under -W0.
-      def popup(title, text)
-        lines = text.to_s.lines
-        box_width = [lines.map { |l| display_width(l.chomp) }.max.to_i + 6, TTY::Screen.width].min
-        box_height = lines.size + 4
-        $stderr.print TTY::Box.frame(
-          top:          [(TTY::Screen.height - box_height) / 2, 0].max,
-          left:         [(TTY::Screen.width - box_width) / 2, 0].max,
-          width:        box_width,
-          height:       box_height,
-          padding:      1,
-          title:        { top_left: " #{title} " },
-          enable_color: color?,
-          style:        color? ? { border: { fg: :cyan } } : {}
-        ) { text.to_s }
-      end
-      # standard:enable Style/StderrPuts
+      def popup(title, text) = console.popup(text.to_s, title:)
 
-      # TTY::Box sizes itself from the number of lines you hand it, not from
-      # the number those lines occupy once wrapped to the box's width. So it
-      # draws any message containing a line longer than the box a row or two
-      # short, and what falls off is the bottom, which is where the instruction
-      # lives. The run that found this reported four of its ten failures and
-      # cut the fifth mid-sentence.
+      # A framed table, returned rather than printed: a table is a
+      # deliverable, so it belongs on STDOUT and the caller picks the stream.
       #
-      # This wraps with the same library TTY::Box wraps with rather than
-      # dividing by the width, because TTY::Box wraps on words. A rough
-      # estimate is wrong in exactly the cases this exists for.
-      #
-      # @param text [String]
-      # @return [Integer] rows the box needs: its content, two borders, one pad
-      def box_height(text) = Strings.wrap(text.to_s, width - 4).lines.size + 3
+      # @param rows [Array<Array<#to_s>>]
+      # @param header [Array<#to_s>, nil]
+      # @return [String] the table ending in a newline, or "" when there are no rows
+      def table(rows, header: nil)
+        Dry::CLI::UI::Widgets::Table.new(Dry::CLI::UI::Terminal.new($stdout, color: color?)).render(rows, header:)
+      end
 
       # A single unadorned line, for per-item progress that does not deserve
       # a box of its own.
@@ -673,10 +607,8 @@ module Agentilda
       # @param message [String]
       # @param bullet [String]
       # @return [void]
-      # standard:disable Style/StderrPuts -- see {.box}: `warn` is a no-op under -W0.
-      def line(message, bullet: "·") = warn("  #{paint(bullet, :bright_black)} #{message}")
-
-      # standard:enable Style/StderrPuts
+      # rubocop:disable-next Style/StderrPuts -- see {.box}: `warn` is a no-op under -W0.
+      def line(message, bullet: "·") = $stderr.puts("  #{paint(bullet, :bright_black)} #{message}")
     end
 
     # @param message [String]

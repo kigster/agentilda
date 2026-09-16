@@ -1,3 +1,21 @@
+GIT
+  remote: https://github.com/kigster/dry-cli-ui.git
+  revision: be25d5a7ee5b69585fbf697537c4fa95aa453ac6
+  branch: kig/live-spinner-handles
+  specs:
+    dry-cli-ui (0.2.0)
+      concurrent-ruby (~> 1.3)
+      dry-cli (>= 1.0)
+      pastel (~> 0.8)
+      strings (~> 0.2)
+      tty-box (~> 0.7)
+      tty-cursor (~> 0.7)
+      tty-progressbar (~> 0.18)
+      tty-prompt (~> 0.23)
+      tty-screen (~> 0.8)
+      tty-spinner (~> 0.9)
+      tty-table (~> 0.12)
+
 PATH
   remote: .
   specs:
@@ -6,18 +24,17 @@ PATH
       concurrent-ruby
       dry-cli
       dry-cli-autocomplete
+      dry-cli-help (~> 0.2.0)
+      dry-cli-ui (>= 0.2)
       dry-inflector
       dry-monads
       fuzzy-string-match
       parallel
       pastel
-      strings
       tty-box
       tty-command
       tty-cursor
-      tty-progressbar
       tty-screen
-      tty-spinner
       unicode-display_width
       zeitwerk
 
@@ -39,6 +56,9 @@ GEM
     dry-cli-autocomplete (0.1.3)
       dry-cli (>= 1.0)
       dry-inflector (>= 1.0)
+    dry-cli-help (0.2.0)
+      dry-cli (>= 1.1.1, < 2)
+      pastel (~> 0.8)
     dry-core (1.2.0)
       concurrent-ruby (~> 1.0)
       logger
@@ -161,11 +181,23 @@ GEM
       tty-cursor (~> 0.7)
       tty-screen (~> 0.8)
       unicode-display_width (>= 1.6, < 3.0)
+    tty-prompt (0.23.1)
+      pastel (~> 0.8)
+      tty-reader (~> 0.8)
+    tty-reader (0.9.0)
+      tty-cursor (~> 0.7)
+      tty-screen (~> 0.8)
+      wisper (~> 2.0)
     tty-screen (0.8.2)
     tty-spinner (0.9.3)
       tty-cursor (~> 0.7)
+    tty-table (0.12.0)
+      pastel (~> 0.8)
+      strings (~> 0.2.0)
+      tty-screen (~> 0.8)
     unicode-display_width (2.6.0)
     unicode_utils (1.4.0)
+    wisper (2.0.1)
     yard (0.9.45)
     zeitwerk (2.8.3)
     zlib (3.2.3)
@@ -178,6 +210,7 @@ DEPENDENCIES
   agentilda!
   colored2
   coverage-badge
+  dry-cli-ui!
   irb
   json_schemer
   rake
@@ -206,6 +239,8 @@ CHECKSUMS
   diff-lcs (1.6.2) sha256=9ae0d2cba7d4df3075fe8cd8602a8604993efc0dfa934cff568969efb1909962
   dry-cli (1.4.1) sha256=b8015bb76c708aa8705a36faf694973e75eeeffca39b89c8e172dc6f66a7d874
   dry-cli-autocomplete (0.1.3) sha256=14f76447bda0000c71739b585c827dc0a0a763e30a68a8b4b2dff91f640768e4
+  dry-cli-help (0.2.0)
+  dry-cli-ui (0.2.0)
   dry-core (1.2.0) sha256=0cc5a7da88df397f153947eeeae42e876e999c1e30900f3c536fb173854e96a1
   dry-inflector (1.3.1) sha256=7fb0c2bb04f67638f25c52e7ba39ab435d922a3a5c3cd196120f63accb682dcc
   dry-monads (1.10.0) sha256=68c90d77617c6ce88d60704fc3b233907e6320974152fe75ad947f968006ca39
@@ -256,10 +291,14 @@ CHECKSUMS
   tty-command (0.10.1) sha256=0c6c471fcb932d55518734eb4e2e07e9efdd2918713cc39bb7393ba862471192
   tty-cursor (0.7.1) sha256=79534185e6a777888d88628b14b6a1fdf5154a603f285f80b1753e1908e0bf48
   tty-progressbar (0.18.3) sha256=6cbb4260e55e74a9180d502143eb6a467d2c8e51bf5f3c9509fb5cacc3d4a5f6
+  tty-prompt (0.23.1) sha256=fcdbce905238993f27eecfdf67597a636bc839d92192f6a0eef22b8166449ec8
+  tty-reader (0.9.0) sha256=c62972c985c0b1566f0e56743b6a7882f979d3dc32ff491ed490a076f899c2b1
   tty-screen (0.8.2) sha256=c090652115beae764336c28802d633f204fb84da93c6a968aa5d8e319e819b50
   tty-spinner (0.9.3) sha256=0e036f047b4ffb61f2aa45f5a770ec00b4d04130531558a94bfc5b192b570542
+  tty-table (0.12.0) sha256=fdc27a4750835c1a16efe19a0b857e3ced3652cc7aceafe6dca94908965b9939
   unicode-display_width (2.6.0) sha256=12279874bba6d5e4d2728cef814b19197dbb10d7a7837a869bab65da943b7f5a
   unicode_utils (1.4.0) sha256=b922d0cf2313b6b7136ada6645ce7154ffc86418ca07d53b058efe9eb72f2a40
+  wisper (2.0.1) sha256=ce17bc5c3a166f241a2e6613848b025c8146fce2defba505920c1d1f3f88fae6
   yard (0.9.45) sha256=52e211493f7cb8a3ebf7e104a25a1e73937a3103092545d34cb88fafebb3dc51
   zeitwerk (2.8.3) sha256=2c85125a8467ce069e20123d1e709a08955c9d29c118c25b46b7b7fafdbb92e5
   zlib (3.2.3) sha256=5bd316698b32f31a64ab910a8b6c282442ca1626a81bbd6a1674e8522e319c20

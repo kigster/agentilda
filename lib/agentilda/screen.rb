@@ -1,5 +1,6 @@
 # frozen_string_literal: true
 
+require "tty/box"
 require "tty/cursor"
 
 module Agentilda
