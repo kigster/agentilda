@@ -37,26 +37,33 @@ module Agentilda
     # @return [Agentilda::Agents]
     attr_reader :agents
 
-    # One line per agent, in name order.
+    # One row per agent, in name order, framed by {UI.table}.
     #
     # @return [String] newline-terminated
     def list
       all = agents.all
       return "No agent definitions in #{agents.dir}\n" if all.empty?
 
-      [header(all), *all.map { |agent| row(agent, all) }].join("\n") + "\n"
+      UI.table(all.map { |agent| row(agent) }, header: HEADINGS)
     end
 
     private
 
-    # A state as the folder names write it, so what an agent handles reads the
-    # same here as it does in `status` and on disk.
+    # A state as its words alone, deliberately without the emoji that every
+    # other rendering of a state carries. The table widget pads a cell to a
+    # width it measures in characters, while the terminal draws a status emoji
+    # in two cells; the variation-selector ones (⭕️ 🅱️ ⚪️ ⭐️ 🕰️) are two
+    # characters drawn in two cells, so no single count is right for all of
+    # them. A row carrying one lands short or long and the frame stops lining
+    # up. The label says the same thing unambiguously, and is worth more than
+    # the emoji is. {Reporter} lays its own columns out with {UI.fit} and so
+    # keeps the emoji.
     #
     # @param key [Symbol]
     # @return [String]
     def state(key)
       status = STATUS_BY_KEY[key] or return key.to_s
-      "#{status.emoji} #{status.label}"
+      status.label
     end
 
     # @param agent [Agentilda::Agent]
@@ -72,52 +79,15 @@ module Agentilda
       READ_ONLY
     end
 
-    # @param all [Array<Agentilda::Agent>]
-    # @return [Integer]
-    def name_width(all) = @name_width ||= all.map { |a| UI.display_width(a.name) }.max.to_i + 2
-
-    # @param all [Array<Agentilda::Agent>]
-    # @return [Integer]
-    def handles_width(all)
-      @handles_width ||= (all.map { |a| UI.display_width(handles(a)) } + [UI.display_width(HEADINGS[1])]).max.to_i + 2
-    end
-
-    # @param all [Array<Agentilda::Agent>]
-    # @return [Integer]
-    def advances_width(all)
-      @advances_width ||= (all.map { |a| UI.display_width(advances(a)) } + [UI.display_width(HEADINGS[2])]).max.to_i + 2
-    end
-
-    # Cells arrive fitted and then painted, in that order: escape codes count
-    # toward a string's length, so padding a coloured string pads it to a width
-    # of which several characters are invisible. See {Reporter#row}.
+    # The widget measures and pads the cells, so they arrive painted only.
     #
-    # @return [String]
-    def line(name, handled, advances, model)
-      format("  %s %s %s %s", name, handled, advances, model).rstrip
-    end
-
-    # @param all [Array<Agentilda::Agent>]
-    # @return [String]
-    def header(all)
-      text = line(UI.fit(HEADINGS[0], name_width(all)),
-        UI.fit(HEADINGS[1], handles_width(all)),
-        UI.fit(HEADINGS[2], advances_width(all)),
-        HEADINGS[3])
-
-      rule = "  " + ("─" * (UI.display_width(text) - 2))
-
-      [UI.paint(text, :bold), UI.paint(rule, :bright_yellow)].join("\n")
-    end
-
     # @param agent [Agentilda::Agent]
-    # @param all [Array<Agentilda::Agent>]
-    # @return [String]
-    def row(agent, all)
-      line(UI.paint(UI.fit(agent.name, name_width(all)), :bright_cyan),
-        UI.fit(handles(agent), handles_width(all)),
-        UI.paint(UI.fit(advances(agent), advances_width(all)), agent.read_only? ? :bright_black : :green),
-        UI.paint(agent.model.to_s, :bright_black))
+    # @return [Array<String>] one cell per entry in {HEADINGS}
+    def row(agent)
+      [UI.paint(agent.name, :bright_cyan),
+       handles(agent),
+       UI.paint(advances(agent), agent.read_only? ? :bright_black : :green),
+       UI.paint(agent.model.to_s, :bright_black)]
     end
   end
 end

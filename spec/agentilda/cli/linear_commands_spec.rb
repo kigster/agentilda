@@ -23,7 +23,6 @@ RSpec.describe "agentilda linear", :tree do
     [strip_ansi(out.string), strip_ansi(err.string), status]
   end
 
-
   let(:api) { instance_double(Agentilda::Linear::API) }
 
   def with_api(projects)

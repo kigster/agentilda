@@ -47,7 +47,6 @@ RSpec.describe Agentilda::CLI::Run, :tree do
     [strip_ansi(out.string), strip_ansi(err.string), status]
   end
 
-
   # 🟡 Building is the cheapest *stable* assignable state: it sits inside a
   # {StateMachine::FAMILIES} group, so the resync each round runs cannot move
   # it on its own. A ⭐️ folder would not do — its contents already best-fit

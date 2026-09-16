@@ -24,7 +24,6 @@ RSpec.describe Agentilda::CLI::Index, :tree do
     [strip_ansi(out.string), strip_ansi(err.string), status]
   end
 
-
   before { plans { |t| t.plan("001.00", :new, "tax-rule-dsl", files: { "spec.md" => spec_body }) } }
 
   it "writes INDEX.md into the plans directory and prints where" do

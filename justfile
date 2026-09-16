@@ -35,13 +35,13 @@ build-rust:
     cargo build --release
     cp target/release/tilda-rs ./exe
 
-# standardrb
+# rubocop
 lint:
-    {{ rbenv }} standardrb
+    {{ rbenv }} rubocop
 
-# Fix style with standardrb, then format the markdown
+# Fix style with rubocop, then format the markdown
 format:
-    {{ rbenv }} standardrb --fix
+    {{ rbenv }} rubocop -a
     /usr/bin/find . -name '*.md' -exec mdformat --wrap no {} \; -print
 
 update-workflow:

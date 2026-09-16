@@ -414,7 +414,7 @@ module Agentilda
       # @yieldparam line [Line]
       # @return [Array] one result per item, in input order
       def concurrently(items, message, jobs:, label: :to_s.to_proc, fields: NO_FIELDS,
-        failure: NO_FAILURE, header: {}, timeout: NO_TIMEOUT, &block)
+        failure: NO_FAILURE, header: {}, timeout: NO_TIMEOUT, &)
         list = items.to_a
         return [] if list.empty?
 
@@ -422,7 +422,7 @@ module Agentilda
 
         if jobs <= 1 || list.size <= 1
           report_line(message) unless animate?
-          return list.map { |item| once(item, label, fields, failure:, timeout:, &block) }
+          return list.map { |item| once(item, label, fields, failure:, timeout:, &) }
         end
 
         results = Concurrent::Hash.new
@@ -430,7 +430,7 @@ module Agentilda
           list.each_with_index do |item, index|
             tasks.task(label.call(item)) do |handle|
               line = Line.new(fields: fields.call(item), handle:, timeout: timeout.call(item))
-              results[index] = attempt(item, line, failure, &block)
+              results[index] = attempt(item, line, failure, &)
             rescue StandardError => e
               results[index] = e
             end
@@ -463,9 +463,9 @@ module Agentilda
       # @yieldparam item [Object]
       # @return [Object]
       # @raise [StandardError] whatever the block raised, once its line says so
-      def once(item, label, fields = NO_FIELDS, failure: NO_FAILURE, timeout: NO_TIMEOUT, &block)
+      def once(item, label, fields = NO_FIELDS, failure: NO_FAILURE, timeout: NO_TIMEOUT, &)
         progress.spinner(label.call(item)) do |handle|
-          attempt(item, Line.new(fields: fields.call(item), handle:, timeout: timeout.call(item)), failure, &block)
+          attempt(item, Line.new(fields: fields.call(item), handle:, timeout: timeout.call(item)), failure, &)
         end
       end
 
@@ -591,16 +591,24 @@ module Agentilda
       # @return [void]
       def popup(title, text) = console.popup(text.to_s, title:)
 
+      # A framed table, returned rather than printed: a table is a
+      # deliverable, so it belongs on STDOUT and the caller picks the stream.
+      #
+      # @param rows [Array<Array<#to_s>>]
+      # @param header [Array<#to_s>, nil]
+      # @return [String] the table ending in a newline, or "" when there are no rows
+      def table(rows, header: nil)
+        Dry::CLI::UI::Widgets::Table.new(Dry::CLI::UI::Terminal.new($stdout, color: color?)).render(rows, header:)
+      end
+
       # A single unadorned line, for per-item progress that does not deserve
       # a box of its own.
       #
       # @param message [String]
       # @param bullet [String]
       # @return [void]
-      # standard:disable Style/StderrPuts -- see {.box}: `warn` is a no-op under -W0.
+      # rubocop:disable-next Style/StderrPuts -- see {.box}: `warn` is a no-op under -W0.
       def line(message, bullet: "·") = $stderr.puts("  #{paint(bullet, :bright_black)} #{message}")
-
-      # standard:enable Style/StderrPuts
     end
 
     # @param message [String]

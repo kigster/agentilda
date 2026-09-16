@@ -2,6 +2,7 @@
 
 require "fileutils"
 require "shellwords"
+require "tmpdir"
 
 module Agentilda
   # Runs one agent against one plan by shelling out to the `claude` CLI.

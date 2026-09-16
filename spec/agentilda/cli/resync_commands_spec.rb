@@ -23,7 +23,6 @@ RSpec.describe "agentilda resync", :tree do
     [strip_ansi(out.string), strip_ansi(err.string), status]
   end
 
-
   describe Agentilda::CLI::Resync::Dirs do
     subject(:command) { described_class.new }
 

@@ -23,7 +23,6 @@ RSpec.describe "derived-output commands" do
     [strip_ansi(out.string), strip_ansi(err.string), status]
   end
 
-
   describe Agentilda::CLI::Docs do
     subject(:command) { described_class.new }
 

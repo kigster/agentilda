@@ -55,14 +55,29 @@ RSpec.describe Agentilda::Roster do
   describe "#list" do
     let(:table) { plain(roster.list) }
 
+    # The fixtures are written luke first, so name order is an actual sort,
+    # not the order the files happened to load in.
     it "names every agent, in name order" do
-      expect(table.scan(/^\s+(\S+-\S+)\s/).flatten).to eq(%w[hansolo-reviewer lando-broker luke-backend])
+      expect(table.scan(/^│ (\S+-\S+)\s/).flatten).to eq(%w[hansolo-reviewer lando-broker luke-backend])
     end
 
-    # The states are written the way the folder names write them, so what an
-    # agent handles reads the same here as it does in `status` and on disk.
-    it "writes each state as its emoji and its words" do
-      expect(table).to include("🟡 Building", "🟢 Ready for Review")
+    # Words only. The widget measures a cell in characters and the terminal
+    # draws an emoji in two, so a status emoji in a cell breaks the frame.
+    it "writes each state as its words" do
+      expect(table).to include("Building", "Ready for Review")
+    end
+
+    # The regression this guards: the variation-selector emoji (⭐️, ⭕️,
+    # 🅱️) cost two characters and two cells, so a row carrying one used to
+    # land a column short of every row that did not.
+    it "keeps no status emoji in any cell" do
+      expect(table).not_to match(/[⭐⭕⚪🅱🕰🟡🟢🔴🎨👀✅🔎📋]/)
+    end
+
+    # Every row is the same width, which is the whole point of dropping them.
+    it "draws a frame whose rows all line up" do
+      widths = table.lines.map { |line| line.chomp.chars.size }.uniq
+      expect(widths.size).to eq(1)
     end
 
     # An agent with no advances_to is never offered work by the loop. Printing
