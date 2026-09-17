@@ -17,7 +17,7 @@ Gem::Specification.new do |spec|
   TEXT
   spec.homepage = "https://github.com/kigster/agentilda"
 
-  spec.required_ruby_version = ">= 4.0"
+  spec.required_ruby_version = ">= 4"
 
   spec.metadata = {
     "homepage_uri" => spec.homepage,
@@ -29,7 +29,7 @@ Gem::Specification.new do |spec|
   # require a git checkout — the same reason the executables resolve their own
   # bundle rather than trusting the caller's working directory.
   spec.files = Dir.chdir(__dir__) do
-    Dir.glob(["*.gemspec", "Gemfile*", "lib/**/*.rb", "agents/*.md", "exe/*", "bin/*"]).select { |f| File.file?(f) }
+    Dir.glob(["*.gemspec", "lib/**/*.rb", "agents/*.md", "exe/*", "bin/*"]).select { |f| File.file?(f) }
   end
 
   spec.bindir = "exe"
@@ -42,8 +42,8 @@ Gem::Specification.new do |spec|
   spec.add_dependency "concurrent-ruby"
   spec.add_dependency "dry-cli"
   spec.add_dependency "dry-cli-autocomplete"
-  spec.add_dependency "dry-cli-help", "~> 0.2.0"
-  spec.add_dependency "dry-cli-ui", ">= 0.2"
+  spec.add_dependency "dry-cli-help"
+  spec.add_dependency "dry-cli-ui"
   spec.add_dependency "dry-inflector"
   spec.add_dependency "dry-monads"
   spec.add_dependency "fuzzy-string-match"
