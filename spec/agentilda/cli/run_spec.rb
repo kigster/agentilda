@@ -522,10 +522,10 @@ RSpec.describe Agentilda::CLI::Run, :tree do
   describe "the state file" do
     before { building_plan }
 
-    # The run's memory lives under .plans/tmp/, which is about one machine and
-    # must not ride along in a commit. Somebody's .gitignore is edited once,
-    # and the edit is announced once.
-    it "adds .plans/tmp/ to .gitignore once and says so" do
+    # The run's memory sits in .plans/ beside the plan folders. It is about
+    # one machine and must not ride along in a commit, so somebody's
+    # .gitignore is edited once, and the edit is announced once.
+    it "adds the state file to .gitignore once and says so" do
       root = File.dirname(plans_root)
       system("git", "-C", root, "init", "-q")
       with_executor
@@ -533,20 +533,20 @@ RSpec.describe Agentilda::CLI::Run, :tree do
       _out, second, = run(commit: true)
 
       aggregate_failures do
-        expect(unwrapped(first)).to include("Added .plans/tmp/ to .gitignore")
-        expect(unwrapped(second)).not_to include("Added .plans/tmp/")
-        expect(File.read(File.join(root, ".gitignore")).scan(".plans/tmp/").size).to eq(1)
+        expect(unwrapped(first)).to include("Added .plans/agentilda-state.json")
+        expect(unwrapped(second)).not_to include("Added .plans/agentilda-state.json")
+        expect(File.read(File.join(root, ".gitignore")).scan(%r{^\.plans/agentilda-state\.json$}).size).to eq(1)
       end
     end
 
-    it "touches neither .gitignore nor .plans/tmp on a dry run" do
+    it "touches neither .gitignore nor the state file on a dry run" do
       root = File.dirname(plans_root)
       system("git", "-C", root, "init", "-q")
       run
 
       aggregate_failures do
         expect(File).not_to exist(File.join(root, ".gitignore"))
-        expect(File).not_to exist(File.join(plans_root, "tmp"))
+        expect(File).not_to exist(File.join(plans_root, Agentilda::StateFile::FILENAME))
       end
     end
   end

@@ -5,10 +5,10 @@ require "json"
 RSpec.describe Agentilda::StateFile, :tree do
   subject(:state) { described_class.new(path:, pid: 4242) }
 
-  let(:path) { File.join(plans_root, described_class::DIRNAME, described_class::FILENAME) }
+  let(:path) { File.join(plans_root, described_class::FILENAME) }
+  let(:tree) { Agentilda::Tree.new(dir: plans_root) }
 
-  it "lives under .plans/tmp" do
-    tree = Agentilda::Tree.new(dir: plans_root)
+  it "lives in .plans, beside the plan folders rather than under them" do
     expect(described_class.for(tree)).to eq(path)
   end
 
@@ -20,7 +20,7 @@ RSpec.describe Agentilda::StateFile, :tree do
     aggregate_failures do
       expect(loaded.stages("001.00").first).to include("agent" => "leah-researcher", "status" => "Started", "model" => "haiku")
       expect(JSON.parse(File.read(path)).dig("run", "pid")).to eq(4242)
-      expect(Dir.children(File.dirname(path))).to eq([described_class::FILENAME])
+      expect(Dir.children(plans_root).grep(/\.tmp\z/)).to be_empty
     end
   end
 
@@ -61,15 +61,59 @@ RSpec.describe Agentilda::StateFile, :tree do
     expect(fresh.stranded).to be_empty
   end
 
+  # The file moved up out of `tmp/` after runs had already written there.
+  # One that died under the old layout still has to be picked up, or its
+  # Started stages are invisible and it silently restarts from zero.
+  describe "the file a run left in the old tmp/ directory" do
+    subject(:loaded) { described_class.new(path:, pid: 4242).load }
+
+    let(:legacy) { described_class.legacy_for(tree) }
+    let(:stage) { { "agent" => "yoda-writer", "round" => 1, "status" => "Started" } }
+    let(:written) { { "run" => { "pid" => 999_999_999 }, "plans" => { "001.00" => { "stages" => [stage] } } } }
+
+    before do
+      FileUtils.mkdir_p(File.dirname(legacy))
+      File.write(legacy, JSON.generate(written))
+    end
+
+    it "is read when the current path holds nothing" do
+      expect(loaded.stages("001.00").first).to include("agent" => "yoda-writer")
+    end
+
+    it "is still reported as stranded, so the next run knows to re-run it" do
+      expect(loaded.stranded.map(&:first)).to eq(["001.00"])
+    end
+
+    it "is left on disk, being the only record that run has" do
+      loaded
+      expect(File.file?(legacy)).to be(true)
+    end
+
+    context "when the current path holds a run of its own" do
+      before { File.write(path, JSON.generate({ "run" => {}, "plans" => { "002.00" => { "stages" => [] } } })) }
+
+      it "loses to it" do
+        expect(loaded.plans).to eq(["002.00"])
+      end
+    end
+  end
+
   describe ".ensure_ignored!" do
-    it "adds .plans/tmp/ to .gitignore once, and says so" do
-      root = File.dirname(plans_root)
+    subject(:root) { File.dirname(plans_root) }
+
+    it "adds both lines to .gitignore once, and says so" do
       system("git", "-C", root, "init", "-q")
       aggregate_failures do
         expect(described_class.ensure_ignored!(root)).to be(true)
-        expect(File.read(File.join(root, ".gitignore"))).to include(".plans/tmp/\n")
+        expect(File.read(File.join(root, ".gitignore"))).to include(".plans/agentilda-state.json\n")
         expect(described_class.ensure_ignored!(root)).to be(false)
       end
+    end
+
+    it "ignores the sibling save writes and renames over the file" do
+      system("git", "-C", root, "init", "-q")
+      described_class.ensure_ignored!(root)
+      expect(File.read(File.join(root, ".gitignore"))).to include(".plans/agentilda-state.json.*.tmp\n")
     end
 
     it "does nothing outside a repository" do

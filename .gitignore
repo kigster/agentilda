@@ -18,3 +18,5 @@ mermaid.html
 /target
 /exe/tilda-rs
 .plans/tmp/
+.plans/agentilda-state.json
+.plans/agentilda-state.json.*.tmp
