@@ -114,12 +114,12 @@ A plan can also leave the main path. It stops at ⭕️ Technical Block or 🅱�
 | `leah-researcher`   | ⚪️             | 🔎                  | `spec.md`                              | Researches the brief in parallel and appends a `## Research` chapter                     |
 | `yoda-writer`       | 🔎, 🕰️         | 📋                  | `spec.md`                              | Writes the full spec (goals, non-goals, scope), or `blocked.md` when a human must answer |
 | `palpatine-planner` | 📋             | ⭐️                  | `plan.md`                              | Splits the spec into independent work units, one plan each for back end and front end    |
-| `luke-backend`      | ⭐️, 🟡, 🔴     | 🟢                  | `plan-backend.md`, `pull-requests.md`  | Builds the data, domain, API and tests                                                   |
-| `rey-frontend`      | ⭐️, 🟡, 🎨, 🔴 | 🟢                  | `plan-frontend.md`, `pull-requests.md` | Builds the interface against Luke's API and proves the two halves work together          |
+| `luke-backend`      | ⭐️, 🟡, 🔴     | 🟢                  | `plan.md`, `pull-requests.md`          | Builds the data, domain, API and tests                                                   |
+| `rey-frontend`      | ⭐️, 🟡, 🎨, 🔴 | 🟢                  | `plan.md`, `pull-requests.md`          | Builds the interface against Luke's API and proves the two halves work together          |
 | `hansolo-reviewer`  | 🟢, 👀         | 👀 approved, 🔴, 💩 | `pull-requests.md`                     | Reviews the diff against the plan; rejects at most twice; never merges                   |
 | `lando-broker`      | ⭕️, 🅱️         | ⭐️                  | `plan.md`                              | Folds your answers from `blocked.md` back into the spec and plan                         |
 
-Luke and Rey work at the same time, in the same worktree, toward one pull request. They talk through `mailbox.md` in the plan folder, using `tilda mail send` and `tilda mail read`.
+Luke and Rey work at the same time, in the same worktree, toward one pull request. `palpatine-planner` splits `plan.md` into a `## Backend` section and a `## Frontend` one, and each builds only its own. Both sign that same `plan.md`, through `tilda ledger sign` rather than by editing it: the command takes a lock, and two signatures written at once would otherwise lose one of them. They talk through `mailbox.json` in the plan folder, using `tilda mail send`, `tilda mail read` and `tilda mail ack`; `tilda mail render` prints the exchange as Markdown when you want to read it yourself.
 
 Run `tilda agents list` for the same table, or `tilda describe <agent>` to read one agent's prompt.
 
@@ -229,7 +229,7 @@ On a terminal, every command that runs agents draws the same ratatui dashboard a
 
 `k` and `x` do nothing until you press `ENTER`, so a slip of the finger cannot kill an agent.
 
-Ctrl-C once asks each running agent to write a `RESUME:` note into its plan's `mailbox.md` and sign `Interrupted`; every agent reads its mail before it starts, so a later run picks up where this one stopped instead of redoing the work. A second press aborts immediately. It works without a dashboard too, through a `SIGINT` handler.
+Ctrl-C once asks each running agent to write a `RESUME:` note into its plan's `mailbox.json` and sign `Interrupted`; every agent reads its mail before it starts, so a later run picks up where this one stopped instead of redoing the work. A second press aborts immediately. It works without a dashboard too, through a `SIGINT` handler.
 
 ### How agents hand off
 

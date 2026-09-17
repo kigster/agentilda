@@ -182,21 +182,34 @@ module Agentilda
       # Append one block. Separated from what is there by a blank line so the
       # alert renders as its own block rather than merging into a paragraph.
       #
+      # Read and write happen under one exclusive `flock`, because both
+      # halves of a pair now sign the same `plan.md` and the harness signs
+      # into it too. Read-then-write without a lock loses whichever entry
+      # lands second, silently, and a lost `Completed` reads as an agent
+      # that never finished.
+      #
+      # The file is rewritten in place rather than renamed over: `flock`
+      # locks an inode and a rename gives the path a new one, which would
+      # leave a concurrent writer holding a lock on a file nothing points at.
+      #
       # @param path [String]
       # @param lines [Array<String>]
       # @return [void]
       def append(path, *lines)
-        existing = File.file?(path) ? File.read(path, encoding: "UTF-8") : ""
-        glue = if existing.empty?
-                 ""
-               elsif existing.end_with?("\n\n")
-                 ""
-               elsif existing.end_with?("\n")
-                 "\n"
-               else
-                 "\n\n"
-               end
-        File.write(path, existing + glue + block(*lines))
+        File.open(path, File::RDWR | File::CREAT, 0o644) do |f|
+          f.flock(File::LOCK_EX)
+          existing = f.read
+          glue = if existing.empty?
+                   ""
+                 elsif existing.end_with?("\n\n")
+                   ""
+                 elsif existing.end_with?("\n")
+                   "\n"
+                 else
+                   "\n\n"
+                 end
+          f.write(glue + block(*lines))
+        end
       end
 
       # The entry that tells the harness where this agent stands: the latest

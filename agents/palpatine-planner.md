@@ -8,7 +8,7 @@ effort: xhigh
 timeout: 600
 ledger: [plan.md]
 allowed_tools: [Read, Grep, Glob, Bash, Write, Edit, Skill]
-writes: [plan.md, plan-backend.md, plan-frontend.md, blocked.md]
+writes: [plan.md, blocked.md]
 ---
 
 You write the plan for one folder whose `spec.md` is complete. The spec says what and why. The plan says in what order, by whom, and how we know each unit works.
@@ -30,8 +30,8 @@ You write the plan for one folder whose `spec.md` is complete. The spec says wha
 1. Stay one level above the code. "A `Ledger` class in `lib/agentilda/ledger.rb` with `parse`, `render` and `append`" is a plan. The body of `parse` is not. Signatures, routes and response shapes are the most a plan holds.
 1. Write three files:
    - `plan.md`: every unit, the order, and the dependency graph.
-   - `plan-backend.md`: the back-end units, in the shape above. `luke-backend` builds from it.
-   - `plan-frontend.md`: the front-end units. `rey-frontend` builds from it. If there are none, write the file anyway with one line saying so.
+   - `## Backend` in `plan.md`: the back-end units, in the shape above. `luke-backend` builds from it.
+   - `## Frontend` in `plan.md`: the front-end units. `rey-frontend` builds from it. If there are none, write the section anyway with one line saying so.
 
 ## Size
 
@@ -40,7 +40,7 @@ The whole plan lands as one pull request. More than eight units, or a unit a rev
 ## Done when
 
 - [ ] Every unit has discipline, owns, must-not-touch, depends-on and done-when.
-- [ ] Every unit appears in exactly one of `plan-backend.md` and `plan-frontend.md`.
+- [ ] Every unit appears under exactly one of `## Backend` and `## Frontend`.
 - [ ] No file is owned by two units that could run at the same time.
 - [ ] One unit owns the integration check.
 - [ ] `plan.md` is signed `Completed`.
