@@ -48,6 +48,11 @@ tilda create tax rule dsl   # creates .plans/000.00-⚪️ → tax-rule-dsl/spec
                             # finish the brief in spec.md, then save it
 tilda run                   # dry run: shows which agent would take which plan
 tilda run --commit          # runs the agents until no plan changes state
+
+# alternatively
+export AGENTILDA_AUTOCOMMIT=true 
+tilda run 001.00 
+
 tilda list-plans            # every plan, its state and its pull requests
 ```
 
@@ -169,6 +174,10 @@ tilda run --isolation shared               # one checkout, one agent at a time, 
 ```
 
 If you just created several plans, run them with a single `--plan` list. Separate bare `run` calls each loop over the whole tree, so their worktrees would overlap.
+
+Below is the screenshot of multiple agents running, working on two separate plans. The fist plan has both Luke and Rey (backend and frontend developers) runnign, while the second plan is only at the research phase with Leah.	
+
+![agents-running](docs/img/agentilda-running.avif)
 
 The loop stops when a full round changes no plan's state. It also stops when every plan in scope is done, blocked, or out of rounds.
 
