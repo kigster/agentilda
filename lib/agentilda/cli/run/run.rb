@@ -146,6 +146,12 @@ module Agentilda
                    end
         UI.line("keys: h for help - s select, k kill, x extend, w wrap up, n stop, q quit") if keyboard && console.nil? && !quiet?(options)
 
+        # Agents reach each other through Redis, so an absent server is
+        # reported here, once, where somebody can act on it. Found out from
+        # inside an agent's thread twenty minutes in, it would read as a
+        # partner with nothing to say.
+        bus = bus_for(tree, options)
+
         runner = Runner.new(
           tree:,
           agents:,
@@ -164,7 +170,8 @@ module Agentilda
             interactive:  !keyboard.nil? && commit?(options)),
           dry_run:   !commit?(options),
           publisher: publisher_for(root, isolation, options),
-          on_board:  console&.method(:paint)
+          on_board:  console&.method(:paint),
+          bus:
         )
 
         # The dispatcher exists only once the run starts, so the console is
@@ -182,6 +189,27 @@ module Agentilda
       end
 
       private
+
+      # The transport the pair talks over, or nil when this run starts no
+      # agent to talk. Refused rather than degraded: a run that quietly has
+      # no transport looks exactly like a run where nobody had anything to
+      # say, and that is the one thing a mailbox must never look like.
+      #
+      # @param tree [Agentilda::Tree]
+      # @param options [Hash]
+      # @return [Agentilda::Bus, nil]
+      def bus_for(tree, options)
+        return nil unless commit?(options)
+
+        bus = Bus.new(root: tree.dir)
+        return bus if bus.reachable?
+
+        refuse("Redis is not answering at #{ENV.fetch("REDIS_URL", "its default address")}.\n\n" \
+               "Agents on one plan reach each other through it; start it and run this again.",
+          69)
+      rescue LoadError => e
+        refuse("The redis gem is not installed: #{e.message}", 69)
+      end
 
       # The attempts list, padded into columns.
       #

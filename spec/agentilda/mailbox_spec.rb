@@ -39,8 +39,8 @@ RSpec.describe Agentilda::Mailbox, :tree do
       luke_to_rey("second")
     end
 
-    it "is JSON, under one messages key, so a later section can sit beside it" do
-      expect(document.keys).to eq(["messages"])
+    it "is JSON, in named sections, so one can be read without parsing the others" do
+      expect(document.keys).to contain_exactly("stream", "messages", "last-known-state")
     end
 
     it "holds every field a reader needs without parsing prose" do
@@ -218,6 +218,130 @@ RSpec.describe Agentilda::Mailbox, :tree do
       it "reads as empty" do
         expect(mailbox.messages).to be_empty
       end
+    end
+  end
+
+  # This is what replaces a broker process: any reader may fold the bus
+  # into the file, because flock makes the write safe and the watermark
+  # makes it idempotent.
+  describe "#sync!" do
+    let(:bus) { Agentilda::Bus.new(root: plans_root, redis: FakeRedis.new) }
+
+    let(:payload) do
+      { "kind" => "message", "from" => "luke-backend", "to" => "rey-frontend",
+        "body" => "the endpoint is up", "at" => Time.now.iso8601 }
+    end
+
+    it "folds what the bus carried into the file" do
+      bus.publish("001.00", payload)
+      mailbox.sync!(bus, "001.00")
+
+      expect(mailbox.messages.map(&:body)).to eq(["the endpoint is up"])
+    end
+
+    it "numbers a folded message as if it had been appended" do
+      luke_to_rey("written straight in")
+      bus.publish("001.00", payload)
+      mailbox.sync!(bus, "001.00")
+
+      expect(mailbox.messages.map(&:number)).to eq([1, 2])
+    end
+
+    it "folds each entry once, however often it runs" do
+      bus.publish("001.00", payload)
+      3.times { mailbox.sync!(bus, "001.00") }
+
+      expect(mailbox.messages.size).to eq(1)
+    end
+
+    it "says how many it folded, and nothing when there was nothing" do
+      bus.publish("001.00", payload)
+      aggregate_failures do
+        expect(mailbox.sync!(bus, "001.00")).to eq(1)
+        expect(mailbox.sync!(bus, "001.00")).to eq(0)
+      end
+    end
+
+    it "drops an entry with no recipient rather than writing one nobody can read" do
+      bus.publish("001.00", payload.merge("to" => ""))
+      mailbox.sync!(bus, "001.00")
+
+      expect(mailbox.messages).to be_empty
+    end
+
+    # Leaving the watermark where it was would make every later sync read
+    # the same unusable entry again, forever.
+    it "still moves past an entry it could not use" do
+      bus.publish("001.00", { "kind" => "something-later" })
+      mailbox.sync!(bus, "001.00")
+
+      expect(mailbox.sync!(bus, "001.00")).to eq(0)
+    end
+  end
+
+  # Two writers, and a precedence between them. An agent asked to stop
+  # writes the better entry, because it knows what it finished. One killed
+  # when the grace period expired writes nothing, and the harness's account
+  # is all the next round gets.
+  describe "#record_state" do
+    it "keeps what an agent says about itself" do
+      mailbox.record_state("luke-backend",
+        source:    described_class::BY_AGENT,
+        round:     1,
+        status:    "Interrupted",
+        next_step: "wire the dispatcher")
+
+      expect(mailbox.last_known_state.dig("luke-backend", "next_step")).to eq("wire the dispatcher")
+    end
+
+    it "stamps who wrote it, so the next round knows what it is reading" do
+      mailbox.record_state("luke-backend", source: described_class::BY_HARNESS, round: 1, status: "Interrupted")
+
+      expect(mailbox.last_known_state.dig("luke-backend", "source")).to eq("harness")
+    end
+
+    it "lets the harness fill in for an agent that never got to write" do
+      mailbox.record_state("rey-frontend",
+        source: described_class::BY_HARNESS,
+        round:  1,
+        status: "Interrupted",
+        note:   "harness died")
+
+      expect(mailbox.last_known_state.dig("rey-frontend", "note")).to eq("harness died")
+    end
+
+    it "does not let the harness overwrite what the agent said itself" do
+      mailbox.record_state("luke-backend", source: described_class::BY_AGENT, round: 1, note: "mine")
+      mailbox.record_state("luke-backend", source: described_class::BY_HARNESS, round: 1, note: "guessed")
+
+      expect(mailbox.last_known_state.dig("luke-backend", "note")).to eq("mine")
+    end
+
+    it "says so when it declined, rather than reporting a write it did not make" do
+      mailbox.record_state("luke-backend", source: described_class::BY_AGENT, round: 1)
+
+      expect(mailbox.record_state("luke-backend", source: described_class::BY_HARNESS, round: 1)).to be_nil
+    end
+
+    it "lets an agent replace the harness's guess with its own account" do
+      mailbox.record_state("luke-backend", source: described_class::BY_HARNESS, round: 1, note: "guessed")
+      mailbox.record_state("luke-backend", source: described_class::BY_AGENT, round: 1, note: "mine")
+
+      expect(mailbox.last_known_state.dig("luke-backend", "note")).to eq("mine")
+    end
+
+    it "keeps one entry per agent, the last of them" do
+      mailbox.record_state("luke-backend", source: described_class::BY_AGENT, round: 1, status: "Interrupted")
+      mailbox.record_state("luke-backend", source: described_class::BY_AGENT, round: 3, status: "Interrupted")
+
+      expect(mailbox.last_known_state["luke-backend"]["round"]).to eq(3)
+    end
+
+    it "leaves the messages alone" do
+      luke_to_rey("still here")
+      mailbox.record_state("luke-backend", source: described_class::BY_AGENT, round: 1)
+
+      expect(mailbox.messages.map(&:body)).to eq(["still here"])
     end
   end
 

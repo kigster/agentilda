@@ -119,7 +119,13 @@ A plan can also leave the main path. It stops at ⭕️ Technical Block or 🅱�
 | `hansolo-reviewer`  | 🟢, 👀         | 👀 approved, 🔴, 💩 | `pull-requests.md`                     | Reviews the diff against the plan; rejects at most twice; never merges                   |
 | `lando-broker`      | ⭕️, 🅱️         | ⭐️                  | `plan.md`                              | Folds your answers from `blocked.md` back into the spec and plan                         |
 
-Luke and Rey work at the same time, in the same worktree, toward one pull request. `palpatine-planner` splits `plan.md` into a `## Backend` section and a `## Frontend` one, and each builds only its own. Both sign that same `plan.md`, through `tilda ledger sign` rather than by editing it: the command takes a lock, and two signatures written at once would otherwise lose one of them. They talk through `mailbox.json` in the plan folder, using `tilda mail send`, `tilda mail read` and `tilda mail ack`; `tilda mail render` prints the exchange as Markdown when you want to read it yourself.
+Luke and Rey work at the same time, in the same worktree, toward one pull request. `palpatine-planner` splits `plan.md` into a `## Backend` section and a `## Frontend` one, and each builds only its own. Both sign that same `plan.md`, through `tilda ledger sign` rather than by editing it: the command takes a lock, and two signatures written at once would otherwise lose one of them.
+
+They talk over Redis. `tilda mail send` adds the message to a per-plan Redis **stream**, and whoever reads next folds it into `mailbox.json` in the plan folder — the harness thread does it once a second, and so does any `mail read`. A stream rather than pub/sub, because a message published to a channel nobody is subscribed to is discarded silently, and a harness that was restarting would lose it with nothing anywhere saying so. Redis is required; a run refuses to start without it rather than pretending, since a transport that is quietly absent looks exactly like a partner with nothing to say.
+
+`mailbox.json` is the durable record and is committed with the plan; the stream keeps an hour. `tilda mail read` shows what is waiting, `tilda mail ack N` is how the reader says it read it — delivery is not reading — and `tilda mail render` prints the exchange as Markdown. A `PostToolUse` hook runs `tilda mail poll` after every tool call an agent makes, so mail arrives at the next call whether or not the agent remembered to look.
+
+Ctrl-C asks each agent to record where it got to with `tilda mail state`, in fields rather than prose, under `last-known-state` in the same file. An agent killed before it gets that far leaves nothing, so the harness writes what it watched instead — marked as its own, and never overwriting an agent's own account.
 
 Run `tilda agents list` for the same table, or `tilda describe <agent>` to read one agent's prompt.
 

@@ -65,6 +65,7 @@ $stderr = StringIO.new
 require_relative "support/plans_fixture"
 require_relative "support/captured_stream"
 require_relative "support/box_text"
+require_relative "support/fake_redis"
 
 RSpec.configure do |config|
   config.example_status_persistence_file_path = ".rspec_status"
@@ -83,6 +84,14 @@ RSpec.configure do |config|
   # Pastel memoizes `enabled:` at construction, so an example that stubs
   # `tty?` or `color?` would otherwise poison every example that ran after it.
   config.before { Agentilda::UI.reset! }
+
+  # No example opens a socket. {Agentilda::Bus.client} is the one place a
+  # Redis client is built, so stubbing it here is enough — and it is done
+  # for every example rather than only the ones that mean to use a bus,
+  # because a developer machine usually has Redis running and a forgotten
+  # stub would pass locally and reach a real server in CI. An example that
+  # wants to see the entries stubs it again with a fake of its own.
+  config.before { allow(Agentilda::Bus).to receive(:client).and_return(FakeRedis.new) }
 
   # Every example tagged `:tree` gets its own throwaway `.plans` directory, so
   # the suite never reads or writes a real project.

@@ -25,7 +25,7 @@ module Agentilda
         # @return [void]
         def call(**options)
           quiet?(options)
-          puts mailbox_for(options).render
+          puts synced_mailbox(options).render
         end
       end
     end

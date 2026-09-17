@@ -28,7 +28,7 @@ module Agentilda
         # @return [void]
         def call(number:, **options)
           quiet?(options)
-          mailbox = mailbox_for(options)
+          mailbox = synced_mailbox(options)
           message = begin
             mailbox.ack(number.to_i, by: options[:by])
           rescue Agentilda::Error => e

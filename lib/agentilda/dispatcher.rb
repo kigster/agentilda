@@ -48,9 +48,14 @@ module Agentilda
     # @param rounds [Integer, nil] `--rounds`, a cap that only tightens
     # @param sleeper [Proc] how a tick waits; the suite passes a no-op
     # @param on_board [Proc, nil] receives a {Board} each tick
-    def initialize(runner:, state: nil, rounds: nil, sleeper: ->(seconds) { sleep(seconds) }, on_board: nil)
+    # @param bus [Agentilda::Bus, nil] nil under a dry run, and whenever
+    #   there is no transport to fold in; this is the thread that replaces
+    #   a broker process, draining once a tick and writing the plan's file
+    def initialize(runner:, state: nil, rounds: nil, sleeper: ->(seconds) { sleep(seconds) }, on_board: nil,
+      bus: nil)
       @runner = runner
       @state = state
+      @bus = bus
       @rounds_cap = rounds
       @sleeper = sleeper
       @on_board = on_board
@@ -343,6 +348,7 @@ module Agentilda
     # @return [void]
     def poll
       @running.each do |job|
+        fold_mail(job)
         reading = read_ledger(job.task)
         entry = Ledger.last_for(reading, job.task.agent.name)
         job.file = entry&.file || job.file
@@ -473,8 +479,47 @@ module Agentilda
       end
     end
 
+    # Everything the bus has carried for this plan, folded into its file.
+    #
+    # This is the whole of what a broker process would have done, running
+    # on the thread that is already watching this agent. Failures are
+    # swallowed: a transport that has gone away is a reason to lose
+    # messages, never a reason to lose the run.
+    #
+    # @param job [Agentilda::Dispatcher::Job]
+    # @return [void]
+    def fold_mail(job)
+      return unless @bus
+
+      subject = job.task.subject
+      Mailbox.new(dir: subject.feature.path).sync!(@bus, subject.feature.ordinal.to_s)
+    rescue StandardError
+      nil
+    end
+
+    # What the harness saw, for an agent that never got to say it itself.
+    #
+    # An agent asked to stop writes its own entry, and that one is better:
+    # it knows what it finished and what the next step is. One terminated
+    # when the grace period expired, or one that died outright, writes
+    # nothing at all, and this is the only record the next round gets.
+    # {Agentilda::Mailbox#record_state} is what keeps this from displacing
+    # an agent's own account.
+    #
+    # @return [void]
+    def remember_state(subject, agent, round, reason)
+      Mailbox.new(dir: subject.feature.path).record_state(agent.name,
+        source: Mailbox::BY_HARNESS,
+        round:,
+        status: "Interrupted",
+        note:   reason)
+    rescue StandardError
+      nil
+    end
+
     # @return [void]
     def write_interrupted(subject, agent, round, reason)
+      remember_state(subject, agent, round, reason)
       line = Ledger.render(Ledger::Entry.new(at: Time.now,
         agent: agent.name,
         status: "Interrupted",

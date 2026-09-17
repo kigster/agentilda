@@ -46,7 +46,7 @@ module Agentilda
     # @param on_board [Proc, nil]
     def initialize(tree:, executor:, agents: Agents.new, isolation: :shared, jobs: 1, worktree: nil,
       plans: nil, publisher: nil, dry_run: false, rounds: nil, state: nil,
-      sleeper: ->(seconds) { sleep(seconds) }, on_board: nil)
+      sleeper: ->(seconds) { sleep(seconds) }, on_board: nil, bus: nil)
       @tree = tree
       @executor = executor
       @agents = agents
@@ -57,6 +57,10 @@ module Agentilda
       @dry_run = dry_run
       @rounds = rounds
       @state = dry_run ? nil : state
+      # A dry run starts no agent, so there is nothing to carry and nothing
+      # to fold in; holding a connection open for it would be the only
+      # thing it did.
+      @bus = dry_run ? nil : bus
       @sleeper = sleeper
       @on_board = on_board
       @attempts = []
@@ -87,7 +91,12 @@ module Agentilda
     #   console can attach itself and reach the running jobs
     # @return [Array<Agentilda::Runner::Attempt>]
     def call
-      dispatcher = Dispatcher.new(runner: self, state: @state, rounds: @rounds, sleeper: @sleeper, on_board: @on_board)
+      dispatcher = Dispatcher.new(runner: self,
+        state: @state,
+        rounds: @rounds,
+        sleeper: @sleeper,
+        on_board: @on_board,
+        bus: @bus)
       yield dispatcher if block_given?
       @attempts = dispatcher.run
     end
