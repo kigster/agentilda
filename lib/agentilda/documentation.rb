@@ -321,6 +321,7 @@ module Agentilda
         | `spec.md` | the specification; written first |
         | `plan.md` | the execution plan; written from the spec, split into `## Backend` and `## Frontend` |
         | `contract.md` | the contract between the two halves of building |
+        | `openapi.yaml` | optional; the HTTP half of that contract, when the plan has one |
         #{known.reject { |r| r.start_with?("| `spec.md`", "| `plan.md`") }.join("\n")}
 
         `contract.md` is the one file no state requires. `luke-backend`

@@ -30,6 +30,9 @@ require_relative "cli/mail/subcommands/ack"
 require_relative "cli/mail/subcommands/render"
 require_relative "cli/mail/subcommands/poll"
 require_relative "cli/mail/subcommands/state"
+require_relative "cli/api/api"
+require_relative "cli/api/subcommands/list"
+require_relative "cli/api/subcommands/docs"
 require_relative "cli/ledger/ledger"
 require_relative "cli/ledger/subcommands/sign"
 
@@ -75,7 +78,7 @@ module Agentilda
       width [90, TTY::Screen.width - 2].min
 
       group "Plans", "create", "list-plans", "index", "resync", "unblock", "worktree"
-      group "Agents", "run", "agents", "describe", "mail", "ledger"
+      group "Agents", "run", "agents", "describe", "mail", "ledger", "api"
       group "Reference", "docs", "states", "linear", "completion", "version"
     end
 
@@ -113,6 +116,13 @@ module Agentilda
     end
 
     # What a paired agent shells out to between steps. See {Agentilda::Mailbox}.
+    # The OpenAPI documents plans carry. See {Agentilda::OpenAPI} for why
+    # this is optional and never the contract itself.
+    register "api" do |prefix|
+      prefix.register "list", API::List
+      prefix.register "docs", API::Docs
+    end
+
     # How an agent signs the document it owns. See {Agentilda::CLI::Ledger}
     # for why this is a command rather than something an agent edits.
     register "ledger" do |prefix|

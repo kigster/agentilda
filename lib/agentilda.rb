@@ -16,6 +16,7 @@ loader.inflector.inflect(
   "github"     => "GitHub",
   "issue"      => "Issues",
   "list_plans" => "ListPlans",
+  "open_api"   => "OpenAPI",
   "unit"       => "Units",
   "ui"         => "UI"
 )
@@ -30,10 +31,12 @@ loader.collapse("#{__dir__}/agentilda/cli/version")
 loader.collapse("#{__dir__}/agentilda/cli/worktree")
 loader.collapse("#{__dir__}/agentilda/cli/agents/subcommands")
 loader.collapse("#{__dir__}/agentilda/cli/linear/subcommands")
+loader.collapse("#{__dir__}/agentilda/cli/api/subcommands")
 loader.collapse("#{__dir__}/agentilda/cli/ledger/subcommands")
 loader.collapse("#{__dir__}/agentilda/cli/mail/subcommands")
 loader.collapse("#{__dir__}/agentilda/cli/resync/subcommands")
 loader.ignore("#{__dir__}/agentilda/cli/linear/linear.rb")
+loader.ignore("#{__dir__}/agentilda/cli/api/api.rb")
 loader.ignore("#{__dir__}/agentilda/cli/ledger/ledger.rb")
 loader.ignore("#{__dir__}/agentilda/cli/mail/mail.rb")
 loader.ignore("#{__dir__}/agentilda/linear/mapping.rb")
