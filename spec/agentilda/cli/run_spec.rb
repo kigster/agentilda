@@ -159,9 +159,23 @@ RSpec.describe Agentilda::CLI::Run, :tree do
     it "prints which agent would take which plan, and invokes none" do
       out, err, status = run
 
-      expect(out).to include("001.00\tluke-backend\t[R:1]\tno change\tdry run - would invoke luke-backend")
+      expect(out).to include("001.00  luke-backend  [R:1]  no change  dry run - would invoke luke-backend")
       expect(unwrapped(err)).to include("Dry run — no agent was invoked", "--commit")
       expect(status).to eq(0)
+    end
+
+    # Tabs put each column on the next multiple of eight, so "yoda-writer"
+    # being one character shorter than "luke-backend" moved its round and
+    # mark a whole stop left of the rows above it.
+    describe "the attempts list, with agents whose names are different lengths" do
+      subject(:columns) { lines.map { |line| line.index("[R:") } }
+
+      let(:lines) { run.first.lines.grep(/\[R:/) }
+
+      before { plans { |t| t.plan("002.00", :researched, "second-plan", files: { "spec.md" => spec_body }) } }
+
+      it("lists an attempt per agent") { expect(lines.size).to be > 1 }
+      it("puts every round in the same column") { expect(columns.uniq.size).to eq(1) }
     end
 
     it "spends nothing, so it prints no bill" do
@@ -178,6 +192,14 @@ RSpec.describe Agentilda::CLI::Run, :tree do
       run
 
       expect(Dir.children(plans_root).grep(/stays-put/)).to eq(["002.00-⭐️ → stays-put"])
+    end
+
+    # Every key speaks to a running agent, and listening puts the terminal
+    # in raw mode, which is what made the report staircase down the screen.
+    it "listens for no keys, since there is no agent for a key to reach" do
+      run
+
+      expect(Agentilda::Keyboard).not_to have_received(:listen)
     end
 
     it "says where the progress log is going before the loop starts" do
@@ -252,6 +274,33 @@ RSpec.describe Agentilda::CLI::Run, :tree do
 
       expect(Agentilda::Executor).to have_received(:new)
         .with(hash_including(instructions: "Focus on the parser"))
+    end
+
+    context "when a short --prompt names an existing file" do
+      before do
+        with_executor
+        File.write(File.join(plans_root, "steer.txt"), "Focus on the parser, from a file")
+        Dir.chdir(plans_root) { run(commit: true, agent: "luke-backend", prompt: "steer.txt") }
+      end
+
+      it "reads the instructions from the file" do
+        expect(Agentilda::Executor).to have_received(:new)
+          .with(hash_including(instructions: "Focus on the parser, from a file"))
+      end
+    end
+
+    context "when a --prompt of 80 characters or more names an existing file" do
+      let(:long_path) { File.join(plans_root, "#{"x" * 80}.txt") }
+
+      before do
+        with_executor
+        File.write(long_path, "from the file")
+        run(commit: true, agent: "luke-backend", prompt: long_path)
+      end
+
+      it "takes the prompt as the text" do
+        expect(Agentilda::Executor).to have_received(:new).with(hash_including(instructions: long_path))
+      end
     end
 
     # Without the restriction the steer would reach every agent in the round,
@@ -344,7 +393,7 @@ RSpec.describe Agentilda::CLI::Run, :tree do
       with_executor
       out, err, status = run(commit: true, rounds: 1)
 
-      expect(out).to include("attempts", "001.00\tluke-backend")
+      expect(out).to include("001.00  luke-backend")
       # A committed run spent something, so the tally belongs with the
       # attempts it bills for, on STDOUT, where a redirected run keeps it.
       expect(out).to include("2 invocations")
@@ -403,6 +452,73 @@ RSpec.describe Agentilda::CLI::Run, :tree do
     end
   end
 
+  describe "the dashboard" do
+    let(:fake_screen) { instance_double(Agentilda::Screen::Ratatui, attach_keyboard: nil, open: nil, close: nil, draw: nil) }
+
+    before { allow(Agentilda::UI).to receive(:animate?).and_return(true) }
+
+    context "when the run is committed" do
+      before do
+        allow(Agentilda::Screen::Ratatui).to receive(:new).and_return(fake_screen)
+        allow(Agentilda::Keyboard).to receive(:new).and_call_original
+        run(commit: true)
+      end
+
+      it { expect(Agentilda::Screen::Ratatui).to have_received(:new) }
+      it { expect(Agentilda::Keyboard).to have_received(:new) }
+      it("never starts the keyboard listener") { expect(Agentilda::Keyboard).not_to have_received(:listen) }
+      it { expect(fake_screen).to have_received(:attach_keyboard) }
+    end
+
+    context "with --scroll-height" do
+      before do
+        allow(Agentilda::Screen::Ratatui).to receive(:new).and_return(fake_screen)
+        run(commit: true, scroll_height: "5")
+      end
+
+      it "hands it to the screen" do
+        expect(Agentilda::Screen::Ratatui).to have_received(:new).with(scroll_height: 5)
+      end
+    end
+
+    context "with an --scroll-height that is not a positive whole number" do
+      subject(:result) { run(commit: true, scroll_height: "0") }
+
+      let(:err) { result[1] }
+      let(:status) { result[2] }
+
+      it { expect(status).to eq(64) }
+      it { expect(unwrapped(err)).to include("--scroll-height") }
+    end
+
+    describe "the publisher" do
+      subject(:publisher) { command.send(:publisher_for, plans_root, :worktree, options) }
+
+      context "with the default options" do
+        let(:options) { { commit: true } }
+
+        it { is_expected.to be_a(Agentilda::Publisher) }
+      end
+
+      context "with --no-git-push" do
+        let(:options) { { commit: true, git_push: false } }
+
+        it { is_expected.to be_nil }
+      end
+    end
+
+    context "when the run is dry" do
+      before do
+        allow(Agentilda::Screen::Ratatui).to receive(:new)
+        run
+      end
+
+      it "draws nothing" do
+        expect(Agentilda::Screen::Ratatui).not_to have_received(:new)
+      end
+    end
+  end
+
   describe "the state file" do
     before { building_plan }
 
@@ -454,7 +570,7 @@ RSpec.describe Agentilda::CLI::Run, :tree do
 
       out, err, status = run(isolation: "worktree")
 
-      expect(out).to include("001.00\tluke-backend")
+      expect(out).to include("001.00  luke-backend")
       expect(unwrapped(err)).to include("one worktree each")
       expect(status).to eq(0)
     end

@@ -106,35 +106,28 @@ module Agentilda
     # and friends, and credential keys.
     #
     # Never fatal. A repository with no ignored files is perfectly normal, and
-    # a plan is not worth abandoning over a seeding step, so this reports and
-    # carries on. It runs `--quiet`, which prints nothing on success and leaves
-    # a real failure on STDERR where the loop's other progress goes.
+    # a plan is not worth abandoning over a seeding step, so this notes it and
+    # carries on.
+    #
+    # The note goes to the progress log, never the terminal: this runs while
+    # the ratatui dashboard owns the screen, and a line written to STDERR
+    # lands on top of an agent's row. The seeder's own output is silenced for
+    # the same reason. A suite that later dies on a missing key is explained
+    # by the log line.
     #
     # @param path [String] the worktree to seed
     # @return [Boolean] whether the seeder ran and succeeded
-    # `$stderr` rather than `Kernel#warn`, matching {Agentilda::UI}, which
-    # writes its progress to `$stderr` too. Style/StderrPuts prefers warn so the
-    # output can be silenced, but warn reaches file descriptor 2 through
-    # `Warning.warn` and ignores a reassigned `$stderr` entirely:
-    #
-    #   $stderr = StringIO.new; warn "x"; $stderr.string  # => ""
-    #
-    # So anything capturing this loop's output, the suite included, would never
-    # see a seeding failure. Being silenceable is worth less than being seen.
-    # rubocop: disable Style/StderrPuts
     def seed(path)
       unless File.executable?(SEEDER)
-        $stderr.puts "worktree: #{SEEDER} is missing, so #{path} has no .env or credential keys"
+        UI.log("worktree: #{SEEDER} is missing, so #{path} has no .env or credential keys")
         return false
       end
 
-      return true if system(SEEDER, "--quiet", path, out: File::NULL)
+      return true if system(SEEDER, "--quiet", path, out: File::NULL, err: File::NULL)
 
-      $stderr.puts "worktree: could not seed #{path}; its suite may fail on a missing key"
+      UI.log("worktree: could not seed #{path}; its suite may fail on a missing key")
       false
     end
-
-    # rubocop: enable Style/StderrPuts
 
     # @param feature [Agentilda::Feature]
     # @return [String] e.g. "kig/002.00-tenancy-households"

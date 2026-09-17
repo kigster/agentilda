@@ -7,7 +7,7 @@ module Agentilda
   # Turns a finished worktree into a pushed branch and a pull request.
   #
   # This is the one place the harness reaches off the machine, so it requires
-  # `--commit`, is skipped with `--dont-push-anything`, and refuses anything
+  # `--commit`, is skipped with `--no-git-push`, and refuses anything
   # it is not certain about. Everything it does is reported before it does it.
   #
   # Titles follow the convention the whole system joins on:

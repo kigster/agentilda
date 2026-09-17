@@ -18,6 +18,11 @@ end
 group :test do
   gem "coverage-badge"
   gem "json_schemer" # validates configuration.example.yml against configuration.schema.json
+  # ratatui_ruby's own test_helper hard-requires "minitest/mock" (for its
+  # Terminal/EventInjection mixins), which minitest 6.x dropped entirely.
+  # Pinned to the last line that still ships Mock, purely so `require
+  # "ratatui_ruby/test_helper"` resolves; RSpec itself never touches minitest.
+  gem "minitest", "~> 5.27"
   gem "rspec"
   gem "rspec-its"
   gem "rspec_junit_formatter" # JUnit XML for CircleCI store_test_results

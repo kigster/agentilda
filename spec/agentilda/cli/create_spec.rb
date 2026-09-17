@@ -119,12 +119,12 @@ RSpec.describe Agentilda::CLI::Create, :tree do
     # itself only draws on a TTY, so the seam is the phrase handed to the UI.
     it "names anakin-briefster on the progress line" do
       with_brief(result: [true, "drafted"])
-      allow(Agentilda::UI).to receive(:spinning).and_call_original
+      allow(Agentilda::UI).to receive(:concurrently).and_call_original
 
       run("tax", "rule", "dsl", open: false)
 
-      expect(Agentilda::UI).to have_received(:spinning)
-        .with(a_string_including(Agentilda::Brief::AGENT_NAME))
+      expect(Agentilda::UI).to have_received(:concurrently)
+        .with(anything, a_string_including(Agentilda::Brief::AGENT_NAME), hash_including(jobs: 1))
     end
 
     # The scaffold survives a failed draft, so the failure must not read as a

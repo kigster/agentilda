@@ -159,19 +159,28 @@ RSpec.describe Agentilda::Worktree do
       expect(File.directory?(worktrees.checkout_for(feature).path)).to be(true)
     end
 
-    it "says it could not seed, rather than failing quietly" do
-      # spec_helper swaps $stderr for a StringIO suite-wide, so RSpec's
-      # `output(...).to_stderr` never sees anything. Swap it here instead.
-      captured = StringIO.new
-      original = $stderr
-      begin
-        $stderr = captured
-        worktrees.seed(repo)
+    # The dashboard owns the terminal while this runs, so the note goes to
+    # the progress log and nothing reaches STDERR.
+    context "when it notes the missing seeder" do
+      subject(:seeded) { worktrees.seed(repo) }
+
+      let(:stderr) { StringIO.new }
+
+      around do |example|
+        original = $stderr
+        $stderr = stderr
+        example.run
       ensure
         $stderr = original
       end
 
-      expect(captured.string).to include("missing")
+      before do
+        allow(Agentilda::UI).to receive(:log)
+        seeded
+      end
+
+      it { expect(Agentilda::UI).to have_received(:log).with(a_string_including("missing")) }
+      it { expect(stderr.string).to be_empty }
     end
 
     it "answers false so a caller can tell seeding did not happen" do
@@ -194,24 +203,30 @@ RSpec.describe Agentilda::Worktree do
     end
 
     context "when the seeder runs and fails" do
-      before { fake_seeder(1) }
+      let(:stderr) { StringIO.new }
+
+      around do |example|
+        original = $stderr
+        $stderr = stderr
+        example.run
+      ensure
+        $stderr = original
+      end
+
+      before do
+        fake_seeder(1)
+        allow(Agentilda::UI).to receive(:log)
+      end
 
       # Never fatal: a plan is not worth abandoning over a seeding step, but
       # a suite dying later on a missing key needs this line to explain it.
-      it "answers false and says the suite may fail on a missing key" do
-        captured = StringIO.new
-        original = $stderr
-        begin
-          $stderr = captured
-          result = worktrees.seed(repo)
-        ensure
-          $stderr = original
-        end
+      it { expect(worktrees.seed(repo)).to be(false) }
 
-        aggregate_failures do
-          expect(result).to be(false)
-          expect(captured.string).to include("could not seed")
-        end
+      context "when it has run" do
+        before { worktrees.seed(repo) }
+
+        it { expect(Agentilda::UI).to have_received(:log).with(a_string_including("could not seed")) }
+        it { expect(stderr.string).to be_empty }
       end
 
       it "still hands back a usable checkout" do

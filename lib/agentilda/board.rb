@@ -40,6 +40,9 @@ module Agentilda
   #   @return [Symbol, nil] the clock's phase while running
   # @!attribute [r] frame
   #   @return [Integer] spinner frame counter
+  # @!attribute [r] history
+  #   @return [Array<String>] what the agent has said, newest first, for
+  #     `run --scroll-height` to show more than the latest line of
   Board::Row = Data.define(:key,
     :at,
     :ordinal,
@@ -57,10 +60,32 @@ module Agentilda
     :state,
     :pr,
     :frame,
-    :bold) do
-    def initialize(pr: nil, phase: nil, remaining: nil, frame: 0, bold: false, message: nil, **rest) = super
+    :bold,
+    :elapsed,
+    :subagents,
+    :history) do
+    def initialize(pr: nil, phase: nil, remaining: nil, frame: 0, bold: false, message: nil,
+      elapsed: 0, subagents: 0, history: [], **rest)
+      super
+    end
+
+    # @param history [Array<String>] newest first
+    # @param text [String, nil]
+    # @return [Array<String>] +text+ on top, unless it is empty or repeats
+    #   the newest line: an agent restating its activity is not news
+    def self.remember(history, text)
+      text = text.to_s.strip
+      return history if text.empty? || history.first == text
+
+      [text, *history].first(Board::Row::HISTORY)
+    end
 
     # @return [Boolean]
     def running? = state == :running
   end
+
+  # Statuses a row keeps, whatever the screen shows of them. A cap, so a
+  # long-running agent's chatter cannot grow without bound. Outside the
+  # `Data.define` block, whose constants would land on Agentilda instead.
+  Board::Row::HISTORY = 50
 end

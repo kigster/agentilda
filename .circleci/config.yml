@@ -14,12 +14,43 @@ commands:
       google-chrome-stable, which the GitHub `test` job installed: the
       `-browsers` image variant already ships it, and layering a second Chrome
       over the top is how a browser and a driver stop agreeing.
+
+      clang and libclang-dev are for ratatui_ruby: rb-sys generates its Ruby
+      bindings with bindgen, which dlopens libclang at build time and panics
+      with "Unable to find libclang" without it. gcc is not a substitute.
     steps:
       - run:
           name: Install packages
           command: |
             sudo apt-get update
-            sudo apt-get install --no-install-recommends -y curl libjemalloc2 libvips
+            sudo apt-get install --no-install-recommends -y curl libjemalloc2 libvips \
+              clang libclang-dev
+
+  install_rust:
+    description: >-
+      ratatui_ruby is a Rust extension and cimg/ruby carries no toolchain, so
+      `bundle install` stops at `checking for cargo... no` and the gem fails to
+      build. rustup's own installer is the documented route and pins nothing
+      the image would argue with. Cached because compiling the extension from
+      scratch costs more than every other gem in the bundle put together.
+    steps:
+      - restore_cache:
+          keys:
+            - v1-cargo-{{ arch }}-{{ checksum "Gemfile.lock" }}
+            - v1-cargo-{{ arch }}-
+      - run:
+          name: Install Rust toolchain
+          command: |
+            if ! command -v cargo > /dev/null; then
+              curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs \
+                | sh -s -- -y --profile minimal --default-toolchain stable
+            fi
+            echo 'source "$HOME/.cargo/env"' >> "$BASH_ENV"
+      - save_cache:
+          key: v1-cargo-{{ arch }}-{{ checksum "Gemfile.lock" }}
+          paths:
+            - ~/.cargo
+            - ~/.rustup
 
   bundle_deps:
     description: >-
@@ -29,8 +60,8 @@ commands:
     steps:
       - restore_cache:
           keys:
-            - v2-bundle-{{ arch }}-{{ checksum ".ruby-version" }}-{{ checksum "Gemfile.lock" }}
-            - v2-bundle-{{ arch }}-{{ checksum ".ruby-version" }}-
+            - v3-bundle-{{ arch }}-{{ checksum ".ruby-version" }}-{{ checksum "Gemfile.lock" }}
+            - v3-bundle-{{ arch }}-{{ checksum ".ruby-version" }}-
       - run:
           name: Install Ruby dependencies
           command: |
@@ -38,7 +69,7 @@ commands:
             bundle install --jobs=4 --retry=3
             bundle clean --force
       - save_cache:
-          key: v1-bundle-{{ arch }}-{{ checksum ".ruby-version" }}-{{ checksum "Gemfile.lock" }}
+          key: v3-bundle-{{ arch }}-{{ checksum ".ruby-version" }}-{{ checksum "Gemfile.lock" }}
           paths:
             - vendor/bundle
 
@@ -48,6 +79,7 @@ jobs:
     steps:
       - checkout
       - install_packages
+      - install_rust
       - bundle_deps
       # `-f github` emitted GitHub's command annotations, which mean
       # nothing to CircleCI's log renderer. Plain output; the offences are
@@ -67,6 +99,7 @@ jobs:
     steps:
       - checkout
       - install_packages
+      - install_rust
       - bundle_deps
       - run:
           name: Run tests

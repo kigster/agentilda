@@ -191,6 +191,16 @@ RSpec.describe Agentilda::Executor, :tree do
     it "explains the warnings the control file will carry" do
       expect(prompt).to include("WARN:", "WRAP_UP:", "STOP")
     end
+
+    # What makes a restart after ctrl-c idempotent: a note on the way out,
+    # and every agent reading its mail on the way in.
+    context "with a control file" do
+      let(:controlled) { executor.invocation(agent, subject_plan, control: "/tmp/control-000.00-yoda-writer")[2] }
+
+      it "asks an interrupted agent for a resume note, and every agent to read one first" do
+        expect(controlled).to include("INTERRUPT", "RESUME:", "--from yoda-writer --to yoda-writer", "mail read", "Interrupted")
+      end
+    end
   end
 
   describe "#call with a handle" do

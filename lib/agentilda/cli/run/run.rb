@@ -19,7 +19,12 @@ module Agentilda
         desc: "Seconds before one agent is abandoned; only tightens an agent's own clock " \
               "(default: the agent's own, else 900)"
       option :agent, desc: "Only run this one agent"
-      option :prompt, desc: "Extra instructions appended to the agent's prompt (only with --agent)"
+      # `--prompt` shorter than this that names an existing file is read.
+      PROMPT_PATH_LIMIT = 80
+
+      option :prompt,
+        desc: "Extra instructions appended to the agent's prompt (only with --agent); " \
+              "a path to an existing text file under #{PROMPT_PATH_LIMIT} characters is read instead"
       option :skip,
         desc: "Never assign this agent; its plans wait, the rest of the pipeline runs. " \
               "Comma separated for several"
@@ -41,11 +46,15 @@ module Agentilda
       option :jobs,
         aliases: ["-j"],
         desc:    "Agents to run at once (default: cores - 2, capped at 12)"
-      option :dont_push_anything,
+      option :git_push,
         type:    :boolean,
-        default: false,
+        default: true,
         desc:    "With --commit and --isolation worktree, a finished branch is pushed and its pull request " \
-                 "opened as soon as it lands, titled [NNN.MM](X). Pass this to turn that off and leave it uncommitted."
+                 "opened as soon as it lands, titled [NNN.MM](X). --no-git-push turns that off and leaves it uncommitted."
+      option :scroll_height,
+        aliases: ["-s"],
+        desc:    "Lines of each agent's latest statuses shown under its row, newest first " \
+                 "(default: #{Screen::Ratatui::SCROLL_HEIGHT})"
       option :log, desc: "Append progress to this file (default: a per-project file under the system temp dir)"
 
       example [
@@ -54,7 +63,8 @@ module Agentilda
         "--commit -j 4          # …with four at a time",
         "--isolation shared     # one tree, serial — no git required",
         "--commit --rounds 3    # …capping every agent at three rounds per plan",
-        "--commit --plan 005,006,007  # only the plans a batch step just created"
+        "--commit --plan 005,006,007  # only the plans a batch step just created",
+        "--commit -s 5          # …each agent's last five statuses under its row"
       ]
 
       # Option precedence, quietest to loudest: the built-in default, then
@@ -117,10 +127,23 @@ module Agentilda
         # The screen only on a terminal that is actually running agents: a dry
         # run has nothing to draw and a pipe has nowhere to draw it. Without a
         # screen the keys still work, so the one line says which.
+        # With a screen, ratatui owns the terminal's input, so the keyboard is
+        # fed from its loop rather than started on STDIN of its own.
         Control.reset!
-        screen   = (Screen.new if UI.animate? && commit?(options))
+        scroll_height = options.fetch(:scroll_height, Screen::Ratatui::SCROLL_HEIGHT)
+        unless scroll_height.to_s.match?(/\A[1-9]\d*\z/)
+          refuse("--scroll-height must be a whole number of lines, 1 or more, not #{scroll_height.inspect}.", 64)
+        end
+        screen   = (Screen::Ratatui.new(scroll_height: scroll_height.to_i) if UI.animate? && commit?(options))
         console  = (Console.new(screen:) if screen)
-        keyboard = Keyboard.listen(sink: console)
+        # A dry run gets no keyboard at all: every key it offers speaks to a
+        # running agent, and listening costs the terminal's raw mode, whose
+        # output post-processing the report below needs left alone.
+        keyboard = if screen
+                     Keyboard.new(sink: console).tap { |kb| screen.attach_keyboard(kb) }
+                   elsif commit?(options)
+                     Keyboard.listen(sink: console)
+                   end
         UI.line("keys: h for help - s select, k kill, x extend, w wrap up, n stop, q quit") if keyboard && console.nil? && !quiet?(options)
 
         runner = Runner.new(
@@ -135,7 +158,7 @@ module Agentilda
           executor:  Executor.new(root:,
             timeout:,
             dry_run:      !commit?(options),
-            instructions: options[:prompt],
+            instructions: instructions_from(options[:prompt]),
             model:        options[:model],
             max_tokens:   (options[:max_tokens] || config[:max_tokens])&.to_i,
             interactive:  !keyboard.nil? && commit?(options)),
@@ -149,7 +172,7 @@ module Agentilda
         started  = UI.monotonic
         attempts = begin
           screen&.open
-          runner.call { |dispatcher| console&.attach(dispatcher) }
+          Control.on_interrupt { runner.call { |dispatcher| console&.attach(dispatcher) } }
         ensure
           screen&.close
           keyboard&.stop
@@ -159,6 +182,51 @@ module Agentilda
       end
 
       private
+
+      # The attempts list, padded into columns.
+      #
+      # Tabs used to separate these, which put every column on the next
+      # multiple of eight: one agent's name a character longer than the
+      # next one's pushed its round and mark a whole stop to the right, so
+      # nothing under `luke-backend` and `yoda-writer` lined up. Widths come
+      # from the rows themselves, so the columns are as narrow as the run
+      # allows and still square.
+      #
+      # @param attempts [Array<Agentilda::Runner::Attempt>]
+      # @return [Array<String>] one line per attempt, indented by two
+      def attempt_lines(attempts)
+        rows   = attempts.map { |a| [a.ordinal.to_s, a.agent.to_s, "[R:#{a.round}]", mark(a), a.note.to_s] }
+        widths = rows.transpose.map { |column| column.map { |cell| UI.display_width(cell) }.max.to_i }
+        rows.map do |cells|
+          # The note is last and is left as it is: padding the final column
+          # only adds trailing whitespace a copy-paste then carries.
+          last = cells.size - 1
+          "  #{cells.each_with_index.map { |cell, i| i == last ? cell : UI.fit(cell, widths[i] + 2) }.join}"
+        end
+      end
+
+      # @param attempt [Agentilda::Runner::Attempt]
+      # @return [String] what the attempt did to its plan's state
+      def mark(attempt)
+        return "FAIL" unless attempt.ok
+        return "#{attempt.from} -> #{attempt.to}" if attempt.advanced?
+
+        "no change"
+      end
+
+      # `--prompt` takes the instructions themselves or a file holding them.
+      # A short argument naming an existing file is read; anything else is
+      # the text, so a sentence that happens to match a filename in the
+      # project is not silently swapped for that file once it is long enough
+      # to be a sentence.
+      #
+      # @param prompt [String, nil]
+      # @return [String, nil]
+      def instructions_from(prompt)
+        return prompt unless prompt && prompt.length < PROMPT_PATH_LIMIT && File.file?(prompt)
+
+        File.read(prompt)
+      end
 
       # @param agents [Agentilda::Agents]
       # @param name [String]
@@ -258,7 +326,7 @@ module Agentilda
       # isolation has to actually give each plan a branch of its own too.
       #
       # `nil` is how {Runner} is told to leave a finished worktree alone; it
-      # is what `--dont-push-anything` asks for, and what a shared tree gets
+      # is what `--no-git-push` asks for, and what a shared tree gets
       # by construction, since there is no separate branch there to push.
       #
       # @param root [String]
@@ -266,7 +334,7 @@ module Agentilda
       # @param options [Hash]
       # @return [Agentilda::Publisher, nil]
       def publisher_for(root, isolation, options)
-        return nil if isolation != :worktree || options[:dont_push_anything]
+        return nil if isolation != :worktree || options[:git_push] == false
 
         Publisher.new(root:, dry_run: !commit?(options))
       end
@@ -282,17 +350,12 @@ module Agentilda
       # @param seconds [Float] wall clock for the whole loop
       # @return [void]
       def report(runner, attempts, options, seconds: 0.0)
-        puts "attempts"
-        attempts.each do |a|
-          mark = if !a.ok
-                   "FAIL"
-                 elsif a.advanced?
-                   "#{a.from} -> #{a.to}"
-                 else
-                   "no change"
-                 end
-          puts "  #{a.ordinal}\t#{a.agent}\t[R:#{a.round}]\t#{mark}\t#{a.note}"
-        end
+        # A leading blank line, because the spinners this replaces write to
+        # STDERR and the last of them may have left the cursor mid-line:
+        # without it the first attempt starts wherever that line stopped,
+        # indented by however much it had drawn.
+        puts ""
+        puts attempt_lines(attempts)
 
         # What the run cost, on STDOUT with the attempts it belongs to, so a run
         # redirected to a file keeps its bill. A dry run spent nothing and gets

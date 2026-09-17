@@ -27,10 +27,12 @@ module Agentilda
       :message,
       :up,
       :down,
+      :subagents,
       :result,
       :from,
       :state,
-      :frame) do
+      :frame,
+      :history) do
       # @return [Boolean]
       def finished? = !thread.alive?
     end
@@ -86,7 +88,7 @@ module Agentilda
     def tick
       reap
       poll
-      @running.each { |job| job.handle.kill!(grace: 0) } if Control.overdue?
+      @running.each { |job| job.handle.kill!(grace: 0, reason: :quit) } if Control.overdue?
       dispatch unless Control.quit?
       persist
       @on_board&.call(board)
@@ -168,7 +170,10 @@ module Agentilda
         message: job.message,
         state: :running,
         pr: pr_for(task),
-        frame: job.frame)
+        frame: job.frame,
+        elapsed: (UI.monotonic - job.started_at).round,
+        subagents: job.subagents.to_i,
+        history: job.history || [])
     end
 
     # @param task [Agentilda::Runner::Task]
@@ -288,6 +293,7 @@ module Agentilda
         state: subject.status.key,
         up: 0,
         down: 0,
+        subagents: 0,
         frame: 0)
       successor = @runner.agents.for_status(STATUS_BY_KEY.fetch(agent.advances_to)).first&.name if agent.advances_to && STATUS_BY_KEY.key?(agent.advances_to)
       # Each member of a pair is told who the others are, so the executor
@@ -309,7 +315,9 @@ module Agentilda
           @runner.executor.call(agent, subject, root: task.root, round:, successor:, handle:, partners:) { |progress|
             job.up = progress.up
             job.down = progress.down
+            job.subagents = progress.subagents
             job.message = progress.message || progress.activity
+            job.history = Board::Row.remember(job.history || [], job.message)
           }
         rescue StandardError => e
           e
@@ -365,8 +373,10 @@ module Agentilda
         @running.delete(job)
         attempt = settle(job)
         @attempts << attempt
-        @recent << { at: UI.monotonic, row: row_for(job).with(state: attempt.ok ? :done : :failed,
+        row = row_for(job)
+        @recent << { at: UI.monotonic, row: row.with(state: attempt.ok ? :done : :failed,
           message: attempt.note,
+          history: Board::Row.remember(row.history, attempt.note),
           remaining: nil,
           phase: nil,
           bold: !attempt.ok) }
@@ -422,7 +432,8 @@ module Agentilda
       case result.killed
       when :key then "killed by harness after #{KILL_GRACE}s grace"
       when :timeout then "timed out, killed #{Clock::GRACE}s after STOP"
-      else "no closing ledger line"
+      when :quit then "interrupted, killed #{Control::GRACE}s after #{Control.interrupted? ? "ctrl-c" : "q"}"
+      else Control.interrupted? ? "interrupted by ctrl-c" : "no closing ledger line"
       end
     end
 

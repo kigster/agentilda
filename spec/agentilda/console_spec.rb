@@ -3,7 +3,7 @@
 RSpec.describe Agentilda::Console do
   subject(:console) { described_class.new(screen:) }
 
-  let(:screen) { instance_double(Agentilda::Screen, draw: nil) }
+  let(:screen) { instance_double(Agentilda::Screen::Ratatui, draw: nil) }
   let(:dispatcher) { instance_double(Agentilda::Dispatcher, kill: nil, extend: nil) }
   let(:rows) do
     %w[001.00/leah-researcher 002.00/yoda-writer 003.00/palpatine-planner].each_with_index.map do |key, i|

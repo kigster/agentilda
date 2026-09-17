@@ -22,6 +22,28 @@ RSpec.describe Agentilda::Keyboard do
     expect(described_class.listen(input:)).to be_nil
   end
 
+  # getch leaves the terminal raw when the thread is killed inside it, and
+  # raw mode's newline no longer returns the cursor to column zero.
+  describe "#stop, on a terminal" do
+    before do
+      allow(input).to receive(:tty?).and_return(true)
+      allow(input).to receive(:cooked!)
+      keyboard.stop
+    end
+
+    it("puts the terminal back in cooked mode") { expect(input).to have_received(:cooked!) }
+  end
+
+  describe "#stop, where STDIN is a pipe" do
+    before do
+      allow(input).to receive(:tty?).and_return(false)
+      allow(input).to receive(:cooked!)
+      keyboard.stop
+    end
+
+    it("has no mode to restore") { expect(input).not_to have_received(:cooked!) }
+  end
+
   it "h pops the bindings when there is no console, and they mention every key" do
     keyboard.handle("h")
 
@@ -59,11 +81,38 @@ RSpec.describe Agentilda::Keyboard do
       expect(File.read(file).strip).to eq("STOP")
       expect(Agentilda::Control.quit?).to be(true)
     end
+
+    # The first Ctrl-C lets the agent write down where it got to, so the
+    # next run resumes instead of redoing the work.
+    describe "ctrl-c" do
+      subject(:press) { -> { keyboard.handle("\u0003") } }
+
+      it "does not abort yet" do
+        expect(press).not_to raise_error
+      end
+
+      context "when pressed once" do
+        before { press.call }
+
+        it "asks it for a resume note" do
+          expect(File.read(file).strip).to eq("INTERRUPT")
+        end
+
+        it "quits the loop" do
+          expect(Agentilda::Control).to be_quit
+        end
+
+        it "says a second press aborts" do
+          expect(Agentilda::UI).to have_received(:line).with(a_string_including("resume notes", "again to abort"))
+        end
+      end
+    end
   end
 
   # The listener must never make a run harder to kill: raw mode swallowed
-  # the Ctrl-C, so the listener forwards the Interrupt it would have been.
-  it "forwards Ctrl-C as the Interrupt raw mode swallowed" do
+  # the Ctrl-C, so a second press is the Interrupt it would have been.
+  it "forwards a second Ctrl-C as the Interrupt raw mode swallowed" do
+    keyboard.handle("\u0003")
     expect { keyboard.handle("\u0003") }.to raise_error(Interrupt)
   end
 

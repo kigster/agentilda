@@ -8,6 +8,9 @@ module Agentilda
     class Base < Dry::CLI::Command
       include UI
 
+      # Values of AGENTILDA_AUTOCOMMIT that turn it on.
+      AUTOCOMMIT = %w[true yes 1].freeze
+
       def self.inherited(klass)
         super
         klass.option :dir,
@@ -55,9 +58,14 @@ module Agentilda
         quiet
       end
 
+      # `--commit`, or AGENTILDA_AUTOCOMMIT=true, which is `--commit` on every
+      # command for someone who never wants the dry run.
+      #
       # @param options [Hash]
       # @return [Boolean]
-      def commit?(options) = options.fetch(:commit, false)
+      def commit?(options)
+        options.fetch(:commit, false) || AUTOCOMMIT.include?(ENV.fetch("AGENTILDA_AUTOCOMMIT", "").strip.downcase)
+      end
 
       # `claude` prefers a credential in the environment to a claude.ai login,
       # so a project `.env` that direnv loads on `cd` can redirect every agent

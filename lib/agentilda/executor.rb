@@ -336,7 +336,7 @@ module Agentilda
       case reason
       when :timeout then "timed out (killed #{Clock::GRACE}s after STOP)"
       when :budget then "token budget of #{@max_tokens} exceeded"
-      when :quit then "still running after q, killed once the grace period ran out"
+      when :quit then "still running after #{Control.interrupted? ? "ctrl-c" : "q"}, killed once the grace period ran out"
       else "killed from the keyboard"
       end
     end
@@ -426,7 +426,7 @@ module Agentilda
         Repository root: #{root}
 
         #{"The folder's name is not currently justified: #{subject.violation}" if subject.violation}
-        #{operator_instructions}#{ledger_section(agent, round:, successor:)}#{budget_section}#{time_budget_section(agent)}#{control_section(control)}#{mailbox_section(agent, subject, partners)}
+        #{operator_instructions}#{ledger_section(agent, round:, successor:)}#{budget_section}#{time_budget_section(agent)}#{control_section(control, agent, subject)}#{mailbox_section(agent, subject, partners)}
         ## Boundary — enforced, not requested
 
         You may read anything, and write source, tests and the plan's own
@@ -606,17 +606,49 @@ module Agentilda
     # The section a control file adds. Present on every invocation, because
     # the advisory clock writes into it whether or not anyone is watching.
     #
+    # INTERRUPT is what makes a restart after Ctrl-C safe: the agent that
+    # was cut off leaves a mailbox note to whoever picks the plan up, and
+    # every agent is told to read its mail first, so the next run resumes
+    # from the note rather than redoing work already on disk.
+    #
     # @param control [String, nil]
+    # @param agent [Agentilda::Agent]
+    # @param subject [Agentilda::Subject]
     # @return [String]
-    def control_section(control)
+    def control_section(control, agent, subject)
       return "" if control.nil?
 
-      "\n## Control file — poll it between steps\n\n    " \
-        "#{control}\n\n" \
-        "Read this file before each significant step. Empty means carry on. " \
-        "A line starting WARN: tells you how much time is left. WRAP_UP: means " \
-        "finish the essential remainder now. STOP means write what you have, " \
-        "write your ledger line, and end your turn.\n"
+      plans_dir = File.dirname(subject.feature.path)
+      plan = subject.feature.ordinal
+      <<~SECTION
+
+        ## Control file — poll it between steps
+
+            #{control}
+
+        Read this file before each significant step. Empty means carry on.
+        A line starting WARN: tells you how much time is left. WRAP_UP: means
+        finish the essential remainder now. STOP means write what you have,
+        write your ledger line, and end your turn.
+
+        INTERRUPT means the operator pressed Ctrl-C and the run will be started
+        again later. Start nothing new. Finish the write you are in the middle
+        of, so no file is left half-written, then leave a resume note for
+        whoever runs next — most likely you — saying what is done, what is
+        not, and the exact next step:
+
+            agentilda mail send --dir "#{plans_dir}" --plan #{plan} --from #{agent.name} --to #{agent.name} "RESUME: ..."
+
+        Then write your ledger line as `Interrupted` with NO `next:` line, and
+        end your turn.
+
+        Before you start, check for such a note from an earlier run:
+
+            agentilda mail read --dir "#{plans_dir}" --plan #{plan} --for #{agent.name}
+
+        If there is a RESUME note, continue from it and do not redo what it
+        says is done; check the files it names rather than taking it on trust.
+      SECTION
     end
 
     # The section `run --prompt` adds, labelled as coming from the person who

@@ -72,6 +72,79 @@ RSpec.describe Agentilda::Dispatcher, :tree do
       yoda = attempts.find { |a| a.agent == "yoda-writer" }
       expect([yoda.from, yoda.to]).to eq(%i[researched ready_for_planning])
     end
+
+    context "when a row is running" do
+      subject(:row) { dispatcher.board.rows.find(&:running?) }
+
+      let(:dispatcher) { described_class.new(runner: runner_with(executor_with { |*| nil }), sleeper: ->(_) {}) }
+
+      before do
+        allow(Agentilda::UI).to receive(:monotonic).and_return(1000.0)
+        dispatcher.tick # dispatches whatever the fixture tree makes eligible
+        allow(Agentilda::UI).to receive(:monotonic).and_return(1042.0)
+      end
+
+      # The tick started real agent threads that write ledger lines into the
+      # fixture tree; the tree is deleted after the example, so wait for them.
+      after { dispatcher.running.each { |job| job.thread.join(5) } }
+
+      it("carries elapsed seconds") { expect(row.elapsed).to eq(42) }
+      it("carries the live sub-agent count") { expect(row.subagents).to eq(0) }
+    end
+
+    # What `run --scroll-height` draws: every distinct status, newest
+    # first, on the running row and on the finished one it leaves behind.
+    describe "the agent's statuses, newest first, repeats dropped" do
+      # The executor runs on a dispatcher thread: `said` tells the example
+      # the statuses are out, `release` lets the agent finish. Both pops time
+      # out, so a queue nobody feeds can never hang the suite.
+      let(:said) { Queue.new }
+      let(:release) { Queue.new }
+      let(:executor) do
+        said_queue, release_queue = said, release
+        lambda { |_agent, _subject, **, &progress|
+          ["reading spec.md", "reading spec.md", "editing plan.md"].each do |activity|
+            progress.call(Agentilda::Transcript::Progress.new(activity:, up: 1, down: 1, subagents: 0))
+          end
+          said_queue << true
+          release_queue.pop(timeout: 5)
+          Agentilda::Executor::Result.new(ok: false, note: "stopped early", up: 1, down: 1, subagents: 0, delegated: 0, seconds: 1.0)
+        }
+      end
+      let(:dispatcher) { described_class.new(runner: runner_with(executor), sleeper: ->(_) {}) }
+      let(:running_key) { dispatcher.board.rows.find(&:running?).key }
+      let(:row) { dispatcher.board.rows.find { |r| r.key == running_key } }
+
+      before do
+        dispatcher.tick
+        said.pop(timeout: 5)
+        running_key
+      end
+
+      after do
+        10.times { release << true }
+        dispatcher.running.each { |job| job.thread.join(5) }
+      end
+
+      context "when the agent is still running" do
+        it { expect(row.history).to eq(["editing plan.md", "reading spec.md"]) }
+      end
+
+      context "when the agent is done" do
+        before do
+          10.times { release << true }
+          200.times do
+            dispatcher.tick
+            break if dispatcher.board.rows.none?(&:running?)
+
+            sleep 0.01
+          end
+        end
+
+        it("keeps the statuses under the outcome") { expect(row.history.drop(1)).to eq(["editing plan.md", "reading spec.md"]) }
+        it("puts the outcome on top") { expect(row.history.first).to eq(row.message) }
+      end
+    end
   end
 
   # The 001.00 transcript, the other way round: a folder still named ⚪️

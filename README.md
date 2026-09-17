@@ -25,6 +25,20 @@ eval "$(alock completion zsh)"
 
 ![help-screen](./.img/help-screen.avif)
 
+### What it compiles
+
+The dashboard is drawn by [`ratatui_ruby`](https://github.com/kigster/ratatui_ruby), a Rust extension, so installing needs a Rust toolchain (`cargo`) and `clang` with `libclang` on the machine. On a Mac, `brew install rust` and the Command Line Tools are enough; on Debian or Ubuntu, `rustup` plus `clang libclang-dev`. Without `libclang`, `rb-sys`'s bindgen step stops at "Unable to find libclang", and `gcc` is not a substitute.
+
+#### Building on a jemalloc-linked Ruby
+
+If `bundle install` fails compiling `ratatui_ruby` with `fatal error: 'jemalloc/jemalloc.h' file not found`, your Ruby was built `--with-jemalloc` and `rb-sys`'s bindgen step is not inheriting your compiler's include path:
+
+```bash
+BINDGEN_EXTRA_CLANG_ARGS="-I$(brew --prefix jemalloc)/include" bundle install
+```
+
+Put it in `.envrc` if you hit it more than once.
+
 ## Quick start
 
 Run these from the root of your project:
@@ -96,7 +110,7 @@ A plan can also leave the main path. It stops at ⭕️ Technical Block or 🅱�
 | `yoda-writer`       | 🔎, 🕰️         | 📋                  | `spec.md`                              | Writes the full spec (goals, non-goals, scope), or `blocked.md` when a human must answer |
 | `palpatine-planner` | 📋             | ⭐️                  | `plan.md`                              | Splits the spec into independent work units, one plan each for back end and front end    |
 | `luke-backend`      | ⭐️, 🟡, 🔴     | 🟢                  | `plan-backend.md`, `pull-requests.md`  | Builds the data, domain, API and tests                                                   |
-| `rey-frontend`      | ⭐️, 🟡, 🔴     | 🟢                  | `plan-frontend.md`, `pull-requests.md` | Builds the interface against Luke's API and proves the two halves work together          |
+| `rey-frontend`      | ⭐️, 🟡, 🎨, 🔴 | 🟢                  | `plan-frontend.md`, `pull-requests.md` | Builds the interface against Luke's API and proves the two halves work together          |
 | `hansolo-reviewer`  | 🟢, 👀         | 👀 approved, 🔴, 💩 | `pull-requests.md`                     | Reviews the diff against the plan; rejects at most twice; never merges                   |
 | `lando-broker`      | ⭕️, 🅱️         | ⭐️                  | `plan.md`                              | Folds your answers from `blocked.md` back into the spec and plan                         |
 
@@ -134,7 +148,7 @@ tilda linear import TAX -p 'Tax DSL'   # mirror the plans into Linear
 ```
 
 > [!IMPORTANT]
-> **Every command that writes is a dry run until you add `--commit`.** Read what it would do first.
+> **Every command that writes is a dry run until you add `--commit`.** Read what it would do first. Set `AGENTILDA_AUTOCOMMIT=true` to have every command behave as if `--commit` were passed.
 
 ## Running the agents
 
@@ -147,6 +161,8 @@ tilda run --commit --agent yoda-writer --prompt "Rework the risks section first"
 tilda run --commit --skip hansolo-reviewer # everyone but the reviewer; its plans wait
 tilda run --commit --model opus            # one model for every agent
 tilda run --commit --timeout 600           # at most ten minutes per agent
+tilda run --commit --scroll-height 5       # each agent's last five statuses under its row
+tilda run --commit --agent luke-backend --prompt steer.md  # a short --prompt naming a file is read
 tilda run --commit --rounds 1              # at most one round per agent per plan
 tilda run --commit --max-tokens 200000     # token budget per agent invocation
 tilda run --isolation shared               # one checkout, one agent at a time, no git needed
@@ -160,7 +176,7 @@ The loop stops when a full round changes no plan's state. It also stops when eve
 
 - **Isolation.** By default every plan gets its own git worktree and branch, `<user>/NNN.MM-slug`, so agents on different plans share nothing. Parallel runs require it: `--isolation shared` runs one agent at a time.
 - **Agents cannot publish.** They may write source, tests and their plan's documents, but may not commit, push or touch a pull request. The tool enforces this twice: it withholds those commands from the agent, and afterwards checks that `HEAD` did not move.
-- **The harness publishes.** When a plan finishes, the harness commits the branch, pushes it and opens a pull request titled like `[002.00](A) Tenancy Households`. Pass `--dont-push-anything` to leave the work uncommitted in its worktree.
+- **The harness publishes.** When a plan finishes, the harness commits the branch, pushes it and opens a pull request titled like `[002.00](A) Tenancy Households`. Pass `--no-git-push` to leave the work uncommitted in its worktree.
 - **Nothing merges automatically.** An approval leaves the plan at 👀 until you merge.
 - **Disk over claims.** A plan moves only when the files its new state requires exist. If an agent reports success but wrote nothing, the tool records it as interrupted.
 
@@ -184,9 +200,9 @@ Defaults for `run` can live in `~/.local/config/agentilda.json`:
 
 A typed flag beats the file, and the file beats the built-in default. The file accepts `timeout`, `jobs`, `rounds`, `log` and `max_tokens`. It never accepts `commit`.
 
-### Keys during a run
+### The dashboard, and the keys during a run
 
-When you run it in a terminal, `run` shows a table of the running agents and listens for keys:
+On a terminal, every command that runs agents draws the same ratatui dashboard and listens for the same keys: `run --commit`, `unblock --commit` and `create`. A cyan status bar runs the full width at the top and another at the bottom, and each running agent is one table row — plan, agent, file, elapsed and remaining — with its latest statuses printed under it, newest first. `run --scroll-height N` (`-s N`) keeps the last N of them; the default is three. Off a terminal (a pipe, a dry run, cron) there is no screen, and progress goes to the log instead.
 
 | Key      | What it does                                                                   |
 | :------- | :----------------------------------------------------------------------------- |
@@ -200,9 +216,11 @@ When you run it in a terminal, `run` shows a table of the running agents and lis
 | `w`      | ask every running agent to wrap up as fast as possible                         |
 | `n`      | ask agents to save their work and stop; the loop continues with the next agent |
 | `q`      | save, stop everything and quit, after a 60-second grace period                 |
-| `ctrl-c` | interrupt the run                                                              |
+| `ctrl-c` | agents leave a resume note and stop, then quit; press again to abort at once   |
 
 `k` and `x` do nothing until you press `ENTER`, so a slip of the finger cannot kill an agent.
+
+Ctrl-C once asks each running agent to write a `RESUME:` note into its plan's `mailbox.md` and sign `Interrupted`; every agent reads its mail before it starts, so a later run picks up where this one stopped instead of redoing the work. A second press aborts immediately. It works without a dashboard too, through a `SIGINT` handler.
 
 ### How agents hand off
 
@@ -238,8 +256,8 @@ The `/plan-create`, `/plan-run`, `/plan-status` and other `/plan-*` slash comman
 
 ```bash
 just test         # rspec
-just lint         # standardrb
-just format       # standardrb --fix, then mdformat
+just lint         # rubocop
+just format       # rubocop -a, then mdformat
 just ci           # lint, then tests with coverage
 just update-workflow   # regenerate docs/WORKFLOW.md
 ```

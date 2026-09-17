@@ -62,7 +62,7 @@ module Agentilda
         credentials_warning if commit?(options) && !quiet?(options)
         preflight(subjects, unblocker, options)
 
-        outcomes = unblocker.call(subjects)
+        outcomes = Control.on_interrupt { unblocker.call(subjects) }
         outcomes.each { |outcome| report(outcome, options) }
         footer(outcomes, options) unless quiet?(options)
         exit(worst(targets, outcomes))
