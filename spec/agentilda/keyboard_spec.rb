@@ -22,6 +22,28 @@ RSpec.describe Agentilda::Keyboard do
     expect(described_class.listen(input:)).to be_nil
   end
 
+  # getch leaves the terminal raw when the thread is killed inside it, and
+  # raw mode's newline no longer returns the cursor to column zero.
+  describe "#stop, on a terminal" do
+    before do
+      allow(input).to receive(:tty?).and_return(true)
+      allow(input).to receive(:cooked!)
+      keyboard.stop
+    end
+
+    it("puts the terminal back in cooked mode") { expect(input).to have_received(:cooked!) }
+  end
+
+  describe "#stop, where STDIN is a pipe" do
+    before do
+      allow(input).to receive(:tty?).and_return(false)
+      allow(input).to receive(:cooked!)
+      keyboard.stop
+    end
+
+    it("has no mode to restore") { expect(input).not_to have_received(:cooked!) }
+  end
+
   it "h pops the bindings when there is no console, and they mention every key" do
     keyboard.handle("h")
 

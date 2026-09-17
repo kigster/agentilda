@@ -159,9 +159,23 @@ RSpec.describe Agentilda::CLI::Run, :tree do
     it "prints which agent would take which plan, and invokes none" do
       out, err, status = run
 
-      expect(out).to include("001.00\tluke-backend\t[R:1]\tno change\tdry run - would invoke luke-backend")
+      expect(out).to include("001.00  luke-backend  [R:1]  no change  dry run - would invoke luke-backend")
       expect(unwrapped(err)).to include("Dry run — no agent was invoked", "--commit")
       expect(status).to eq(0)
+    end
+
+    # Tabs put each column on the next multiple of eight, so "yoda-writer"
+    # being one character shorter than "luke-backend" moved its round and
+    # mark a whole stop left of the rows above it.
+    describe "the attempts list, with agents whose names are different lengths" do
+      subject(:columns) { lines.map { |line| line.index("[R:") } }
+
+      let(:lines) { run.first.lines.grep(/\[R:/) }
+
+      before { plans { |t| t.plan("002.00", :researched, "second-plan", files: { "spec.md" => spec_body }) } }
+
+      it("lists an attempt per agent") { expect(lines.size).to be > 1 }
+      it("puts every round in the same column") { expect(columns.uniq.size).to eq(1) }
     end
 
     it "spends nothing, so it prints no bill" do
@@ -178,6 +192,14 @@ RSpec.describe Agentilda::CLI::Run, :tree do
       run
 
       expect(Dir.children(plans_root).grep(/stays-put/)).to eq(["002.00-⭐️ → stays-put"])
+    end
+
+    # Every key speaks to a running agent, and listening puts the terminal
+    # in raw mode, which is what made the report staircase down the screen.
+    it "listens for no keys, since there is no agent for a key to reach" do
+      run
+
+      expect(Agentilda::Keyboard).not_to have_received(:listen)
     end
 
     it "says where the progress log is going before the loop starts" do
@@ -371,7 +393,7 @@ RSpec.describe Agentilda::CLI::Run, :tree do
       with_executor
       out, err, status = run(commit: true, rounds: 1)
 
-      expect(out).to include("attempts", "001.00\tluke-backend")
+      expect(out).to include("001.00  luke-backend")
       # A committed run spent something, so the tally belongs with the
       # attempts it bills for, on STDOUT, where a redirected run keeps it.
       expect(out).to include("2 invocations")
@@ -548,7 +570,7 @@ RSpec.describe Agentilda::CLI::Run, :tree do
 
       out, err, status = run(isolation: "worktree")
 
-      expect(out).to include("001.00\tluke-backend")
+      expect(out).to include("001.00  luke-backend")
       expect(unwrapped(err)).to include("one worktree each")
       expect(status).to eq(0)
     end

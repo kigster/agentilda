@@ -37,6 +37,9 @@ module Agentilda
       # Cells a status line stops short of the terminal's right edge.
       ACTIVITY_MARGIN = 5
 
+      # Status lines drawn under an agent's row when nobody says otherwise.
+      SCROLL_HEIGHT = 3
+
       # Seconds between samples for the running-agent-count sparkline.
       SAMPLE_INTERVAL = 10
 
@@ -54,7 +57,7 @@ module Agentilda
       #   its own orchestration
       # @param scroll_height [Integer] how many of an agent's latest statuses
       #   show under its row, newest at the top
-      def initialize(runner: RatatuiRuby.method(:run), scroll_height: 1)
+      def initialize(runner: RatatuiRuby.method(:run), scroll_height: SCROLL_HEIGHT)
         @runner = runner
         @scroll_height = Integer(scroll_height).clamp(1, Board::Row::HISTORY)
         @board = nil
@@ -157,15 +160,18 @@ module Agentilda
           direction:   :vertical,
           constraints: [tui.constraint_length(1), tui.constraint_length(1), tui.constraint_length(1),
                         tui.constraint_fill(1), tui.constraint_length(1)])
-        bottom_text, bottom_spark = tui.layout_split(bottom,
+        _bottom_text, bottom_spark = tui.layout_split(bottom,
           direction:   :horizontal,
           constraints: [tui.constraint_fill(3), tui.constraint_fill(1)])
 
         frame.render_widget(top_bar(tui, board), top)
         frame.render_stateful_widget(table(tui, board), table_area, table_state)
         render_activities(tui, frame, table_area, board, table_state)
-        frame.render_widget(bottom_bar(tui, board), bottom_text)
-        frame.render_widget(tui.sparkline(data: @history, style: tui.style(fg: :cyan)), bottom_spark)
+        # The bar is painted across the whole strip first, sparkline area
+        # included, so the cyan reaches both edges; the sparkline is then
+        # drawn over its right-hand share of it, in the same colors.
+        frame.render_widget(bottom_bar(tui, board), bottom)
+        frame.render_widget(tui.sparkline(data: @history, style: tui.style(fg: :black, bg: :cyan)), bottom_spark)
         render_overlay(tui, frame, area, board)
       end
 
@@ -202,7 +208,7 @@ module Agentilda
         tui.paragraph(
           text:  "#{board.status} · plans: #{board.plans.join(", ")} " \
                  "· tokens ↑#{UI.abbreviate(board.up)} ↓#{UI.abbreviate(board.down)}",
-          style: tui.style(fg: :black, bg: :white)
+          style: tui.style(fg: :black, bg: :cyan)
         )
       end
 
@@ -211,7 +217,7 @@ module Agentilda
         tui.paragraph(
           text:  "working in #{board.root} · agents running: #{board.running} " \
                  "· live ↑#{UI.abbreviate(board.live_up)} ↓#{UI.abbreviate(board.live_down)}",
-          style: tui.style(fg: :black, bg: :white)
+          style: tui.style(fg: :black, bg: :cyan)
         )
       end
 

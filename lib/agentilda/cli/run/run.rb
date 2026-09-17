@@ -53,7 +53,8 @@ module Agentilda
                  "opened as soon as it lands, titled [NNN.MM](X). --no-git-push turns that off and leaves it uncommitted."
       option :scroll_height,
         aliases: ["-s"],
-        desc:    "Lines of each agent's latest statuses shown under its row, newest first (default: 1)"
+        desc:    "Lines of each agent's latest statuses shown under its row, newest first " \
+                 "(default: #{Screen::Ratatui::SCROLL_HEIGHT})"
       option :log, desc: "Append progress to this file (default: a per-project file under the system temp dir)"
 
       example [
@@ -129,15 +130,18 @@ module Agentilda
         # With a screen, ratatui owns the terminal's input, so the keyboard is
         # fed from its loop rather than started on STDIN of its own.
         Control.reset!
-        scroll_height = options.fetch(:scroll_height, 1)
+        scroll_height = options.fetch(:scroll_height, Screen::Ratatui::SCROLL_HEIGHT)
         unless scroll_height.to_s.match?(/\A[1-9]\d*\z/)
           refuse("--scroll-height must be a whole number of lines, 1 or more, not #{scroll_height.inspect}.", 64)
         end
         screen   = (Screen::Ratatui.new(scroll_height: scroll_height.to_i) if UI.animate? && commit?(options))
         console  = (Console.new(screen:) if screen)
+        # A dry run gets no keyboard at all: every key it offers speaks to a
+        # running agent, and listening costs the terminal's raw mode, whose
+        # output post-processing the report below needs left alone.
         keyboard = if screen
                      Keyboard.new(sink: console).tap { |kb| screen.attach_keyboard(kb) }
-                   else
+                   elsif commit?(options)
                      Keyboard.listen(sink: console)
                    end
         UI.line("keys: h for help - s select, k kill, x extend, w wrap up, n stop, q quit") if keyboard && console.nil? && !quiet?(options)
@@ -178,6 +182,37 @@ module Agentilda
       end
 
       private
+
+      # The attempts list, padded into columns.
+      #
+      # Tabs used to separate these, which put every column on the next
+      # multiple of eight: one agent's name a character longer than the
+      # next one's pushed its round and mark a whole stop to the right, so
+      # nothing under `luke-backend` and `yoda-writer` lined up. Widths come
+      # from the rows themselves, so the columns are as narrow as the run
+      # allows and still square.
+      #
+      # @param attempts [Array<Agentilda::Runner::Attempt>]
+      # @return [Array<String>] one line per attempt, indented by two
+      def attempt_lines(attempts)
+        rows   = attempts.map { |a| [a.ordinal.to_s, a.agent.to_s, "[R:#{a.round}]", mark(a), a.note.to_s] }
+        widths = rows.transpose.map { |column| column.map { |cell| UI.display_width(cell) }.max.to_i }
+        rows.map do |cells|
+          # The note is last and is left as it is: padding the final column
+          # only adds trailing whitespace a copy-paste then carries.
+          last = cells.size - 1
+          "  #{cells.each_with_index.map { |cell, i| i == last ? cell : UI.fit(cell, widths[i] + 2) }.join}"
+        end
+      end
+
+      # @param attempt [Agentilda::Runner::Attempt]
+      # @return [String] what the attempt did to its plan's state
+      def mark(attempt)
+        return "FAIL" unless attempt.ok
+        return "#{attempt.from} -> #{attempt.to}" if attempt.advanced?
+
+        "no change"
+      end
 
       # `--prompt` takes the instructions themselves or a file holding them.
       # A short argument naming an existing file is read; anything else is
@@ -315,17 +350,12 @@ module Agentilda
       # @param seconds [Float] wall clock for the whole loop
       # @return [void]
       def report(runner, attempts, options, seconds: 0.0)
-        puts "attempts"
-        attempts.each do |a|
-          mark = if !a.ok
-                   "FAIL"
-                 elsif a.advanced?
-                   "#{a.from} -> #{a.to}"
-                 else
-                   "no change"
-                 end
-          puts "  #{a.ordinal}\t#{a.agent}\t[R:#{a.round}]\t#{mark}\t#{a.note}"
-        end
+        # A leading blank line, because the spinners this replaces write to
+        # STDERR and the last of them may have left the cursor mid-line:
+        # without it the first attempt starts wherever that line stopped,
+        # indented by however much it had drawn.
+        puts ""
+        puts attempt_lines(attempts)
 
         # What the run cost, on STDOUT with the attempts it belongs to, so a run
         # redirected to a file keeps its bill. A dry run spent nothing and gets

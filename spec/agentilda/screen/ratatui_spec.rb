@@ -174,7 +174,11 @@ RSpec.describe Agentilda::Screen::Ratatui do
   describe "the two-line agent layout, in a real terminal" do
     include RatatuiRuby::TestHelper
 
-    subject(:lines) do
+    # One status line per agent, so the line numbers below stay the
+    # arithmetic this block is about rather than the default's.
+    subject(:screen) { described_class.new(scroll_height: 1) }
+
+    let(:lines) do
       with_test_terminal(160, 14) do
         tui.draw { |frame| screen.render(tui, frame, frame.area, board.with(rows: [row, second]), table_state) }
         buffer_content
@@ -214,10 +218,36 @@ RSpec.describe Agentilda::Screen::Ratatui do
     end
   end
 
+  # The bars frame the whole screen, so a strip that stops short of the
+  # edge — as the bottom one did while the sparkline's own area was left
+  # unpainted — reads as a drawing fault rather than a layout choice.
+  describe "the status bars, in a real terminal" do
+    include RatatuiRuby::TestHelper
+
+    subject(:bars) do
+      with_test_terminal(width, height) do
+        tui.draw { |frame| screen.render(tui, frame, frame.area, board, table_state) }
+        { top: cells_of(1), bottom: cells_of(height - 1) }
+      end
+    end
+
+    let(:width) { 160 }
+    let(:height) { 12 }
+
+    def cells_of(row) = (0...width).map { |x| get_cell(x, row) }
+
+    it("paints the top bar cyan, edge to edge") { expect(bars[:top].map(&:bg).uniq).to eq([:cyan]) }
+    it("writes the top bar in black") { expect(bars[:top].first.fg).to eq(:black) }
+    it("paints the bottom bar cyan, edge to edge") { expect(bars[:bottom].map(&:bg).uniq).to eq([:cyan]) }
+    it("writes the bottom bar in black") { expect(bars[:bottom].first.fg).to eq(:black) }
+  end
+
   describe "--scroll-height, in a real terminal" do
     include RatatuiRuby::TestHelper
 
     subject(:screen) { described_class.new(scroll_height: 3) }
+
+    it("is what a screen built with no argument already draws") { expect(described_class.new.scroll_height).to eq(3) }
 
     context "when a row has a history" do
       let(:talkative) { row.with(history: ["writing plan.md", "reading spec.md", "listing .plans", "starting"]) }

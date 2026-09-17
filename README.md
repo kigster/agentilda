@@ -202,7 +202,7 @@ A typed flag beats the file, and the file beats the built-in default. The file a
 
 ### The dashboard, and the keys during a run
 
-On a terminal, every command that runs agents draws the same ratatui dashboard and listens for the same keys: `run --commit`, `unblock --commit` and `create`. A status bar sits at the top, and each running agent is one table row — plan, agent, file, elapsed and remaining — with its latest statuses printed under it, newest first. `run --scroll-height N` (`-s N`) keeps the last N of them; the default is one. Off a terminal (a pipe, a dry run, cron) there is no screen, and progress goes to the log instead.
+On a terminal, every command that runs agents draws the same ratatui dashboard and listens for the same keys: `run --commit`, `unblock --commit` and `create`. A cyan status bar runs the full width at the top and another at the bottom, and each running agent is one table row — plan, agent, file, elapsed and remaining — with its latest statuses printed under it, newest first. `run --scroll-height N` (`-s N`) keeps the last N of them; the default is three. Off a terminal (a pipe, a dry run, cron) there is no screen, and progress goes to the log instead.
 
 | Key      | What it does                                                                   |
 | :------- | :----------------------------------------------------------------------------- |

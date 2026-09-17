@@ -63,6 +63,23 @@ module Agentilda
     def stop
       @thread&.kill
       @thread = nil
+      restore
+    end
+
+    # `getch` puts the terminal in raw mode for the length of one read and
+    # restores it afterwards — but the listener spends almost all its life
+    # blocked inside that read, and {#stop} kills it there, which leaves
+    # the mode behind. Raw mode has output post-processing off, so a "\n"
+    # written after it drops a line without returning the cursor to column
+    # zero: the run report then starts wherever the previous line ended and
+    # staircases down the screen. Nothing else puts the mode back, so this
+    # does.
+    #
+    # @return [void]
+    def restore
+      @input.cooked! if @input.tty?
+    rescue IOError, SystemCallError
+      # No terminal left to put back; there is nothing to restore it to.
     end
 
     # @param key [String, nil]
