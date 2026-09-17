@@ -42,7 +42,7 @@ GEM
     dry-cli-help (0.5.0)
       dry-cli
       pastel (~> 0.8)
-    dry-cli-ui (0.5.0)
+    dry-cli-ui (0.5.1)
       concurrent-ruby (~> 1.3)
       dry-cli (>= 1.0)
       pastel (~> 0.8)
@@ -67,7 +67,7 @@ GEM
     fuzzy-string-match (1.0.1)
       RubyInline (>= 3.8.6)
     hana (1.3.7)
-    io-console (0.9.3)
+    io-console (0.9.4)
     irb (1.18.0)
       pp (>= 0.6.0)
       prism (>= 1.3.0)
@@ -243,14 +243,14 @@ CHECKSUMS
   dry-cli (1.4.1) sha256=b8015bb76c708aa8705a36faf694973e75eeeffca39b89c8e172dc6f66a7d874
   dry-cli-autocomplete (0.5.0) sha256=de35e6f43cbbc02c027ea0aa3584c806a82c46bdb0cf11861df99ab4c786dbcd
   dry-cli-help (0.5.0) sha256=7d4a28e8a039792a68a15614752c42d5e9fb21ba229c79647d1653ba0f428698
-  dry-cli-ui (0.5.0) sha256=23e298f05e0e57316290c2e9b024abdf1357a8cf779be5d859efa7d03b14681c
+  dry-cli-ui (0.5.1) sha256=ea3db7dbe128c290219a924892785e07a58c2f07839641a83af5b27bf147e01c
   dry-core (1.2.0) sha256=0cc5a7da88df397f153947eeeae42e876e999c1e30900f3c536fb173854e96a1
   dry-inflector (1.3.1) sha256=7fb0c2bb04f67638f25c52e7ba39ab435d922a3a5c3cd196120f63accb682dcc
   dry-monads (1.11.0) sha256=ffc188512bf90c8ace135a1171a6791e561d5e3a1de6195ce5f9bc190c81e31b
   erb (6.0.7) sha256=c5ca6dc25b0ef974a44dc8f59fe847577122483b1968a38dec305c60bf91ee92
   fuzzy-string-match (1.0.1) sha256=0740e515b3d1f7a40bd7f058a67a63682a9f4d98e4a95a9eb670aa562a047549
   hana (1.3.7) sha256=5425db42d651fea08859811c29d20446f16af196308162894db208cac5ce9b0d
-  io-console (0.9.3) sha256=f555049461b0afb78a5448b5be8e7c7b48371347cd48abfc22814764160000dd
+  io-console (0.9.4) sha256=a403304f32928ee85e56d457b4612ca43f2703b561a3258844992bd24085fbb1
   irb (1.18.0) sha256=de9454a0703a54704b9811a5ef31a60c86949fbf4013fcf244fabc7c775248e3
   json (3.0.2) sha256=8e6d7e7b11384c21230430cef90b71f14849a34a1f4452796670f7c981bd19df
   json_schemer (2.5.0) sha256=2f01fb4cce721a4e08dd068fc2030cffd0702a7f333f1ea2be6e8991f00ae396
