@@ -135,8 +135,8 @@ RSpec.describe Agentilda::Agents do
     it "lists the documents each agent signs, in order" do
       aggregate_failures do
         expect(agents.find("leah-researcher").ledger).to eq(%w[spec.md])
-        expect(agents.find("luke-backend").ledger).to eq(%w[plan-backend.md pull-requests.md])
-        expect(agents.find("rey-frontend").ledger).to eq(%w[plan-frontend.md pull-requests.md])
+        expect(agents.find("luke-backend").ledger).to eq(%w[plan.md pull-requests.md])
+        expect(agents.find("rey-frontend").ledger).to eq(%w[plan.md pull-requests.md])
         expect(agents.find("hansolo-reviewer").ledger).to eq(%w[pull-requests.md])
         # Not plan.md: signing a spec-stage block into a new plan.md would
         # justify 📋 and skip research and specification.

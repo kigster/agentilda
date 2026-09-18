@@ -406,8 +406,9 @@ RSpec.describe Agentilda::CLI::Run, :tree do
     # about.
     it "exits zero when the agent signs Completed and the folder moves" do
       with_executor { |subject|
-        File.write(File.join(subject.feature.path, "plan-backend.md"), "> [2026-09-04 11:29:20 AM PDT] [ agent: luke-backend   status: Completed, round 1 ]\n")
-        File.write(File.join(subject.feature.path, "plan-frontend.md"), "> [2026-09-04 11:29:20 AM PDT] [ agent: rey-frontend   status: Completed, round 1 ]\n")
+        File.write(File.join(subject.feature.path, "plan.md"),
+          "> [2026-09-04 11:29:20 AM PDT] [ agent: luke-backend   status: Completed, round 1 ]\n" \
+          "> [2026-09-04 11:29:20 AM PDT] [ agent: rey-frontend   status: Completed, round 1 ]\n")
         File.write(File.join(subject.feature.path, "pull-requests.md"), "| Pull Request Number | Pull Request Name | Status |\n| --: | :-- | --: |\n| 1 | [x](https://github.com/example/repo/pull/1) | Open 🟡 |\n")
         [true, "completed"]
       }

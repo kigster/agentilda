@@ -26,6 +26,10 @@ require_relative "cli/worktree/worktree"
 require_relative "cli/mail/mail"
 require_relative "cli/mail/subcommands/send"
 require_relative "cli/mail/subcommands/read"
+require_relative "cli/mail/subcommands/ack"
+require_relative "cli/mail/subcommands/render"
+require_relative "cli/ledger/ledger"
+require_relative "cli/ledger/subcommands/sign"
 
 module Agentilda
   # The command line. Every command is a thin shell over one library class:
@@ -69,7 +73,7 @@ module Agentilda
       width [90, TTY::Screen.width - 2].min
 
       group "Plans", "create", "list-plans", "index", "resync", "unblock", "worktree"
-      group "Agents", "run", "agents", "describe", "mail"
+      group "Agents", "run", "agents", "describe", "mail", "ledger"
       group "Reference", "docs", "states", "linear", "completion", "version"
     end
 
@@ -107,9 +111,17 @@ module Agentilda
     end
 
     # What a paired agent shells out to between steps. See {Agentilda::Mailbox}.
+    # How an agent signs the document it owns. See {Agentilda::CLI::Ledger}
+    # for why this is a command rather than something an agent edits.
+    register "ledger" do |prefix|
+      prefix.register "sign", Ledger::Sign
+    end
+
     register "mail" do |prefix|
       prefix.register "send", Mail::Send
       prefix.register "read", Mail::Read
+      prefix.register "ack", Mail::Ack
+      prefix.register "render", Mail::Render
     end
 
     register "completion", ::Dry::CLI::Autocomplete::Command[::Agentilda::CLI]

@@ -105,7 +105,7 @@ RSpec.describe Agentilda::Executor, :tree do
       expect(paired).to include(
         "## Mailbox",
         "Your partner on this plan is `rey-frontend`",
-        File.join(subject_plan.feature.path, "mailbox.md"),
+        File.join(subject_plan.feature.path, "mailbox.json"),
         "agentilda mail read --dir \"#{plans_root}\" --plan 000.00 --for luke-backend",
         "agentilda mail send --dir \"#{plans_root}\" --plan 000.00 --from luke-backend --to rey-frontend"
       )

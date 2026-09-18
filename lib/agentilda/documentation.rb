@@ -319,11 +319,11 @@ module Agentilda
         | File | Required by |
         | :--- | :---------- |
         | `spec.md` | the specification; written first |
-        | `plan.md` | the execution plan; written from the spec |
-        | `implementation-plan.md` | the contract between the two halves of building |
+        | `plan.md` | the execution plan; written from the spec, split into `## Backend` and `## Frontend` |
+        | `contract.md` | the contract between the two halves of building |
         #{known.reject { |r| r.start_with?("| `spec.md`", "| `plan.md`") }.join("\n")}
 
-        `implementation-plan.md` is the one file no state requires. `luke-backend`
+        `contract.md` is the one file no state requires. `luke-backend`
         writes it before it writes code, and `rey-frontend` builds from it a round
         later: the interfaces the back end landed, their shapes and their errors,
         which files each half owns, which units may run concurrently, and the one

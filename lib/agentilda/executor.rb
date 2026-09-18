@@ -590,16 +590,24 @@ module Agentilda
             agentilda mail read --dir "#{plans_dir}" --plan #{plan} --for #{agent.name}
 
         Pass `--after N`, with the number of the last message you have read,
-        to see only what is new. Write to it when you land an interface your
-        partner is waiting on, when you amend the contract, when you need
-        something from their half, and when you finish:
+        to see only what is new. Acknowledge each message the moment you have
+        read it, by its number:
+
+            agentilda mail ack N --dir "#{plans_dir}" --plan #{plan} --by #{agent.name}
+
+        Nothing else can do this for you. That a message reached you is not
+        that you read it, and a message left unacknowledged is reported as an
+        agent that has stopped reading its mail. Write to it when you land an
+        interface your partner is waiting on, when you amend the contract,
+        when you need something from their half, and when you finish:
 
             agentilda mail send --dir "#{plans_dir}" --plan #{plan} --from #{agent.name} --to #{partners.first.name} "what you need them to know"
 
         Every message is appended with a number and a timestamp and never
-        edited, so a person can read the exchange after the round. A question
-        your partner has not answered within a few steps is not a reason to
-        stop: write your assumption into implementation-plan.md and carry on.
+        edited. The file is JSON so you need not parse anything; a person
+        reads it afterwards with `agentilda mail render --plan #{plan}`. A
+        question your partner has not answered within a few steps is not a
+        reason to stop: write your assumption into contract.md and carry on.
       SECTION
     end
 
@@ -648,6 +656,7 @@ module Agentilda
 
         If there is a RESUME note, continue from it and do not redo what it
         says is done; check the files it names rather than taking it on trust.
+        Acknowledge it as you would any other message.
       SECTION
     end
 

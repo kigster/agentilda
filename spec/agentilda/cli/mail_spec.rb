@@ -32,6 +32,10 @@ RSpec.describe "agentilda mail", :tree do
 
   def read(**) = run(Agentilda::CLI::Mail::Read.new, **)
 
+  def ack(**) = run(Agentilda::CLI::Mail::Ack.new, **)
+
+  def render(**) = run(Agentilda::CLI::Mail::Render.new, **)
+
   it "delivers a message from one half to the other" do
     _out, err, status = send(body: "GET /returns/:id is up", plan: "001.00", from: "luke-backend", to: "rey-frontend")
     out, = read(plan: "001.00", for: "rey-frontend")
@@ -43,10 +47,11 @@ RSpec.describe "agentilda mail", :tree do
     end
   end
 
-  it "writes into the plan's own folder, where a person can read it after the round" do
+  it "writes JSON into the plan's own folder, for the next poll to read without parsing prose" do
     send(body: "hello", plan: "001", from: "luke-backend", to: "rey-frontend")
 
-    expect(File.read(File.join(folder, "mailbox.md"))).to include("## 1 · ", "hello")
+    expect(JSON.parse(File.read(File.join(folder, "mailbox.json"))).dig("messages", 0))
+      .to include("number" => 1, "body" => "hello", "read" => "no")
   end
 
   it "shows a reader nothing that was addressed to somebody else" do
@@ -96,7 +101,7 @@ RSpec.describe "agentilda mail", :tree do
     aggregate_failures do
       expect(err).to include("--to")
       expect(status).to eq(64)
-      expect(File).not_to exist(File.join(folder, "mailbox.md"))
+      expect(File).not_to exist(File.join(folder, "mailbox.json"))
     end
   end
 
@@ -106,6 +111,66 @@ RSpec.describe "agentilda mail", :tree do
     aggregate_failures do
       expect(err).to include("body")
       expect(status).to eq(64)
+    end
+  end
+
+  # Delivery is not reading. The recipient says so itself, in its own call,
+  # because nothing else on the machine can honestly say it.
+  describe "ack" do
+    before { send(body: "the endpoint is up", plan: "001.00", from: "luke-backend", to: "rey-frontend") }
+
+    it "marks the message read on the recipient's word" do
+      _out, err, status = ack(number: 1, plan: "001.00", by: "rey-frontend")
+
+      aggregate_failures do
+        expect(status).to eq(0)
+        expect(err).to include("#1 read by rey-frontend")
+        expect(JSON.parse(File.read(File.join(folder, "mailbox.json"))).dig("messages", 0, "read")).to eq("yes")
+      end
+    end
+
+    it "refuses an agent acking its partner's mail" do
+      _out, err, status = ack(number: 1, plan: "001.00", by: "luke-backend")
+
+      aggregate_failures do
+        expect(err).to include("for rey-frontend")
+        expect(status).to eq(64)
+      end
+    end
+
+    it "refuses a number nobody wrote" do
+      _out, err, status = ack(number: 9, plan: "001.00", by: "rey-frontend")
+
+      aggregate_failures do
+        expect(err).to include("no message #9")
+        expect(status).to eq(64)
+      end
+    end
+  end
+
+  # The mailbox is JSON so an agent does no parsing; this is the other half
+  # of that trade, and it goes to STDOUT because STDOUT carries whatever is
+  # being asked for.
+  describe "render" do
+    before do
+      send(body: "the endpoint is up", plan: "001.00", from: "luke-backend", to: "rey-frontend")
+      send(body: "seen", plan: "001.00", from: "rey-frontend", to: "luke-backend")
+    end
+
+    it "prints the exchange as Markdown" do
+      out, _err, status = render(plan: "001.00")
+
+      aggregate_failures do
+        expect(status).to eq(0)
+        expect(out).to include("# Mailbox", "## 1 · ", "luke-backend → rey-frontend", "the endpoint is up", "seen")
+      end
+    end
+
+    it "says so when nothing has been sent" do
+      plans { |t| t.plan "002.00", :building, "quiet", files: { "spec.md" => spec_body, "plan.md" => "# P" } }
+      out, = render(plan: "002.00")
+
+      expect(out).to include("Nothing has been sent")
     end
   end
 end
