@@ -174,10 +174,10 @@ module Agentilda
     # @param ordinal [String]
     # @return [Integer] how many entries were folded in
     def sync!(bus, ordinal)
-      drained = bus.drain(ordinal, after: document[STREAM])
-      return 0 if drained.empty?
-
       write do |doc|
+        drained = bus.drain(ordinal, after: doc[STREAM])
+        next [doc, 0] if drained.empty?
+
         folded = drained.reduce(doc) { |carry, (id, payload)| fold(carry, id, payload) }
         [folded, drained.size]
       end
@@ -307,16 +307,20 @@ module Agentilda
     # @return [Hash] the document with one more message in it
     def add(doc, message) = doc.merge(MESSAGES => doc[MESSAGES] + [message.to_h])
 
-    # One bus entry, folded into the document. The watermark moves whatever
-    # the payload turned out to be, including a kind this version does not
-    # know: leaving it would make every later sync re-read it forever.
+    # One bus entry, folded into the document. The watermark moves past
+    # whatever the payload turned out to be, including a kind this version
+    # does not know or a payload the bus could not decode at all: leaving it
+    # behind would make every later sync re-fetch and re-skip the same entry
+    # forever.
     #
     # @param doc [Hash]
     # @param id [String] the entry's stream id
-    # @param payload [Hash]
+    # @param payload [Hash, nil] nil for an entry the bus could not decode
     # @return [Hash]
     def fold(doc, id, payload)
       moved = doc.merge(STREAM => id)
+      return moved unless payload
+
       case payload["kind"]
       when MESSAGE_KIND then fold_message(moved, payload)
       when STATE_KIND then fold_state(moved, payload)

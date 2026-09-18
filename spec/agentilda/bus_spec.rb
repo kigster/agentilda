@@ -76,11 +76,22 @@ RSpec.describe Agentilda::Bus do
 
     # One stray entry, from an older version or a person with redis-cli,
     # must not cost an agent its round.
-    it "skips an entry it cannot decode rather than raising" do
+    it "gives back nil, not the entry, for one it cannot decode rather than raising" do
       redis.xadd(bus.key_for("001.00"), { "json" => "{not json" })
       bus.publish("001.00", payload)
 
-      expect(bus.drain("001.00").map(&:last)).to eq([payload])
+      expect(bus.drain("001.00").map(&:last)).to eq([nil, payload])
+    end
+
+    # A caller folds `drain`'s ids into its own watermark. Omitting a bad
+    # entry's id along with its payload would leave the watermark exactly
+    # where it was, so the same unreadable entry gets fetched and skipped on
+    # every later drain until it ages out of the stream.
+    it "keeps the id of an entry it cannot decode, so a caller can still move its watermark past it" do
+      redis.xadd(bus.key_for("001.00"), { "json" => "{not json" })
+
+      ids = bus.drain("001.00").map(&:first)
+      expect(ids).not_to be_empty
     end
   end
 

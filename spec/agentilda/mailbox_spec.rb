@@ -225,7 +225,8 @@ RSpec.describe Agentilda::Mailbox, :tree do
   # into the file, because flock makes the write safe and the watermark
   # makes it idempotent.
   describe "#sync!" do
-    let(:bus) { Agentilda::Bus.new(root: plans_root, redis: FakeRedis.new) }
+    let(:redis) { FakeRedis.new }
+    let(:bus) { Agentilda::Bus.new(root: plans_root, redis:) }
 
     let(:payload) do
       { "kind" => "message", "from" => "luke-backend", "to" => "rey-frontend",
@@ -273,6 +274,16 @@ RSpec.describe Agentilda::Mailbox, :tree do
     # the same unusable entry again, forever.
     it "still moves past an entry it could not use" do
       bus.publish("001.00", { "kind" => "something-later" })
+      mailbox.sync!(bus, "001.00")
+
+      expect(mailbox.sync!(bus, "001.00")).to eq(0)
+    end
+
+    # Same reasoning, one layer lower: an entry the bus itself could not
+    # decode at all still has to move the watermark, or a `PostToolUse`
+    # poll re-fetches and re-skips it on every tool call until it expires.
+    it "still moves past an entry the bus could not decode" do
+      redis.xadd(bus.key_for("001.00"), { "json" => "{not json" })
       mailbox.sync!(bus, "001.00")
 
       expect(mailbox.sync!(bus, "001.00")).to eq(0)

@@ -390,10 +390,10 @@ module Agentilda
     def hook_settings(agent, subject, partners)
       return nil if partners.empty?
 
-      command = ["agentilda", "mail", "poll",
-                 "--dir", File.dirname(subject.feature.path),
-                 "--plan", subject.feature.ordinal.to_s,
-                 "--for", agent.name].map { |part| part.include?(" ") ? %("#{part}") : part }.join(" ")
+      command = Shellwords.join(["agentilda", "mail", "poll",
+                                  "--dir", File.dirname(subject.feature.path),
+                                  "--plan", subject.feature.ordinal.to_s,
+                                  "--for", agent.name])
       path = File.join(@trace_dir, "settings-#{subject.feature.ordinal}-#{agent.name}-#{Process.pid}.json")
       FileUtils.mkdir_p(@trace_dir)
       File.write(path,

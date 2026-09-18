@@ -92,13 +92,19 @@ module Agentilda
 
     # What is in the stream after a given id.
     #
+    # Every entry is returned, even one {#decode} could not make sense of —
+    # with `nil` standing in for its payload — so the caller's watermark
+    # moves over it. Dropping a malformed entry outright would leave the
+    # watermark exactly where it was, and every poll after would re-fetch
+    # and re-skip the same entry until it aged out of the stream.
+    #
     # @param ordinal [String]
     # @param after [String] an id from a previous read, or {BEGINNING}
-    # @return [Array<Array(String, Hash)>] each id with its decoded payload
+    # @return [Array<Array(String, Hash, nil)>] each id with its decoded
+    #   payload, or nil for an entry {#decode} discarded
     def drain(ordinal, after: BEGINNING)
-      @redis.xrange(key_for(ordinal), exclusive(after), "+").filter_map do |id, fields|
-        payload = decode(fields)
-        payload && [id, payload]
+      @redis.xrange(key_for(ordinal), exclusive(after), "+").map do |id, fields|
+        [id, decode(fields)]
       end
     end
 

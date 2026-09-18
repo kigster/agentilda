@@ -124,6 +124,17 @@ module Agentilda
           info("Added #{StateFile::IGNORE.join(" and ")} to .gitignore: the run keeps its state there.")
         end
 
+        # Agents reach each other through Redis, so an absent server is
+        # reported here, once, where somebody can act on it. Found out from
+        # inside an agent's thread twenty minutes in, it would read as a
+        # partner with nothing to say.
+        #
+        # Checked before the keyboard exists, not after: `refuse` exits, and
+        # an exit between `Keyboard.listen` and the `ensure` below that stops
+        # it would leave the terminal in raw mode with nothing left running
+        # to take it out again.
+        bus = bus_for(tree, options)
+
         # The screen only on a terminal that is actually running agents: a dry
         # run has nothing to draw and a pipe has nowhere to draw it. Without a
         # screen the keys still work, so the one line says which.
@@ -145,12 +156,6 @@ module Agentilda
                      Keyboard.listen(sink: console)
                    end
         UI.line("keys: h for help - s select, k kill, x extend, w wrap up, n stop, q quit") if keyboard && console.nil? && !quiet?(options)
-
-        # Agents reach each other through Redis, so an absent server is
-        # reported here, once, where somebody can act on it. Found out from
-        # inside an agent's thread twenty minutes in, it would read as a
-        # partner with nothing to say.
-        bus = bus_for(tree, options)
 
         runner = Runner.new(
           tree:,

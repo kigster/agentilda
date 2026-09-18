@@ -29,14 +29,19 @@ module Agentilda
           ordinal = Ordinal.parse(options[:plan].to_s)
           message = begin
             validate!(options, body)
+            sent = payload(options, body)
             # Published first, folded in second. The bus is what reaches the
             # harness and the partner within the second; folding is how this
             # message gets into the file without waiting for somebody else
             # to do it, and doing both here means a send is complete whether
             # or not a run is watching.
-            bus.publish(ordinal, payload(options, body))
+            bus.publish(ordinal, sent)
             mailbox.sync!(bus, ordinal)
-            mailbox.messages.last
+            # `sync!` folds in whatever the bus is currently holding, not
+            # only this send. When a partner published concurrently,
+            # `messages.last` can be theirs, and this command would report
+            # somebody else's number and recipient as if it were its own.
+            sent_message(mailbox, sent)
           rescue Agentilda::Error => e
             refuse(e.message, 64)
           end
@@ -70,6 +75,18 @@ module Agentilda
             "to"   => options[:to],
             "body" => body.to_s.strip,
             "at"   => Time.now.iso8601 }
+        end
+
+        # The entry this send folded in, found by the fields it published
+        # rather than assumed to be whatever is now last in the file.
+        #
+        # @param mailbox [Agentilda::Mailbox]
+        # @param sent [Hash] this command's own {#payload}
+        # @return [Agentilda::Mailbox::Message, nil]
+        def sent_message(mailbox, sent)
+          mailbox.messages.reverse_each.find do |m|
+            m.from == sent["from"] && m.to == sent["to"] && m.body == sent["body"] && m.at == sent["at"]
+          end
         end
       end
     end
