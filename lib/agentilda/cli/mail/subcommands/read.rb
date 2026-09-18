@@ -26,7 +26,7 @@ module Agentilda
         # @return [void]
         def call(**options)
           quiet?(options)
-          mailbox = mailbox_for(options)
+          mailbox = synced_mailbox(options)
           after = options[:after].to_i
           waiting = mailbox.for(options[:for], after:)
 

@@ -451,6 +451,23 @@ RSpec.describe Agentilda::CLI::Run, :tree do
 
       expect(unwrapped(err)).to include("ANTHROPIC_API_KEY is set in this shell", "401 API key is invalid")
     end
+
+    # Redis unreachable exits by way of `refuse`, before the loop, and
+    # therefore before the `begin...ensure` that would otherwise stop a
+    # listener it started. Checking Redis before the keyboard exists at all
+    # is what keeps an exit here from leaving the terminal in raw mode with
+    # nothing left running to take it back out.
+    it "checks Redis before starting the keyboard listener, so a refusal never leaves one running" do
+      allow(Agentilda::Bus).to receive(:client).and_return(FakeRedis.new(reachable: false))
+
+      _out, err, status = run(commit: true, rounds: 1)
+
+      aggregate_failures do
+        expect(status).to eq(69)
+        expect(unwrapped(err)).to include("Redis is not answering")
+        expect(Agentilda::Keyboard).not_to have_received(:listen)
+      end
+    end
   end
 
   describe "the dashboard" do

@@ -4,11 +4,17 @@
 # the two commands are exercised the way an agent uses them: one sends, the
 # other reads, against a real plan folder.
 RSpec.describe "agentilda mail", :tree do
+  # The one place a client is built, so nothing here opens a socket. The
+  # fake keeps entries and mints ordered ids, because what these examples
+  # are really testing is that a send reaches the file through the bus.
+  let(:redis) { FakeRedis.new }
   let!(:folder) do
     path = nil
     plans { |t| path = t.plan "001.00", :building, "paired", files: { "spec.md" => spec_body, "plan.md" => "# P" } }
     path
   end
+
+  before { allow(Agentilda::Bus).to receive(:client).and_return(redis) }
 
   def run(command, **)
     out = CapturedStream.new
@@ -35,6 +41,10 @@ RSpec.describe "agentilda mail", :tree do
   def ack(**) = run(Agentilda::CLI::Mail::Ack.new, **)
 
   def render(**) = run(Agentilda::CLI::Mail::Render.new, **)
+
+  def poll(**) = run(Agentilda::CLI::Mail::Poll.new, **)
+
+  def state(**) = run(Agentilda::CLI::Mail::State.new, **)
 
   it "delivers a message from one half to the other" do
     _out, err, status = send(body: "GET /returns/:id is up", plan: "001.00", from: "luke-backend", to: "rey-frontend")
@@ -105,12 +115,180 @@ RSpec.describe "agentilda mail", :tree do
     end
   end
 
+  # Redis is the transport, not the record. What proves a send worked is
+  # that it came back out of the file the partner reads.
+  it "carries the message out through the bus" do
+    send(body: "the endpoint is up", plan: "001.00", from: "luke-backend", to: "rey-frontend")
+
+    expect(redis.streams.values.flatten(1).size).to eq(1)
+  end
+
+  it "names the stream after the checkout as well as the plan, so two worktrees do not cross" do
+    send(body: "hello", plan: "001.00", from: "luke-backend", to: "rey-frontend")
+
+    expect(redis.streams.keys.first).to eq(Agentilda::Bus.key(plans_root, "001.00"))
+  end
+
+  # A stream keeps what was added, so a reader that was not there when the
+  # message was sent still gets it. This is the failure pub/sub has and a
+  # stream does not.
+  it "folds an entry nobody was there for into the file at the next read" do
+    Agentilda::Bus.new(root: plans_root, redis:)
+                  .publish("001.00",
+                    { "kind" => "message", "from" => "luke-backend",
+                                                           "to" => "rey-frontend", "body" => "sent while nobody listened",
+                                                           "at" => Time.now.iso8601 })
+    out, = read(plan: "001.00", for: "rey-frontend")
+
+    expect(out).to include("sent while nobody listened")
+  end
+
+  it "folds each entry in once, however many times it is read" do
+    send(body: "once", plan: "001.00", from: "luke-backend", to: "rey-frontend")
+    3.times { read(plan: "001.00", for: "rey-frontend") }
+
+    expect(JSON.parse(File.read(File.join(folder, "mailbox.json")))["messages"].size).to eq(1)
+  end
+
+  it "refuses to pretend when Redis is not there" do
+    allow(Agentilda::Bus).to receive(:client).and_return(FakeRedis.new(reachable: false))
+    _out, err, status = send(body: "hello", plan: "001.00", from: "luke-backend", to: "rey-frontend")
+
+    aggregate_failures do
+      expect(err).to include("Redis is not answering")
+      expect(status).to eq(69)
+    end
+  end
+
   it "refuses an empty message" do
     _out, err, status = send(body: "  ", plan: "001.00", from: "luke-backend", to: "rey-frontend")
 
     aggregate_failures do
       expect(err).to include("body")
       expect(status).to eq(64)
+    end
+  end
+
+  # An agent asked to stop used to leave prose the next round had to read
+  # and believe. This is the same thing in fields, which the next round can
+  # check against the files it names.
+  describe "state" do
+    subject(:recorded) do
+      JSON.parse(File.read(File.join(folder, "mailbox.json"))).dig("last-known-state", "luke-backend")
+    end
+
+    before do
+      state(plan: "001.00",
+        agent: "luke-backend",
+        round: "2",
+        status: "Interrupted",
+        done: "schema; specs green",
+        remaining: "wire the dispatcher",
+        next_step: "bundle exec rspec spec/agentilda/ledger_spec.rb")
+    end
+
+    it "records what the agent finished, as a list rather than a sentence" do
+      expect(recorded["done"]).to eq(["schema", "specs green"])
+    end
+
+    it "records what it did not" do
+      expect(recorded["remaining"]).to eq(["wire the dispatcher"])
+    end
+
+    it "records the exact next thing to do" do
+      expect(recorded["next_step"]).to eq("bundle exec rspec spec/agentilda/ledger_spec.rb")
+    end
+
+    it "records which round it was cut off in" do
+      expect(recorded["round"]).to eq(2)
+    end
+
+    # The precedence: the harness only fills in for an agent that never got
+    # this far, and must not overwrite one that did.
+    it "is marked as the agent's own, which beats anything the harness writes" do
+      aggregate_failures do
+        expect(recorded["source"]).to eq("agent")
+        expect(Agentilda::Mailbox.new(dir: folder).record_state("luke-backend",
+          source: Agentilda::Mailbox::BY_HARNESS,
+          round:  2)).to be_nil
+      end
+    end
+
+    it "leaves the messages alone" do
+      expect(JSON.parse(File.read(File.join(folder, "mailbox.json")))["messages"]).to be_empty
+    end
+  end
+
+  # A hook runs this after every one of an agent's tool calls, so it is
+  # subordinate to not disrupting the agent: little output, and never a
+  # failure, whatever is wrong underneath.
+  describe "poll" do
+    it "says nothing when there is nothing waiting" do
+      out, _err, status = poll(plan: "001.00", for: "luke-backend")
+
+      aggregate_failures do
+        expect(out).to be_empty
+        expect(status).to eq(0)
+      end
+    end
+
+    it "names what is unread, and tells the agent to acknowledge it" do
+      send(body: "the endpoint is up", plan: "001.00", from: "luke-backend", to: "rey-frontend")
+      out, = poll(plan: "001.00", for: "rey-frontend")
+
+      expect(out).to include("1 unread", "#1 from luke-backend", "the endpoint is up", "acknowledge")
+    end
+
+    it "stops naming a message once its recipient has acknowledged it" do
+      send(body: "seen already", plan: "001.00", from: "luke-backend", to: "rey-frontend")
+      ack(number: 1, plan: "001.00", by: "rey-frontend")
+      out, = poll(plan: "001.00", for: "rey-frontend")
+
+      expect(out).to be_empty
+    end
+
+    it "keeps to one line each, whatever the message is" do
+      send(body: "first line\n\nand a great deal more prose after it",
+        plan: "001.00",
+        from: "luke-backend",
+        to: "rey-frontend")
+      out, = poll(plan: "001.00", for: "rey-frontend")
+
+      aggregate_failures do
+        expect(out.lines.last).to include("first line")
+        expect(out).not_to include("great deal")
+      end
+    end
+
+    it "shows at most the limit it was given, keeping the newest" do
+      3.times { |i| send(body: "m#{i}", plan: "001.00", from: "luke-backend", to: "rey-frontend") }
+      out, = poll(plan: "001.00", for: "rey-frontend", limit: "2")
+
+      aggregate_failures do
+        expect(out).to include("m1", "m2")
+        expect(out).not_to include("m0")
+      end
+    end
+
+    # A hook that raises breaks each of an agent's steps rather than one of
+    # them, so nothing here may escape.
+    it "stays quiet and exits zero when Redis is gone" do
+      allow(Agentilda::Bus).to receive(:client).and_return(FakeRedis.new(reachable: false))
+      out, _err, status = poll(plan: "001.00", for: "rey-frontend")
+
+      aggregate_failures do
+        expect(out).to be_empty
+        expect(status).to eq(0)
+      end
+    end
+
+    it "stays quiet and exits zero for a plan that is not there" do
+      out, _err, status = poll(plan: "009", for: "rey-frontend")
+
+      aggregate_failures do
+        expect(out).to be_empty
+        expect(status).to eq(0)
+      end
     end
   end
 

@@ -111,6 +111,33 @@ RSpec.describe Agentilda::Executor, :tree do
       )
     end
 
+    # The prompt asks the agent to poll between steps, and it does, when it
+    # judges a step significant. The hook runs the same drain from the
+    # runtime instead, so a message lands at the agent's next tool call
+    # whether or not it thought to look.
+    describe "the mail hook" do
+      subject(:settings) do
+        JSON.parse(File.read(executor.invocation(agents.find("luke-backend"),
+          subject_plan,
+          partners: [agents.find("rey-frontend")]).each_cons(2).find { |flag, _| flag == "--settings" }.last))
+      end
+
+      it "runs after every tool call the agent makes" do
+        expect(settings["hooks"].keys).to eq(["PostToolUse"])
+      end
+
+      it "polls this plan's mail for this agent" do
+        expect(settings.dig("hooks", "PostToolUse", 0, "hooks", 0, "command"))
+          .to include("agentilda mail poll", "--plan 000.00", "--for luke-backend")
+      end
+
+      # An agent alone on a plan has no mailbox to poll and would pay for
+      # the hook on every call it made, for nothing.
+      it "is not written for an agent with no partner" do
+        expect(executor.invocation(agents.find("luke-backend"), subject_plan)).not_to include("--settings")
+      end
+    end
+
     # `alo` signs a lock with the process fingerprint, which every sub-agent
     # of one `claude` shares, so the prompt names the holder explicitly.
     it "tells the agent to claim files with alo, under its own name" do
@@ -197,8 +224,16 @@ RSpec.describe Agentilda::Executor, :tree do
     context "with a control file" do
       let(:controlled) { executor.invocation(agent, subject_plan, control: "/tmp/control-000.00-yoda-writer")[2] }
 
-      it "asks an interrupted agent for a resume note, and every agent to read one first" do
-        expect(controlled).to include("INTERRUPT", "RESUME:", "--from yoda-writer --to yoda-writer", "mail read", "Interrupted")
+      it "asks an interrupted agent to record where it got to, in fields rather than prose" do
+        expect(controlled).to include("INTERRUPT", "mail state", "--agent yoda-writer", "--next-step", "--remaining")
+      end
+
+      it "asks it to sign Interrupted through the command that takes the lock" do
+        expect(controlled).to include("ledger sign", "--status Interrupted")
+      end
+
+      it "asks every agent to read its mail on the way in, which is what makes a restart idempotent" do
+        expect(controlled).to include("mail read", "RESUME")
       end
     end
   end

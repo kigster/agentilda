@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require "fileutils"
+require "json"
 require "shellwords"
 require "tmpdir"
 
@@ -363,7 +364,43 @@ module Agentilda
       model = @model || agent.model
       argv += ["--model", model] if model
       argv += ["--effort", agent.effort] if agent.effort
+      settings = hook_settings(agent, subject, partners)
+      argv += ["--settings", settings] if settings
       argv
+    end
+
+    # A `PostToolUse` hook that drains this agent's mail after every tool
+    # call it makes.
+    #
+    # The prompt already asks the agent to poll between steps, and it does,
+    # when it judges a step significant. This runs the same drain from the
+    # runtime instead, so a message reaches the agent at its next tool call
+    # whether or not it thought to look. Written only for an agent that has
+    # a partner: an agent alone on a plan has no mailbox to poll and would
+    # pay for the hook on every call for nothing.
+    #
+    # It is deliberately fire-and-forget. `mail poll` swallows its own
+    # errors, because a hook that raises breaks each of an agent's steps
+    # rather than one of them.
+    #
+    # @param agent [Agentilda::Agent]
+    # @param subject [Agentilda::Subject]
+    # @param partners [Array<Agentilda::Agent>]
+    # @return [String, nil] the settings file, or nil when there is no pair
+    def hook_settings(agent, subject, partners)
+      return nil if partners.empty?
+
+      command = Shellwords.join(["agentilda", "mail", "poll",
+                                  "--dir", File.dirname(subject.feature.path),
+                                  "--plan", subject.feature.ordinal.to_s,
+                                  "--for", agent.name])
+      path = File.join(@trace_dir, "settings-#{subject.feature.ordinal}-#{agent.name}-#{Process.pid}.json")
+      FileUtils.mkdir_p(@trace_dir)
+      File.write(path,
+        JSON.pretty_generate(
+                { "hooks" => { "PostToolUse" => [{ "hooks" => [{ "type" => "command", "command" => command }] }] } }
+              ))
+      path
     end
 
     # What this particular agent may not touch: the network tools unless it
@@ -426,7 +463,7 @@ module Agentilda
         Repository root: #{root}
 
         #{"The folder's name is not currently justified: #{subject.violation}" if subject.violation}
-        #{operator_instructions}#{ledger_section(agent, round:, successor:)}#{budget_section}#{time_budget_section(agent)}#{control_section(control, agent, subject)}#{mailbox_section(agent, subject, partners)}
+        #{operator_instructions}#{ledger_section(agent, round:, successor:)}#{budget_section}#{time_budget_section(agent)}#{control_section(control, agent, subject, round)}#{mailbox_section(agent, subject, partners)}
         ## Boundary — enforced, not requested
 
         You may read anything, and write source, tests and the plan's own
@@ -622,8 +659,10 @@ module Agentilda
     # @param control [String, nil]
     # @param agent [Agentilda::Agent]
     # @param subject [Agentilda::Subject]
+    # @param round [Integer] named in the commands the agent is given, so
+    #   it does not have to work out which round it is in to run them
     # @return [String]
-    def control_section(control, agent, subject)
+    def control_section(control, agent, subject, round = 1)
       return "" if control.nil?
 
       plans_dir = File.dirname(subject.feature.path)
@@ -645,10 +684,19 @@ module Agentilda
         whoever runs next — most likely you — saying what is done, what is
         not, and the exact next step:
 
-            agentilda mail send --dir "#{plans_dir}" --plan #{plan} --from #{agent.name} --to #{agent.name} "RESUME: ..."
+            agentilda mail state --dir "#{plans_dir}" --plan #{plan} --agent #{agent.name} --round #{round} \\
+              --done "what is finished;and what else" \\
+              --remaining "what is not" \\
+              --next-step "the exact command or edit to do first"
 
-        Then write your ledger line as `Interrupted` with NO `next:` line, and
-        end your turn.
+        Write it in fields, not prose: the next run checks what you name
+        rather than taking it on trust. If you are killed before you get
+        this far the harness records what it watched instead, which is a
+        worse record than yours, so run it early rather than perfectly.
+
+        Then sign `Interrupted` with NO `next:` line, and end your turn:
+
+            agentilda ledger sign --dir "#{plans_dir}" --plan #{plan} --agent #{agent.name} --status Interrupted --round #{round}
 
         Before you start, check for such a note from an earlier run:
 

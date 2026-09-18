@@ -31,10 +31,26 @@ module Agentilda
     # What {#render} writes above the messages.
     TITLE = "# Mailbox"
 
-    # Written by the reader, never by delivery. A consumer group's ack says
-    # the bytes arrived; only the agent can say it read them.
+    # Written by the reader, never by delivery. A stream's own ack says the
+    # bytes arrived; only the agent can say it read them.
     READ = "yes"
     UNREAD = "no"
+
+    # The document's three sections. `stream` is the id of the last bus
+    # entry folded in, which is what makes {#sync!} idempotent: two
+    # processes draining the same stream write the same messages once.
+    MESSAGES = "messages"
+    STATE = "last-known-state"
+    STREAM = "stream"
+
+    # What {#sync!} does with a payload, by its `kind`.
+    MESSAGE_KIND = "message"
+    STATE_KIND = "state"
+
+    # Who wrote a {STATE} entry. An agent's own account of where it got to
+    # always wins; the harness fills in for one that never got to write.
+    BY_AGENT = "agent"
+    BY_HARNESS = "harness"
 
     # One entry.
     #
@@ -78,10 +94,18 @@ module Agentilda
     # Every message, in the order it was written.
     #
     # @return [Array<Agentilda::Mailbox::Message>]
-    def messages
-      return [] unless exist?
+    def messages = decode_messages(document)
 
-      decode(File.read(path, encoding: "UTF-8"))
+    # The whole file, with every section present whether or not it has been
+    # written yet, so no caller has to test for a missing key.
+    #
+    # @return [Hash]
+    def document
+      return blank unless exist?
+
+      normalize(JSON.parse(File.read(path, encoding: "UTF-8")))
+    rescue JSON::ParserError
+      blank
     end
 
     # What is waiting for one agent.
@@ -105,6 +129,60 @@ module Agentilda
       messages.reject(&:read?).select { |m| name.nil? || m.to == name }
     end
 
+    # Where each agent on this plan got to, as last recorded.
+    #
+    # @return [Hash{String => Hash}] keyed by agent name, last write wins
+    def last_known_state = document[STATE]
+
+    # Record where one agent got to, for the round that picks the plan up.
+    #
+    # Two writers, and a precedence between them. An agent interrupted
+    # cleanly writes its own entry, which is the better one: it knows what
+    # it finished and what the next step is. An agent that was terminated
+    # when the grace period expired, or that died outright, writes nothing,
+    # and the harness fills in from what it watched. So a harness entry
+    # never displaces an agent's, and an agent's always displaces whatever
+    # is there.
+    #
+    # @param agent [String]
+    # @param source [String] {BY_AGENT} or {BY_HARNESS}
+    # @param fields [Hash] round, status, done, remaining, next_step, note
+    # @return [Hash, nil] what now stands for that agent, or nil when a
+    #   harness entry was declined in favour of the agent's own
+    def record_state(agent, source:, at: Time.now, **fields)
+      write do |doc|
+        held = doc[STATE][agent.to_s]
+        if source == BY_HARNESS && held && held["source"] == BY_AGENT
+          [doc, nil]
+        else
+          entry = { "source" => source, "at" => at.iso8601 }.merge(fields.transform_keys(&:to_s))
+          [doc.merge(STATE => doc[STATE].merge(agent.to_s => entry)), entry]
+        end
+      end
+    end
+
+    # Fold everything the bus has carried since the last sync into the file.
+    #
+    # This is what replaces a broker process. Any number of readers may run
+    # it — the harness thread once a second, and whoever is about to read
+    # the file — because `flock` makes the write safe and the {STREAM}
+    # watermark makes it idempotent. A message is therefore never lost to
+    # nobody-was-listening, which is the failure a published-and-forgotten
+    # transport has and a stream does not.
+    #
+    # @param bus [Agentilda::Bus]
+    # @param ordinal [String]
+    # @return [Integer] how many entries were folded in
+    def sync!(bus, ordinal)
+      write do |doc|
+        drained = bus.drain(ordinal, after: doc[STREAM])
+        next [doc, 0] if drained.empty?
+
+        folded = drained.reduce(doc) { |carry, (id, payload)| fold(carry, id, payload) }
+        [folded, drained.size]
+      end
+    end
+
     # Append one message and give it the next number.
     #
     # @param from [String]
@@ -121,14 +199,9 @@ module Agentilda
       raise Error, "a message needs a body" if text.empty?
       raise Error, "a message needs --from and --to, each one agent name" unless name?(from) && name?(to)
 
-      write do |existing|
-        message = Message.new(number: (existing.last&.number || 0) + 1,
-          at:   at.iso8601,
-          from:,
-          to:,
-          body: text,
-          read: UNREAD)
-        [existing + [message], message]
+      write do |doc|
+        message = next_message(doc, from:, to:, body: text, at: at.iso8601)
+        [add(doc, message), message]
       end
     end
 
@@ -141,7 +214,8 @@ module Agentilda
     #   was addressed to somebody else — an agent acking its partner's mail
     #   would mark read what nobody has read
     def ack(number, by:)
-      write do |existing|
+      write do |doc|
+        existing = decode_messages(doc)
         index = existing.index { |m| m.number == number }
         raise Error, "no message ##{number} in #{path}" unless index
 
@@ -149,7 +223,7 @@ module Agentilda
         raise Error, "message ##{number} is for #{found.to}, not #{by}" unless found.to == by
 
         acked = found.with(read: READ)
-        [existing.dup.tap { |all| all[index] = acked }, acked]
+        [doc.merge(MESSAGES => existing.dup.tap { |all| all[index] = acked }.map(&:to_h)), acked]
       end
     end
 
@@ -180,39 +254,106 @@ module Agentilda
     # rename because one process writes it; this is written by as many
     # processes as the round has agents.
     #
-    # @yieldparam [Array<Agentilda::Mailbox::Message>] what is on disk
-    # @yieldreturn [Array(Array<Agentilda::Mailbox::Message>, Object)] what
-    #   to write, and what to hand back to the caller
+    # @yieldparam [Hash] the document on disk, with every section present
+    # @yieldreturn [Array(Hash, Object)] what to write, and what to hand
+    #   back to the caller
     # @return [Object] the second half of what the block returned
     def write
       File.open(path, File::RDWR | File::CREAT, 0o644) do |f|
         f.flock(File::LOCK_EX)
-        all, result = yield(decode(f.read))
+        text = f.read
+        doc, result = yield(parse_or_blank(text))
         f.rewind
-        f.write(JSON.pretty_generate({ "messages" => all.map(&:to_h) }))
+        f.write(JSON.pretty_generate(doc))
         f.truncate(f.pos)
         result
       end
     end
 
+    # @return [Hash] an empty document, every section present
+    def blank = { STREAM => Bus::BEGINNING, MESSAGES => [], STATE => {} }
+
+    # @param text [String]
+    # @return [Hash]
+    def parse_or_blank(text)
+      normalize(JSON.parse(text.to_s))
+    rescue JSON::ParserError
+      blank
+    end
+
+    # A file half-written, or edited by hand into something else, gives back
+    # whichever sections still make sense and blanks the rest. The caller is
+    # an agent polling between steps, and a crash there costs the round.
+    #
+    # @param parsed [Object]
+    # @return [Hash]
+    def normalize(parsed)
+      return blank unless parsed.is_a?(Hash)
+
+      { STREAM   => parsed[STREAM].is_a?(String) ? parsed[STREAM] : Bus::BEGINNING,
+        MESSAGES => parsed[MESSAGES].is_a?(Array) ? parsed[MESSAGES] : [],
+        STATE    => parsed[STATE].is_a?(Hash) ? parsed[STATE] : {} }
+    end
+
+    # @param doc [Hash]
+    # @return [Array<Agentilda::Mailbox::Message>]
+    def decode_messages(doc) = doc[MESSAGES].filter_map { |entry| message_from(entry) }
+
+    # @return [Agentilda::Mailbox::Message]
+    def next_message(doc, from:, to:, body:, at:)
+      Message.new(number: (decode_messages(doc).last&.number || 0) + 1, at:, from:, to:, body:, read: UNREAD)
+    end
+
+    # @return [Hash] the document with one more message in it
+    def add(doc, message) = doc.merge(MESSAGES => doc[MESSAGES] + [message.to_h])
+
+    # One bus entry, folded into the document. The watermark moves past
+    # whatever the payload turned out to be, including a kind this version
+    # does not know or a payload the bus could not decode at all: leaving it
+    # behind would make every later sync re-fetch and re-skip the same entry
+    # forever.
+    #
+    # @param doc [Hash]
+    # @param id [String] the entry's stream id
+    # @param payload [Hash, nil] nil for an entry the bus could not decode
+    # @return [Hash]
+    def fold(doc, id, payload)
+      moved = doc.merge(STREAM => id)
+      return moved unless payload
+
+      case payload["kind"]
+      when MESSAGE_KIND then fold_message(moved, payload)
+      when STATE_KIND then fold_state(moved, payload)
+      else moved
+      end
+    end
+
+    # @return [Hash]
+    def fold_message(doc, payload)
+      return doc unless name?(payload["from"]) && name?(payload["to"]) && !payload["body"].to_s.strip.empty?
+
+      add(doc,
+        next_message(doc,
+          from: payload["from"].to_s,
+          to:   payload["to"].to_s,
+          body: payload["body"].to_s.strip,
+          at:   payload["at"].to_s))
+    end
+
+    # @return [Hash]
+    def fold_state(doc, payload)
+      agent = payload["agent"].to_s
+      return doc unless name?(agent)
+
+      held = doc[STATE][agent]
+      return doc if payload["source"] == BY_HARNESS && held && held["source"] == BY_AGENT
+
+      doc.merge(STATE => doc[STATE].merge(agent => payload.except("kind", "agent")))
+    end
+
     # @param value [Object]
     # @return [Boolean] one token, with no whitespace to read as two names
     def name?(value) = value.to_s.match?(/\A\S+\z/)
-
-    # A file that is empty, half-written or not JSON at all reads as no
-    # messages rather than raising: the caller is an agent polling between
-    # steps, and a crash there costs the round.
-    #
-    # @param text [String]
-    # @return [Array<Agentilda::Mailbox::Message>]
-    def decode(text)
-      document = JSON.parse(text.to_s)
-      return [] unless document.is_a?(Hash) && document["messages"].is_a?(Array)
-
-      document["messages"].filter_map { |entry| message_from(entry) }
-    rescue JSON::ParserError
-      []
-    end
 
     # @param entry [Object] one element of `messages`
     # @return [Agentilda::Mailbox::Message, nil] nil for anything that is

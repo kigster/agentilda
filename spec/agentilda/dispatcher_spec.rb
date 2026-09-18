@@ -332,6 +332,45 @@ RSpec.describe Agentilda::Dispatcher, :tree do
       end
     end
 
+    # An agent killed when the grace period expired writes nothing about
+    # where it got to, so the harness's account is all the next round has.
+    describe "what the harness remembers for an agent that could not say it itself" do
+      subject(:state_for_leah) do
+        Agentilda::Mailbox.new(dir: path_of("001.00")).last_known_state["leah-researcher"]
+      end
+
+      let(:executor) do
+        lambda { |_agent, _subject, round: 1, **|
+          Agentilda::Executor::Result.new(ok: false,
+            note: "timed out",
+            up: 0,
+            down: 0,
+            subagents: 0,
+            delegated: 0,
+            seconds: 0.0,
+            killed: :timeout)
+        }
+      end
+
+      before { runner_with(executor, agents: agents.only("leah-researcher")).call }
+
+      it "records that the agent was interrupted" do
+        expect(state_for_leah["status"]).to eq("Interrupted")
+      end
+
+      it "marks the record as the harness's, not the agent's" do
+        expect(state_for_leah["source"]).to eq(Agentilda::Mailbox::BY_HARNESS)
+      end
+
+      it "keeps the reason, which is the only clue the next round gets" do
+        expect(state_for_leah["note"]).to include("timed out")
+      end
+
+      it "says which round it was" do
+        expect(state_for_leah["round"]).to eq(1)
+      end
+    end
+
     it "writes only Interrupted, and re-runs, when the work is not there" do
       Dir.mktmpdir do |dir|
         File.write(File.join(dir, "leah.md"), "---\nname: leah-researcher\nhandles: [new]\nadvances_to: researched\nrounds: 2\nledger: [spec.md]\n---\nbody")

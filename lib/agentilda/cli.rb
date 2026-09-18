@@ -28,6 +28,8 @@ require_relative "cli/mail/subcommands/send"
 require_relative "cli/mail/subcommands/read"
 require_relative "cli/mail/subcommands/ack"
 require_relative "cli/mail/subcommands/render"
+require_relative "cli/mail/subcommands/poll"
+require_relative "cli/mail/subcommands/state"
 require_relative "cli/ledger/ledger"
 require_relative "cli/ledger/subcommands/sign"
 
@@ -122,6 +124,8 @@ module Agentilda
       prefix.register "read", Mail::Read
       prefix.register "ack", Mail::Ack
       prefix.register "render", Mail::Render
+      prefix.register "poll", Mail::Poll
+      prefix.register "state", Mail::State
     end
 
     register "completion", ::Dry::CLI::Autocomplete::Command[::Agentilda::CLI]
