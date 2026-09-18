@@ -175,7 +175,7 @@ tilda run --isolation shared               # one checkout, one agent at a time, 
 
 If you just created several plans, run them with a single `--plan` list. Separate bare `run` calls each loop over the whole tree, so their worktrees would overlap.
 
-Below is the screenshot of multiple agents running, working on two separate plans. The fist plan has both Luke and Rey (backend and frontend developers) runnign, while the second plan is only at the research phase with Leah.	
+Below is the screenshot of multiple agents running, working on two separate plans. The fist plan has both Luke and Rey (backend and frontend developers) runnign, while the second plan is only at the research phase with Leah.
 
 ![agents-running](docs/img/agentilda-running.avif)
 
@@ -249,7 +249,7 @@ An agent never renames its plan folder. Instead, it signs the document it owns, 
 | `Blocked`                         | parks the folder at ⭕️, or at 🅱️ when the note says `product`       |
 | `Almost completed`, `Interrupted` | gives the agent another round, up to its limit                      |
 
-Suppose an agent stops without signing, because it crashed, timed out or was killed. The harness signs `Interrupted` for it. If the work is on disk anyway, the harness also signs `Completed` for it. The run's own state, such as process ids and token counts, lives in `.plans/tmp/agentilda-state.json`. A later run picks up where a dead one stopped.
+Suppose an agent stops without signing, because it crashed, timed out or was killed. The harness signs `Interrupted` for it. If the work is on disk anyway, the harness also signs `Completed` for it. The run's own state, such as process ids and token counts, lives in `.plans/agentilda-state.json`, gitignored. A later run picks up where a dead one stopped.
 
 ## GitHub and Linear
 

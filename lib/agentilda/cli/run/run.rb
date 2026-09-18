@@ -115,13 +115,13 @@ module Agentilda
         credentials_warning if commit?(options) && !quiet?(options)
 
         # The state file is what a harness that dies leaves for the next one.
-        # It sits under .plans/tmp/ so a reboot keeps it, and that directory
-        # is ignored so it never rides along in a commit. Editing somebody's
-        # .gitignore is announced, the once it happens. The runner drops the
-        # file on a dry run, which is why it can be built unconditionally.
+        # It sits in .plans/ so a reboot keeps it, and it is ignored by name
+        # so it never rides along in a commit. Editing somebody's .gitignore
+        # is announced, the once it happens. The runner drops the file on a
+        # dry run, which is why it can be built unconditionally.
         state = StateFile.new(path: StateFile.for(tree))
         if commit?(options) && StateFile.ensure_ignored!(root) && !quiet?(options)
-          info("Added #{StateFile::IGNORE} to .gitignore: the run keeps its state there.")
+          info("Added #{StateFile::IGNORE.join(" and ")} to .gitignore: the run keeps its state there.")
         end
 
         # The screen only on a terminal that is actually running agents: a dry

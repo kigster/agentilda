@@ -10,33 +10,50 @@ module Agentilda
   # The ledger inside each document is the record humans read and the
   # dispatcher acts on; this is the index of it, plus what the ledger cannot
   # hold: which run wrote what, process ids, tokens, and whether the run
-  # that wrote a `Started` is still alive. It sits under `.plans/tmp/`
-  # rather than the system temp dir because a reboot must not lose it, and
-  # it is gitignored because it is about one machine's run, not the plan.
+  # that wrote a `Started` is still alive. It sits in `.plans/` rather than
+  # the system temp dir because a reboot must not lose it, and it is
+  # gitignored because it is about one machine's run, not the plan.
   class StateFile
-    DIRNAME = "tmp"
     FILENAME = "agentilda-state.json"
 
-    # The line {.ensure_ignored!} adds.
-    IGNORE = "#{Agentilda::PLANS_DIR}/#{DIRNAME}/"
+    # Where it used to live, one directory down. Read by {#load} when the
+    # current path holds nothing, so a run started under the old layout is
+    # picked up rather than silently restarted from zero. Nothing writes
+    # here any more and nothing deletes it: the file left behind is the
+    # only record a half-finished run has.
+    LEGACY_DIRNAME = "tmp"
+
+    # The lines {.ensure_ignored!} adds. The second covers the sibling
+    # {#save} writes and renames over the first — brief, but `.plans/` is a
+    # directory whose other contents are committed, so a `git status` run
+    # during that instant must not offer it.
+    IGNORE = ["#{Agentilda::PLANS_DIR}/#{FILENAME}", "#{Agentilda::PLANS_DIR}/#{FILENAME}.*.tmp"].freeze
 
     # @param tree [Agentilda::Tree]
     # @return [String]
-    def self.for(tree) = File.join(tree.dir, DIRNAME, FILENAME)
+    def self.for(tree) = File.join(tree.dir, FILENAME)
 
-    # Add the ignore line once. Editing somebody's `.gitignore` is a thing
+    # @param tree [Agentilda::Tree]
+    # @return [String] where {LEGACY_DIRNAME} put it
+    def self.legacy_for(tree) = File.join(tree.dir, LEGACY_DIRNAME, FILENAME)
+
+    # Add the ignore lines once. Editing somebody's `.gitignore` is a thing
     # to announce, which is why this returns whether it did.
     #
+    # Only the first line is asked about: git answers for a literal path,
+    # and the second is a glob no path equals. They are written together,
+    # so one being ignored means both are.
+    #
     # @param root [String] repository root
-    # @return [Boolean] true when a line was added
+    # @return [Boolean] true when lines were added
     def self.ensure_ignored!(root)
       return false unless system("git", "-C", root, "rev-parse", "--git-dir", out: File::NULL, err: File::NULL)
-      return false if system("git", "-C", root, "check-ignore", "-q", IGNORE, out: File::NULL, err: File::NULL)
+      return false if system("git", "-C", root, "check-ignore", "-q", IGNORE.first, out: File::NULL, err: File::NULL)
 
       path = File.join(root, ".gitignore")
       existing = File.file?(path) ? File.read(path) : ""
       glue = existing.empty? || existing.end_with?("\n") ? "" : "\n"
-      File.write(path, "#{existing}#{glue}#{IGNORE}\n")
+      File.write(path, "#{existing}#{glue}#{IGNORE.join("\n")}\n")
       true
     end
 
@@ -52,10 +69,22 @@ module Agentilda
     # @return [String]
     attr_reader :path
 
+    # Where a run started before the file moved up out of {LEGACY_DIRNAME}
+    # would have written. {#load} falls back to it; {#save} never uses it.
+    #
+    # @return [String]
+    def legacy_path = File.join(File.dirname(path), LEGACY_DIRNAME, File.basename(path))
+
+    # Reads the current path, or the legacy one when the current path holds
+    # nothing. A run interrupted under the old layout is otherwise invisible
+    # to the run that picks it up, and {#stranded} would report no stranded
+    # stages for a harness that died with several.
+    #
     # @return [self]
     def load
       @mutex.synchronize do
-        @data = JSON.parse(File.read(path)) if File.file?(path)
+        source = [path, legacy_path].find { |candidate| File.file?(candidate) }
+        @data = JSON.parse(File.read(source)) if source
         @data = { "run" => {}, "plans" => {} } unless @data.is_a?(Hash) && @data["plans"].is_a?(Hash)
       end
       self
