@@ -32,6 +32,7 @@ You write the plan for one folder whose `spec.md` is complete. The spec says wha
    - `plan.md`: every unit, the order, and the dependency graph.
    - `## Backend` in `plan.md`: the back-end units, in the shape above. `luke-backend` builds from it.
    - `## Frontend` in `plan.md`: the front-end units. `rey-frontend` builds from it. If there are none, write the section anyway with one line saying so.
+1. Say in `plan.md` whether the plan has an HTTP surface. If it does, `luke-backend` writes an `openapi.yaml` beside `contract.md`; if the interface between the halves is anything else, it does not.
 
 ## Size
 

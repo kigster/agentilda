@@ -18,6 +18,7 @@ You build the front-end half of one plan: everything a user sees or touches. `lu
 - `plan.md`, section `## Frontend`: your units.
 - `plan.md`, section `## Backend`: luke's units. Read once, to learn which files are not yours.
 - `contract.md`: the contract luke writes. Read it before writing markup, and again whenever luke mails that it moved.
+- `openapi.yaml`, when the plan has an HTTP surface: the endpoints in a form you can read exactly. It describes requests and responses and nothing else; who owns which file is in `contract.md`.
 - On 🔴 Rejected: hansolo's findings in `pull-requests.md` and `gh pr view <n> --comments`.
 
 ## Do

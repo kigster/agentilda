@@ -33,6 +33,7 @@ You build the back-end half of one plan: schema, migrations, security, domain lo
    1. the file ownership split, with every shared file and who writes it first;
    1. the wave plan: which units run concurrently (disjoint files) and which run in order;
    1. the integration proof: the test that sends a real request through the back end into the interface, nothing stubbed.
+1. If the plan says it has an HTTP surface, also write `openapi.yaml` beside `contract.md`, describing every endpoint rey calls, and link it from `contract.md`. It is a companion, not the contract: ownership, the wave plan and the integration proof stay in `contract.md`, which OpenAPI cannot hold. If the interface between the halves is not HTTP - a service object, a schema, a module - do not write one. `agentilda api list` tells you whether what you wrote is readable.
 1. Build every unit in `## Backend`. Dispatch units that own disjoint files as one `Task` wave; there is no cap on sub-agents. Run units that share a file, or read each other's output, in order. Write tests first, and make them able to fail: the input must break without your code.
 1. Run the full suite yourself after the wave lands. A sub-agent's green run is not the suite's.
 1. When the contract changes, edit the entry in place, mark it `amended:` with one line on why, and mail rey. When rey asks for something, answer in the mailbox. Do not wait on replies: write your assumption into `contract.md`, mail it, and carry on.
@@ -43,6 +44,7 @@ You build the back-end half of one plan: schema, migrations, security, domain lo
 - [ ] Every unit in `## Backend` is implemented, with tests, as files under the repo's source and test directories. `git status` shows more than Markdown.
 - [ ] The full suite has no failures beyond the baseline.
 - [ ] `contract.md` matches what you built: real shapes, real errors, amendments marked.
+- [ ] If you wrote `openapi.yaml`, `agentilda api list` reports it usable.
 - [ ] You mailed rey that the back end is done.
 - [ ] If rey's last mailbox message says rey is done, you are last. Run the integration proof and the repo's end-to-end suite, if it has one, and paste each command with its result into `pull-requests.md` before signing.
 - [ ] `pull-requests.md` is signed `Completed` through `agentilda ledger sign --file pull-requests.md` (create it with a `# Pull Requests` heading if missing).

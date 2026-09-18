@@ -125,6 +125,8 @@ They talk over Redis. `tilda mail send` adds the message to a per-plan Redis **s
 
 `mailbox.json` is the durable record and is committed with the plan; the stream keeps an hour. `tilda mail read` shows what is waiting, `tilda mail ack N` is how the reader says it read it — delivery is not reading — and `tilda mail render` prints the exchange as Markdown. A `PostToolUse` hook runs `tilda mail poll` after every tool call an agent makes, so mail arrives at the next call whether or not the agent remembered to look.
 
+When a plan exposes HTTP endpoints, Luke also writes an `openapi.yaml` beside `contract.md`, and `tilda api docs` renders every plan's into one Redoc site. It is a companion, never the contract: most splits are not HTTP at all, and file ownership, the wave plan and the integration proof — the half that keeps the two agents from colliding — have no OpenAPI slot.
+
 Ctrl-C asks each agent to record where it got to with `tilda mail state`, in fields rather than prose, under `last-known-state` in the same file. An agent killed before it gets that far leaves nothing, so the harness writes what it watched instead — marked as its own, and never overwriting an agent's own account.
 
 Run `tilda agents list` for the same table, or `tilda describe <agent>` to read one agent's prompt.
