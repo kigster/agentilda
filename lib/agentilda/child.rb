@@ -18,11 +18,25 @@ module Agentilda
     # @return [Agentilda::Child]
     def self.spawn(argv, chdir: nil)
       reader, writer = IO.pipe
-      options = { out: writer, err: writer, in: File::NULL }
+      options = { out: writer, err: writer, in: File::NULL, unsetenv_others: true }
       options[:chdir] = chdir if chdir
-      pid = Process.spawn(*argv, **options)
+      pid = Process.spawn(environment, *argv, **options)
       writer.close
       new(pid:, reader:)
+    end
+
+    # The environment the child starts in: the one Bundler was loaded under,
+    # less what Bundler itself put there. `exe/agentilda` pins `BUNDLE_GEMFILE`
+    # to its own Gemfile and `bundler/setup` adds `-rbundler/setup` to
+    # `RUBYOPT`; a child that inherited them would run every `bundle exec`,
+    # `standardrb` and `alock` against the harness's checkout instead of the
+    # worktree it was handed, and be told the gems that worktree's Gemfile adds
+    # are "not currently included in the bundle". Bundler knows exactly what it
+    # changed, so it is asked; without Bundler there is nothing to strip.
+    #
+    # @return [Hash{String => String}]
+    def self.environment
+      defined?(::Bundler) ? ::Bundler.unbundled_env : ENV.to_h
     end
 
     # @param pid [Integer]
