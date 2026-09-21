@@ -11,8 +11,32 @@ module Agentilda
       # Values of AGENTILDA_AUTOCOMMIT that turn it on.
       AUTOCOMMIT = %w[true yes 1].freeze
 
+      # dry-cli gathers every token a command did not declare an argument for
+      # into :args, and hands it over without a word. `tilda docs
+      # .plans/README.md` — the `-o` forgotten — therefore ran with every
+      # default, wrote the conventions to the default path, and printed
+      # success for a file the caller never named.
+      #
+      # Prepended rather than called from each `call`, because the command
+      # that forgets this check is the one that needed it.
+      module RefuseStrayArguments
+        # @param options [Hash]
+        # @return [void]
+        def call(**options)
+          stray = Array(options[:args]) - self.class.arguments.flat_map { Array(options[it.name.to_sym]) }
+          unless stray.empty?
+            refuse("This command takes no argument like #{stray.join(" ")}.\n" \
+                   "An option it does take may be the one you meant: run it with -h.",
+              64)
+          end
+
+          super
+        end
+      end
+
       def self.inherited(klass)
         super
+        klass.prepend(RefuseStrayArguments)
         klass.option :dir,
           default: Agentilda::PLANS_DIR,
           aliases: ["-D"],
