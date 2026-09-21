@@ -2,9 +2,25 @@
 
 [![CircleCI](https://dl.circleci.com/status-badge/img/gh/kigster/agentilda/tree/main.svg?style=shield)](https://dl.circleci.com/status-badge/redirect/gh/kigster/agentilda/tree/main) ![Coverage](docs/badges/coverage_badge.svg)
 
-Agentilda turns a short feature description into a reviewed pull request. You write the brief; a team of seven Claude Code agents researches it, specifies it, plans it, builds it and reviews it. You merge.
 
-It is a Ruby gem with one command, `agentilda`, also installed as `tilda`. The agents are defined in [`agents/`](agents/).
+
+#### What is this?
+
+This repo is a collection of installers (BASH and Ruby) which ensure a consistent vendor-neutral agentic setup on your computer, coupled with an agentic software team that diligently creates your feature specs in collaboration with you, and then works on them until they become reviewed, CI-passing PRs that you get to merge.
+
+Here is a screenshot of agents working on two plans at the same time, but on two different phases of the process:
+
+![workflow](docs/img/agentilda-two-plan-work.png)
+
+> [!NOTE]
+>
+> 1. [`agentilda`](<>) (also known as `tilda` executable) is the Ruby Gem, which is a CLI tool that creates and manages the `.plans` folder, and comes with eight or so specialized agents that take a spec.md file and work through it until it's a set of PRs open, reviewed, and passing on your CI. It does not automatically merge anything.
+> 1. [`agentilda-ai-setup`](https://kigster/agentilda-ai-setup) is the GitHub repo that's a mixture of BASH and Ruby installers. It's comes with the [`configuration.yml`](https://github.com/kigster/agentilda-ai-setup/blob/main/configuration.example.yml) file, which lists the installation commands for the coding agents you'd like to install locally, any other executables you might want (for instance, it installs `bt` — braintrust's CLI utility), and then you can list any number of Github Repos and use them to install skills, plugins, commands from them, specifying exactly which you want to install and which you want to exclude. Moreover you can specify a sub-directory of a github repo to install from.
+> 1. The final piece of the puzzle is the locking gem **[`agent-lock`](https://github.com/kigster/agent-lock)**. This flexible gem comes with the executable `alock` and a skill teaching agents how to use it. Using `alock` agents can work in parallel in the same worktree but on different files, sub-folders, and so on. The gem uses locally running Redis as the default backend, and if that's not available, it uses the file system. The choice of the backend happens once and is saved in the git-ignored file in your local working repo.
+>
+> Together, the three repos, after installation provide you with the consistent way to replicate your `~/.agents` and `~/.claude` folders on multiple computers, and to enable a consistent agentic software team workflow across any number of many projects.
+
+Agentilda turns a short feature description into a reviewed pull request. You write the brief; a team of seven Claude Code agents researches it, specifies it, plans it, builds it and reviews it. You merge.
 
 ## Install
 
