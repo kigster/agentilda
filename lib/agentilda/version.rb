@@ -6,5 +6,5 @@
 #
 # © 2026 Konstantin Gredeskoul
 module Agentilda
-  VERSION = "2.0.1"
+  VERSION = "2.0.2"
 end
