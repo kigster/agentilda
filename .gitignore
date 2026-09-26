@@ -1,4 +1,5 @@
 /.ai
+
 /.idea
 **/.DS_Store
 /.bundle/
@@ -20,3 +21,11 @@ mermaid.html
 .plans/tmp/
 .plans/agentilda-state.json
 .plans/agentilda-state.json.*.tmp
+/.env
+/.env.*
+!.env.example
+!env.*.encrypted
+*.key
+*.pem
+*.private
+*.public
