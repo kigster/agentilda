@@ -19,6 +19,7 @@ loader.inflector.inflect(
   "unit"       => "Units",
   "ui"         => "UI"
 )
+loader.collapse("#{__dir__}/agentilda/support")
 loader.collapse("#{__dir__}/agentilda/cli/create")
 loader.collapse("#{__dir__}/agentilda/cli/docs")
 loader.collapse("#{__dir__}/agentilda/cli/index")
@@ -115,13 +116,13 @@ module Agentilda
   #
   # @param root [String] repository root
   # @param ref [String] a branch name; `origin/` is tried first
-  # @return [Array<Agentilda::Ordinal>] possibly empty
+  # @return [Array<Agentilda::Plans::Ordinal>] possibly empty
   def self.plans_on_ref(root, ref)
     ["origin/#{ref}", ref].each do |candidate|
       out = `git -C #{root.shellescape} ls-tree -d --name-only #{candidate.shellescape} #{PLANS_DIR}/ 2>/dev/null`
       next if out.to_s.strip.empty?
 
-      return out.lines.filter_map { |line| Ordinal.from_dirname(File.basename(line.strip)) }
+      return out.lines.filter_map { |line| Plans::Ordinal.from_dirname(File.basename(line.strip)) }
     end
     []
   end
@@ -134,9 +135,9 @@ module Agentilda
   class Error < StandardError; end
 end
 
-# status.rb and feature.rb define methods on Agentilda itself (`status`,
+# plans/status.rb and plans/feature.rb define methods on Agentilda::Plans (`status`,
 # `plan_dirname`, `titleize` and friends) beside the class each is named for.
 # Zeitwerk loads a file when its constant is first named, and a caller of
-# `Agentilda.status` names no constant, so without this those methods exist
+# `Plans.status` names no constant, so without this those methods exist
 # or not depending on what happened to load first.
-%w[status feature].each { |name| loader.load_file("#{__dir__}/agentilda/#{name}.rb") }
+%w[status feature].each { |name| loader.load_file("#{__dir__}/agentilda/plans/#{name}.rb") }

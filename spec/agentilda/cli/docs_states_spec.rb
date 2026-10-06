@@ -62,7 +62,7 @@ RSpec.describe "derived-output commands" do
     it "draws every state on STDOUT, where a pipe can take it" do
       out, err, = run(described_class.new)
 
-      expect(out).to eq(Agentilda::Diagram.new.render)
+      expect(out).to eq(Agentilda::Presentation::Diagram.new.render)
       expect(err).to eq("")
     end
   end

@@ -10,41 +10,41 @@
 # Configuration parameters: IgnoreLiteralBranches, IgnoreConstantBranches, IgnoreDuplicateElseBranch.
 Lint/DuplicateBranch:
   Exclude:
-    - 'lib/agentilda/feature.rb'
-    - 'lib/agentilda/ledger.rb'
+    - 'lib/agentilda/plans/feature.rb'
+    - 'lib/agentilda/plans/ledger.rb'
     - 'lib/agentilda/screen.rb'
 
 # Offense count: 1
 # Configuration parameters: AllowComments, AllowEmptyLambdas.
 Lint/EmptyBlock:
   Exclude:
-    - 'spec/agentilda/transcript_spec.rb'
+    - 'spec/agentilda/execution/transcript_spec.rb'
 
 # Offense count: 1
 # This cop supports unsafe autocorrection (--autocorrect-all).
 Lint/IncompatibleIoSelectWithFiberScheduler:
   Exclude:
-    - 'lib/agentilda/keyboard.rb'
+    - 'lib/agentilda/presentation/keyboard.rb'
 
 # Offense count: 2
 Lint/NoReturnInBeginEndBlocks:
   Exclude:
-    - 'lib/agentilda/creator.rb'
-    - 'lib/agentilda/transcript.rb'
+    - 'lib/agentilda/lifecycle/creator.rb'
+    - 'lib/agentilda/execution/transcript.rb'
 
 # Offense count: 1
 # This cop supports unsafe autocorrection (--autocorrect-all).
 Lint/RedundantDirGlobSort:
   Exclude:
-    - 'lib/agentilda/agents.rb'
+    - 'lib/agentilda/agents/registry.rb'
 
 # Offense count: 7
 # This cop supports safe autocorrection (--autocorrect).
 # Configuration parameters: IgnoreEmptyBlocks, AllowUnusedKeywordArguments.
 Lint/UnusedBlockArgument:
   Exclude:
-    - 'spec/agentilda/dispatcher_spec.rb'
-    - 'spec/agentilda/executor_spec.rb'
+    - 'spec/agentilda/engine/dispatcher_spec.rb'
+    - 'spec/agentilda/execution/executor_spec.rb'
 
 # Offense count: 9
 Lint/UselessConstantScoping:
@@ -58,20 +58,20 @@ Lint/UselessConstantScoping:
 # SupportedStylesForLeadingUnderscores: disallowed, required, optional
 Naming/MemoizedInstanceVariableName:
   Exclude:
-    - 'lib/agentilda/ui.rb'
+    - 'lib/agentilda/support/ui.rb'
 
 # Offense count: 10
 # Configuration parameters: MinNameLength, AllowNamesEndingInNumbers, AllowedNames, ForbiddenNames.
 # AllowedNames: as, at, by, cc, db, id, if, in, io, ip, of, on, os, pp, to
 Naming/MethodParameterName:
   Exclude:
-    - 'lib/agentilda/board.rb'
-    - 'lib/agentilda/executor.rb'
-    - 'lib/agentilda/github.rb'
-    - 'lib/agentilda/pull_requests.rb'
-    - 'lib/agentilda/reporter.rb'
+    - 'lib/agentilda/engine/board.rb'
+    - 'lib/agentilda/execution/executor.rb'
+    - 'lib/agentilda/vcs/github.rb'
+    - 'lib/agentilda/plans/pull_requests.rb'
+    - 'lib/agentilda/presentation/reporter.rb'
     - 'lib/agentilda/screen.rb'
-    - 'spec/agentilda/tally_spec.rb'
+    - 'spec/agentilda/engine/tally_spec.rb'
     - 'spec/agentilda/ui_spec.rb'
 
 # Offense count: 9
@@ -80,8 +80,8 @@ Naming/MethodParameterName:
 RSpec/ContextWording:
   Exclude:
     - 'spec/agentilda/cli/linear_commands_spec.rb'
-    - 'spec/agentilda/dev_work_spec.rb'
-    - 'spec/agentilda/publisher_spec.rb'
+    - 'spec/agentilda/plans/dev_work_spec.rb'
+    - 'spec/agentilda/vcs/publisher_spec.rb'
     - 'spec/agentilda/ui_spec.rb'
 
 # Offense count: 1
@@ -90,20 +90,20 @@ RSpec/ContextWording:
 # SupportedStyles: described_class, explicit
 RSpec/DescribedClass:
   Exclude:
-    - 'spec/agentilda/pull_requests_render_spec.rb'
+    - 'spec/agentilda/plans/pull_requests_render_spec.rb'
 
 # Offense count: 1
 # Configuration parameters: Max, CountAsOne.
 RSpec/ExampleLength:
   Exclude:
-    - 'spec/agentilda/dispatcher_spec.rb'
+    - 'spec/agentilda/engine/dispatcher_spec.rb'
 
 # Offense count: 12
 RSpec/ExpectOutput:
   Exclude:
     - 'spec/agentilda/cli/agent_list_spec.rb'
     - 'spec/agentilda/cli/run_spec.rb'
-    - 'spec/agentilda/worktree_spec.rb'
+    - 'spec/agentilda/vcs/worktree_spec.rb'
 
 # Offense count: 1
 RSpec/IdenticalEqualityAssertion:
@@ -114,45 +114,45 @@ RSpec/IdenticalEqualityAssertion:
 # Configuration parameters: AssignmentOnly.
 RSpec/InstanceVariable:
   Exclude:
-    - 'spec/agentilda/agents_spec.rb'
+    - 'spec/agentilda/agents/registry_spec.rb'
     - 'spec/agentilda/cli/agent_describe_spec.rb'
-    - 'spec/agentilda/control_spec.rb'
-    - 'spec/agentilda/executor_spec.rb'
-    - 'spec/agentilda/roster_spec.rb'
+    - 'spec/agentilda/execution/control_spec.rb'
+    - 'spec/agentilda/execution/executor_spec.rb'
+    - 'spec/agentilda/agents/roster_spec.rb'
     - 'spec/agentilda/ui_spec.rb'
-    - 'spec/agentilda/viewer_spec.rb'
-    - 'spec/agentilda/worktree_spec.rb'
+    - 'spec/agentilda/presentation/viewer_spec.rb'
+    - 'spec/agentilda/vcs/worktree_spec.rb'
 
 # Offense count: 39
 RSpec/LetSetup:
   Exclude:
-    - 'spec/agentilda/adoption_spec.rb'
-    - 'spec/agentilda/creator_spec.rb'
-    - 'spec/agentilda/dispatcher_spec.rb'
-    - 'spec/agentilda/executor_spec.rb'
-    - 'spec/agentilda/feature_spec.rb'
-    - 'spec/agentilda/index_spec.rb'
+    - 'spec/agentilda/lifecycle/adoption_spec.rb'
+    - 'spec/agentilda/lifecycle/creator_spec.rb'
+    - 'spec/agentilda/engine/dispatcher_spec.rb'
+    - 'spec/agentilda/execution/executor_spec.rb'
+    - 'spec/agentilda/plans/feature_spec.rb'
+    - 'spec/agentilda/plans/index_spec.rb'
     - 'spec/agentilda/linear/attribution_spec.rb'
     - 'spec/agentilda/linear/import_spec.rb'
     - 'spec/agentilda/linear/push_spec.rb'
     - 'spec/agentilda/linear/survey_spec.rb'
-    - 'spec/agentilda/publisher_spec.rb'
-    - 'spec/agentilda/reporter_spec.rb'
-    - 'spec/agentilda/resync/dirs_spec.rb'
-    - 'spec/agentilda/resync/prs_spec.rb'
-    - 'spec/agentilda/runner_spec.rb'
+    - 'spec/agentilda/vcs/publisher_spec.rb'
+    - 'spec/agentilda/presentation/reporter_spec.rb'
+    - 'spec/agentilda/lifecycle/resync/dirs_spec.rb'
+    - 'spec/agentilda/lifecycle/resync/prs_spec.rb'
+    - 'spec/agentilda/engine/runner_spec.rb'
 
 # Offense count: 3
 # Configuration parameters: EnforcedStyle.
 # SupportedStyles: have_received, receive
 RSpec/MessageSpies:
   Exclude:
-    - 'spec/agentilda/resync/prs_spec.rb'
+    - 'spec/agentilda/lifecycle/resync/prs_spec.rb'
 
 # Offense count: 1
 RSpec/MultipleDescribes:
   Exclude:
-    - 'spec/agentilda/feature_spec.rb'
+    - 'spec/agentilda/plans/feature_spec.rb'
 
 # Offense count: 5
 # Configuration parameters: AllowedGroups.
@@ -162,7 +162,7 @@ RSpec/NestedGroups:
 # Offense count: 3
 RSpec/PendingWithoutReason:
   Exclude:
-    - 'spec/agentilda/worktree_spec.rb'
+    - 'spec/agentilda/vcs/worktree_spec.rb'
 
 # Offense count: 5
 # Configuration parameters: CustomTransform, IgnoreMethods, IgnoreMetadata, InflectorPath, EnforcedInflector.
@@ -172,9 +172,9 @@ RSpec/SpecFilePathFormat:
     - '**/spec/routing/**/*'
     - 'spec/agentilda/cli/agent_describe_spec.rb'
     - 'spec/agentilda/cli/agent_list_spec.rb'
-    - 'spec/agentilda/github_spec.rb'
+    - 'spec/agentilda/vcs/github_spec.rb'
     - 'spec/agentilda/linear/mapping_spec.rb'
-    - 'spec/agentilda/pull_request_spec.rb'
+    - 'spec/agentilda/plans/pull_request_spec.rb'
 
 # Offense count: 3
 RSpec/SubjectStub:
@@ -205,7 +205,7 @@ Style/FormatStringToken:
 # This cop supports unsafe autocorrection (--autocorrect-all).
 Style/MapToHash:
   Exclude:
-    - 'lib/agentilda/unblocker.rb'
+    - 'lib/agentilda/lifecycle/unblocker.rb'
 
 # Offense count: 1
 # This cop supports unsafe autocorrection (--autocorrect-all).
@@ -213,7 +213,7 @@ Style/MapToHash:
 # SupportedStyles: literals, strict
 Style/MutableConstant:
   Exclude:
-    - 'lib/agentilda/state_file.rb'
+    - 'lib/agentilda/engine/state_file.rb'
 
 # Offense count: 1
 # This cop supports unsafe autocorrection (--autocorrect-all).
@@ -232,25 +232,25 @@ Style/RedundantFetchBlock:
 # This cop supports unsafe autocorrection (--autocorrect-all).
 Style/SelectByRegexp:
   Exclude:
-    - 'lib/agentilda/dev_work.rb'
-    - 'lib/agentilda/github.rb'
+    - 'lib/agentilda/plans/dev_work.rb'
+    - 'lib/agentilda/vcs/github.rb'
 
 # Offense count: 27
 # This cop supports unsafe autocorrection (--autocorrect-all).
 # Configuration parameters: Mode.
 Style/StringConcatenation:
   Exclude:
-    - 'lib/agentilda/diagram.rb'
-    - 'lib/agentilda/executor.rb'
-    - 'lib/agentilda/ledger.rb'
-    - 'lib/agentilda/pull_requests.rb'
-    - 'lib/agentilda/reporter.rb'
-    - 'lib/agentilda/roster.rb'
+    - 'lib/agentilda/presentation/diagram.rb'
+    - 'lib/agentilda/execution/executor.rb'
+    - 'lib/agentilda/plans/ledger.rb'
+    - 'lib/agentilda/plans/pull_requests.rb'
+    - 'lib/agentilda/presentation/reporter.rb'
+    - 'lib/agentilda/agents/roster.rb'
     - 'lib/agentilda/screen.rb'
-    - 'lib/agentilda/tally.rb'
+    - 'lib/agentilda/engine/tally.rb'
     - 'lib/dry/cli/banner.rb'
     - 'spec/agentilda/screen_spec.rb'
-    - 'spec/agentilda/transcript_spec.rb'
+    - 'spec/agentilda/execution/transcript_spec.rb'
 
 # Offense count: 1
 # This cop supports unsafe autocorrection (--autocorrect-all).

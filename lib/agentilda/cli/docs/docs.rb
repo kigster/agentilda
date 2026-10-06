@@ -18,7 +18,7 @@ module Agentilda
       # @param options [Hash]
       # @return [void]
       def call(**options)
-        document = Documentation.new.render
+        document = Presentation::Documentation.new.render
 
         if (path = options[:output])
           FileUtils.mkdir_p(File.dirname(path))

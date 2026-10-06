@@ -7,7 +7,7 @@
 # pull requests — is handed in.
 RSpec.describe Agentilda::Linear::Import, :tree do
   subject(:import) do
-    described_class.new(tree: Agentilda::Tree.new(dir: plans_root), team: "TAX", project:, **options)
+    described_class.new(tree: Agentilda::Plans::Tree.new(dir: plans_root), team: "TAX", project:, **options)
   end
 
   let(:options) { {} }
@@ -125,7 +125,7 @@ RSpec.describe Agentilda::Linear::Import, :tree do
     end
 
     def digest_of(unit)
-      described_class.new(tree: Agentilda::Tree.new(dir: plans_root), team: "TAX", project:)
+      described_class.new(tree: Agentilda::Plans::Tree.new(dir: plans_root), team: "TAX", project:)
                      .actions.find { |a| a.unit == unit }.digest
     end
 
@@ -178,7 +178,7 @@ RSpec.describe Agentilda::Linear::Import, :tree do
   describe "pull requests attributed to a folder from outside it" do
     let(:options) { { adopted: { "002.00-✅ → dev-foundation" => [orphan] } } }
     let(:orphan) do
-      Agentilda::PullRequest.new(number: "91",
+      Agentilda::Plans::PullRequest.new(number: "91",
         title: "Wire the rig to CI",
         url: "https://github.com/example/repo/pull/91",
         state: "Merged 🟣")
@@ -201,7 +201,7 @@ RSpec.describe Agentilda::Linear::Import, :tree do
 
   describe "choosing which plans to import" do
     it "skips everything numbered below --since" do
-      filtered = described_class.new(tree: Agentilda::Tree.new(dir: plans_root),
+      filtered = described_class.new(tree: Agentilda::Plans::Tree.new(dir: plans_root),
         team: "TAX",
         project:,
         since: "002.00")
@@ -210,7 +210,7 @@ RSpec.describe Agentilda::Linear::Import, :tree do
     end
 
     it "keeps only the states asked for" do
-      filtered = described_class.new(tree: Agentilda::Tree.new(dir: plans_root),
+      filtered = described_class.new(tree: Agentilda::Plans::Tree.new(dir: plans_root),
         team: "TAX",
         project:,
         statuses: [:blocked])

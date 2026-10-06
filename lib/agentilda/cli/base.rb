@@ -51,9 +51,9 @@ module Agentilda
       private
 
       # @param options [Hash]
-      # @return [Agentilda::Tree]
+      # @return [Agentilda::Plans::Tree]
       def tree_for(options)
-        tree = Tree.new(dir: options.fetch(:dir, Agentilda::PLANS_DIR))
+        tree = Plans::Tree.new(dir: options.fetch(:dir, Agentilda::PLANS_DIR))
         unless tree.exist?
           refuse("No #{Agentilda::PLANS_DIR} directory at\n#{tree.dir}\n\n" \
                  "Run this from the project root, or pass -D.",
@@ -101,7 +101,7 @@ module Agentilda
       #
       # @return [void]
       def credentials_warning
-        names = Executor.foreign_credentials
+        names = Execution::Executor.foreign_credentials
         return if names.empty?
 
         one = names.size == 1

@@ -10,7 +10,7 @@ RSpec.describe Agentilda::Linear do
     it "accounts for every state the folder names can carry, placed or deliberately not" do
       accounted = described_class::PLACEMENTS.keys + described_class::UNPLACED.keys
 
-      expect(accounted).to match_array(Agentilda::STATUSES.map(&:key))
+      expect(accounted).to match_array(Agentilda::Plans::STATUSES.map(&:key))
     end
 
     it "never both places a state and declares it unplaceable" do
@@ -45,7 +45,7 @@ RSpec.describe Agentilda::Linear do
 
   describe ".placement" do
     it "answers with where a state belongs" do
-      placement = described_class.placement(Agentilda.status(:building))
+      placement = described_class.placement(Agentilda::Plans.status(:building))
 
       expect(placement).to have_attributes(type: "started", name: "In Progress")
     end
@@ -54,8 +54,8 @@ RSpec.describe Agentilda::Linear do
     # one, so the honest answer to "where does 💩 go" is to decline to say.
     it "declines to place a state whose column is a question about the team, not the plan" do
       aggregate_failures do
-        expect(described_class.placement(Agentilda.status(:shit))).to be_nil
-        expect(described_class.placement(Agentilda.status(:rolled_back))).to be_nil
+        expect(described_class.placement(Agentilda::Plans.status(:shit))).to be_nil
+        expect(described_class.placement(Agentilda::Plans.status(:rolled_back))).to be_nil
       end
     end
 
@@ -66,11 +66,11 @@ RSpec.describe Agentilda::Linear do
 
   describe ".placement_for" do
     def pull(state)
-      Agentilda::PullRequest.new(number: "9", title: "t", url: "https://github.com/x/y/pull/9", state:)
+      Agentilda::Plans::PullRequest.new(number: "9", title: "t", url: "https://github.com/x/y/pull/9", state:)
     end
 
     it "gives a unit with no pull requests its plan's own place" do
-      placement = described_class.placement_for(Agentilda.status(:blocked), [])
+      placement = described_class.placement_for(Agentilda::Plans.status(:blocked), [])
 
       expect(placement).to have_attributes(name: "Todo", labels: %w[blocked])
     end
@@ -78,13 +78,13 @@ RSpec.describe Agentilda::Linear do
     # A plan in 🟡 Building has some units merged and some not started;
     # the unit's own pull requests are the better evidence.
     it "puts a unit with an open pull request in review, whatever the plan says" do
-      placement = described_class.placement_for(Agentilda.status(:new), [pull("Open 🟡")])
+      placement = described_class.placement_for(Agentilda::Plans.status(:new), [pull("Open 🟡")])
 
       expect(placement).to have_attributes(type: "started", name: "In Review")
     end
 
     it "marks a unit done once every pull request merged" do
-      placement = described_class.placement_for(Agentilda.status(:building), [pull("Merged 🟣")])
+      placement = described_class.placement_for(Agentilda::Plans.status(:building), [pull("Merged 🟣")])
 
       expect(placement).to have_attributes(type: "completed", name: "Done")
     end
@@ -92,7 +92,7 @@ RSpec.describe Agentilda::Linear do
     # Closed-unmerged is finished business that finished nothing: neither
     # open nor merged, so the evidence is inconclusive and the plan decides.
     it "falls back to the plan when the pull requests were closed without merging" do
-      placement = described_class.placement_for(Agentilda.status(:building), [pull("Closed 🔴")])
+      placement = described_class.placement_for(Agentilda::Plans.status(:building), [pull("Closed 🔴")])
 
       expect(placement).to have_attributes(type: "started", name: "In Progress")
     end
@@ -100,7 +100,7 @@ RSpec.describe Agentilda::Linear do
 
   describe ".reason_unplaced" do
     it "gives the reason a state was deliberately left out" do
-      expect(described_class.reason_unplaced(Agentilda.status(:shit))).to include("the plan survives and its pull requests do not")
+      expect(described_class.reason_unplaced(Agentilda::Plans.status(:shit))).to include("the plan survives and its pull requests do not")
     end
 
     # Deliberately left out and never thought about are different problems,
@@ -110,9 +110,9 @@ RSpec.describe Agentilda::Linear do
     end
   end
 
-  # @return [Agentilda::Status] a sixteenth state, as a future edit would add it
+  # @return [Agentilda::Plans::Status] a sixteenth state, as a future edit would add it
   def invented
-    Agentilda::Status.new(key: :invented,
+    Agentilda::Plans::Status.new(key: :invented,
       emoji: "🦆",
       label: "Invented",
       requires: [],

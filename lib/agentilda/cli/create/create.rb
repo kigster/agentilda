@@ -67,7 +67,7 @@ module Agentilda
         words, seed = resolve_seed(words, options)
         prs = fetch_prs(options)
         result =
-          Creator.new(dir:).create(
+          Lifecycle::Creator.new(dir:).create(
             words:,
             after: options[:after],
             status: options[:status],
@@ -159,7 +159,7 @@ module Agentilda
           )
         end
 
-        GitHub.new.pull_requests(GitHub.parse_refs(options[:prs]))
+        Vcs::GitHub.new.pull_requests(Vcs::GitHub.parse_refs(options[:prs]))
       rescue Agentilda::Error => e
         refuse("Could not read the pull requests:\n#{e.message}", 65)
       end
@@ -183,7 +183,7 @@ module Agentilda
         puts path
         return if quiet?(options)
 
-        feature = Feature.parse(path)
+        feature = Plans::Feature.parse(path)
         success(
           "Created #{File.basename(path)}\n\n" \
           "#{feature.status.emoji} #{feature.status.label} — #{feature.status.note}\n" \
@@ -199,17 +199,17 @@ module Agentilda
       # @param options [Hash]
       # @return [String] the folder's path, which the resync may have renamed
       def synthesize(path, options)
-        agent = Agentilda::Agents.new.find(Agentilda::RETROACTIVE_WRITER) or
+        agent = Agentilda::Agents::Registry.new.find(Agentilda::RETROACTIVE_WRITER) or
           return path
         root = options[:root] || File.dirname(path, 2)
 
-        feature = Feature.parse(path)
+        feature = Plans::Feature.parse(path)
         ok, note = on_agent_row("Writing spec.md from #{UI.paint(File.basename(path).to_s, :yellow)}",
           agent: agent.name,
           plan:  feature.ordinal.to_s,
           root:) do |line|
-          handle = line.handle if line.is_a?(Dashboard::Tracker)
-          Executor.new(root:).call(agent, Subject.new(feature), handle:, &line)
+          handle = line.handle if line.is_a?(Presentation::Dashboard::Tracker)
+          Execution::Executor.new(root:).call(agent, Plans::Subject.new(feature), handle:, &line)
         end
         warn_about(note) unless ok
 
@@ -228,19 +228,19 @@ module Agentilda
       # @param options [Hash] the options hash
       # @return [String] +path+, unchanged
       def brief(path, options, seed: nil)
-        feature = Feature.parse(path)
+        feature = Plans::Feature.parse(path)
         return path if feature.status.key == :retroactive
 
         root = options[:root] || File.dirname(path, 2)
-        brief = Brief.new(path:, title: feature.title, root:, seed:)
+        brief = Lifecycle::Brief.new(path:, title: feature.title, root:, seed:)
         brief.write_scaffold!
 
         if options.fetch(:draft, true)
           # Painted the way Runner::Task#label paints a roster agent, so the
           # half-agent reads as one of them on the terminal.
           label =
-            "#{UI.paint(Brief::AGENT_NAME, :yellow, :bold)} drafting spec.md from #{seed}"
-          ok, note = on_agent_row(label, agent: Brief::AGENT_NAME, plan: feature.ordinal.to_s, root:) { brief.attempt! }
+            "#{UI.paint(Lifecycle::Brief::AGENT_NAME, :yellow, :bold)} drafting spec.md from #{seed}"
+          ok, note = on_agent_row(label, agent: Lifecycle::Brief::AGENT_NAME, plan: feature.ordinal.to_s, root:) { brief.attempt! }
           warn_about_draft(note) unless ok
         end
 
@@ -258,7 +258,7 @@ module Agentilda
       # @yieldparam line [Agentilda::UI::Line]
       # @return [Object] the block's value
       def on_agent_row(label, agent:, plan:, root:, &block)
-        Control.on_interrupt do
+        Execution::Control.on_interrupt do
           UI.concurrently([plan],
             label,
             jobs:   1,
@@ -287,9 +287,9 @@ module Agentilda
       # @param path [String]
       # @return [String] where the folder ended up
       def settle(path)
-        tree = Tree.new(dir: File.dirname(path))
+        tree = Plans::Tree.new(dir: File.dirname(path))
         change =
-          Agentilda::Resync::Dirs
+          Agentilda::Lifecycle::Resync::Dirs
           .new(tree:)
           .call(commit: true)
           .find { |c| c.source == path }
@@ -315,7 +315,7 @@ module Agentilda
       end
 
       # @param path [String]
-      # @param feature [Agentilda::Feature]
+      # @param feature [Agentilda::Plans::Feature]
       # @return [String]
       def next_step(path, feature, from_prs:)
         spec = File.join(File.basename(path), "spec.md")

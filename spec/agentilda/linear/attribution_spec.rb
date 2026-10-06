@@ -5,7 +5,7 @@
 # these examples protect is not just the matching but the refusals — a tie
 # refused, a thin overlap refused — and the sentence explaining each one.
 RSpec.describe Agentilda::Linear::Attribution, :tree do
-  subject(:attribution) { described_class.new(tree: Agentilda::Tree.new(dir: plans_root)) }
+  subject(:attribution) { described_class.new(tree: Agentilda::Plans::Tree.new(dir: plans_root)) }
 
   let!(:tree) do
     plans do |t|
@@ -17,7 +17,7 @@ RSpec.describe Agentilda::Linear::Attribution, :tree do
   end
 
   def pull(title, number: "90")
-    Agentilda::PullRequest.new(number:,
+    Agentilda::Plans::PullRequest.new(number:,
       title:,
       url: "https://github.com/example/repo/pull/#{number}",
       state: "Merged 🟣")

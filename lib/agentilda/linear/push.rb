@@ -28,7 +28,7 @@ module Agentilda
     class Push
       # @param import [Agentilda::Linear::Import]
       # @param api [Agentilda::Linear::API]
-      # @param tree [Agentilda::Tree]
+      # @param tree [Agentilda::Plans::Tree]
       def initialize(import:, api:, tree:)
         @import = import
         @api = api
@@ -49,7 +49,7 @@ module Agentilda
       # @return [Agentilda::Linear::API]
       attr_reader :api
 
-      # @return [Agentilda::Tree]
+      # @return [Agentilda::Plans::Tree]
       attr_reader :tree
 
       # @return [Hash] the team, its states and its labels
@@ -73,7 +73,7 @@ module Agentilda
       end
 
       # @param action [Agentilda::Linear::Action]
-      # @param subject [Agentilda::Subject]
+      # @param subject [Agentilda::Plans::Subject]
       # @param parent [Agentilda::Linear::Result, nil]
       # @return [Agentilda::Linear::Result]
       def apply(action, subject, parent)
@@ -123,7 +123,7 @@ module Agentilda
       end
 
       # @param action [Agentilda::Linear::Action]
-      # @param subject [Agentilda::Subject]
+      # @param subject [Agentilda::Plans::Subject]
       # @return [Hash]
       def recorded(action, subject)
         was = Issues.new(dir: subject.feature.path).by_unit[action.unit]
@@ -174,7 +174,7 @@ module Agentilda
       # skips — a row dropped because its action was a no-op is a row the next
       # run would recreate from scratch.
       #
-      # @param subject [Agentilda::Subject]
+      # @param subject [Agentilda::Plans::Subject]
       # @param results [Array<Agentilda::Linear::Result>]
       # @return [void]
       def record(subject, results)

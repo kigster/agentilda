@@ -18,7 +18,7 @@ RSpec.describe Agentilda::Linear::Survey, :tree do
   end
 
   def survey(projects)
-    described_class.new(tree: Agentilda::Tree.new(dir: plans_root), projects:)
+    described_class.new(tree: Agentilda::Plans::Tree.new(dir: plans_root), projects:)
   end
 
   def project(id, name, **extra)
@@ -64,8 +64,8 @@ RSpec.describe Agentilda::Linear::Survey, :tree do
   end
 
   describe "#near and #guess" do
-    let(:ledger) { Agentilda::Tree.new(dir: plans_root).subjects.find { |s| s.feature.slug == "ledger-carryforward-vintages" } }
-    let(:noise_only) { Agentilda::Tree.new(dir: plans_root).subjects.find { |s| s.feature.slug == "app-web" } }
+    let(:ledger) { Agentilda::Plans::Tree.new(dir: plans_root).subjects.find { |s| s.feature.slug == "ledger-carryforward-vintages" } }
+    let(:noise_only) { Agentilda::Plans::Tree.new(dir: plans_root).subjects.find { |s| s.feature.slug == "app-web" } }
 
     it "ranks the projects sharing the plan's words, best first" do
       near = survey([project("g-2", "Vintages Board", "description" => "Wine cellar"),

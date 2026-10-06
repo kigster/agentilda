@@ -47,11 +47,11 @@ module Agentilda
       def call(plans:, **options)
         tree = tree_for(options)
         quiet?(options)
-        unblocker = Unblocker.new(tree:,
+        unblocker = Lifecycle::Unblocker.new(tree:,
           agent: agent_for(options),
           root: options[:root],
           commit: commit?(options),
-          executor: Executor.new(root: options[:root] || File.dirname(tree.dir),
+          executor: Execution::Executor.new(root: options[:root] || File.dirname(tree.dir),
             dry_run: !commit?(options)))
 
         targets = unblocker.resolve(plans)
@@ -62,7 +62,7 @@ module Agentilda
         credentials_warning if commit?(options) && !quiet?(options)
         preflight(subjects, unblocker, options)
 
-        outcomes = Control.on_interrupt { unblocker.call(subjects) }
+        outcomes = Execution::Control.on_interrupt { unblocker.call(subjects) }
         outcomes.each { |outcome| report(outcome, options) }
         footer(outcomes, options) unless quiet?(options)
         exit(worst(targets, outcomes))
@@ -71,10 +71,10 @@ module Agentilda
       private
 
       # @param options [Hash]
-      # @return [Agentilda::Agent]
+      # @return [Agentilda::Agents::Agent]
       def agent_for(options)
         name = options.fetch(:agent, DEFAULT_AGENT)
-        agents = Agentilda::Agents.new
+        agents = Agentilda::Agents::Registry.new
         agents.find(name) or
           refuse("No agent called #{name}.\n\nKnown: #{agents.all.map(&:name).join(", ")}", 65)
       end
@@ -87,8 +87,8 @@ module Agentilda
       # Every bad token is reported, not just the first, because stopping at
       # the first one hides the rest of the answer.
       #
-      # @param targets [Array<Agentilda::Unblocker::Target>]
-      # @param tree [Agentilda::Tree]
+      # @param targets [Array<Agentilda::Lifecycle::Unblocker::Target>]
+      # @param tree [Agentilda::Plans::Tree]
       # @param options [Hash]
       # @return [void]
       def refused(targets, tree, options)
@@ -113,15 +113,15 @@ module Agentilda
       # terminal showed nothing at all — a run that had found nothing to do and
       # a run still working looked exactly alike.
       #
-      # @param subjects [Array<Agentilda::Subject>]
-      # @param unblocker [Agentilda::Unblocker]
+      # @param subjects [Array<Agentilda::Plans::Subject>]
+      # @param unblocker [Agentilda::Lifecycle::Unblocker]
       # @param options [Hash]
       # @return [void]
       def preflight(subjects, _unblocker, options)
         return if quiet?(options)
 
         subjects.each do |subject|
-          questions = Unblocker.questions(subject)
+          questions = Lifecycle::Unblocker.questions(subject)
           answered = questions.count(&:answered)
           say("#{paint(subject.feature.ordinal.to_s, :bright_black)} #{subject.status.emoji} " \
               "#{subject.feature.title} — #{summary(questions.size, answered)}")
@@ -138,8 +138,8 @@ module Agentilda
         "#{open} open, #{answered.zero? ? "none answered yet" : "#{answered} with an answer waiting"}"
       end
 
-      # @param subject [Agentilda::Subject]
-      # @param questions [Array<Agentilda::Unblocker::Question>]
+      # @param subject [Agentilda::Plans::Subject]
+      # @param questions [Array<Agentilda::Lifecycle::Unblocker::Question>]
       # @return [void]
       def detail(subject, questions)
         if subject.unreadable_block?
@@ -157,7 +157,7 @@ module Agentilda
       # One plan, after the fact: the deliverable line on STDOUT, and what
       # changed on STDERR.
       #
-      # @param outcome [Agentilda::Unblocker::Outcome]
+      # @param outcome [Agentilda::Lifecycle::Unblocker::Outcome]
       # @param options [Hash]
       # @return [void]
       def report(outcome, options)
@@ -177,7 +177,7 @@ module Agentilda
       # What the file says happened, rather than what the agent claims. The
       # questions are counted off disk on both sides of the run.
       #
-      # @param outcome [Agentilda::Unblocker::Outcome]
+      # @param outcome [Agentilda::Lifecycle::Unblocker::Outcome]
       # @param commit [Boolean]
       # @return [String]
       def movement(outcome, commit)
@@ -189,7 +189,7 @@ module Agentilda
         "folded #{outcome.folded.map { |n| "B#{n}" }.join(", ")}"
       end
 
-      # @param outcomes [Array<Agentilda::Unblocker::Outcome>]
+      # @param outcomes [Array<Agentilda::Lifecycle::Unblocker::Outcome>]
       # @param options [Hash]
       # @return [void]
       def footer(outcomes, options)
@@ -222,8 +222,8 @@ module Agentilda
       # The most serious thing that happened, as an exit status. A tree that
       # was partly drained still exits non-zero when part of it could not be.
       #
-      # @param targets [Array<Agentilda::Unblocker::Target>]
-      # @param outcomes [Array<Agentilda::Unblocker::Outcome>]
+      # @param targets [Array<Agentilda::Lifecycle::Unblocker::Target>]
+      # @param outcomes [Array<Agentilda::Lifecycle::Unblocker::Outcome>]
       # @return [Integer]
       def worst(targets, outcomes)
         problems = targets.map(&:problem)

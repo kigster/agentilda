@@ -67,9 +67,9 @@ RSpec.describe "agentilda resync", :tree do
   describe Agentilda::CLI::Resync::Prs do
     subject(:command) { described_class.new }
 
-    let(:github) { instance_double(Agentilda::GitHub) }
+    let(:github) { instance_double(Agentilda::Vcs::GitHub) }
 
-    before { allow(Agentilda::GitHub).to receive(:new).and_return(github) }
+    before { allow(Agentilda::Vcs::GitHub).to receive(:new).and_return(github) }
 
     def pull(number, title, branch: "", files: [])
       { number:, title:, url: "https://github.com/example/repo/pull/#{number}",

@@ -11,7 +11,7 @@ module Agentilda
       # @param options [Hash]
       # @return [void]
       def call(**options)
-        reporter = Reporter.new(tree: tree_for(options))
+        reporter = Presentation::Reporter.new(tree: tree_for(options))
         $stdout.write(reporter.render)
 
         exit 1 unless reporter.inconsistent.empty?

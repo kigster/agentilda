@@ -54,7 +54,7 @@ module Agentilda
       option :scroll_height,
         aliases: ["-s"],
         desc:    "Lines of each agent's latest statuses shown under its row, newest first " \
-                 "(default: #{Screen::Ratatui::SCROLL_HEIGHT})"
+                 "(default: #{Presentation::Screen::Ratatui::SCROLL_HEIGHT})"
       option :log, desc: "Append progress to this file (default: a per-project file under the system temp dir)"
 
       example [
@@ -89,7 +89,7 @@ module Agentilda
 
         tree   = tree_for(options)
         root   = options[:root] || File.dirname(tree.dir)
-        agents = Agentilda::Agents.new
+        agents = Agentilda::Agents::Registry.new
         agents = filtered(agents, options[:agent]) if options[:agent]
         agents = skipped(agents, options[:skip], options[:agent]) if options[:skip]
         plans  = options[:plan] ? scoped(tree, options[:plan]) : nil
@@ -99,7 +99,7 @@ module Agentilda
         jobs      = (options[:jobs] || config[:jobs] || UI.default_jobs).to_i
         timeout   = (options[:timeout] || config[:timeout])&.to_i
 
-        if isolation == :worktree && !::Agentilda::Worktree.new(root:).repository?
+        if isolation == :worktree && !::Agentilda::Vcs::Worktree.new(root:).repository?
           refuse("#{root} is not a git repository, so plans cannot be isolated.\n\n" \
                  "Run with --isolation shared to work in one tree, serially.",
             66)
@@ -119,9 +119,9 @@ module Agentilda
         # so it never rides along in a commit. Editing somebody's .gitignore
         # is announced, the once it happens. The runner drops the file on a
         # dry run, which is why it can be built unconditionally.
-        state = StateFile.new(path: StateFile.for(tree))
-        if commit?(options) && StateFile.ensure_ignored!(root) && !quiet?(options)
-          info("Added #{StateFile::IGNORE.join(" and ")} to .gitignore: the run keeps its state there.")
+        state = Engine::StateFile.new(path: Engine::StateFile.for(tree))
+        if commit?(options) && Engine::StateFile.ensure_ignored!(root) && !quiet?(options)
+          info("Added #{Engine::StateFile::IGNORE.join(" and ")} to .gitignore: the run keeps its state there.")
         end
 
         # The screen only on a terminal that is actually running agents: a dry
@@ -129,33 +129,33 @@ module Agentilda
         # screen the keys still work, so the one line says which.
         # With a screen, ratatui owns the terminal's input, so the keyboard is
         # fed from its loop rather than started on STDIN of its own.
-        Control.reset!
-        scroll_height = options.fetch(:scroll_height, Screen::Ratatui::SCROLL_HEIGHT)
+        Execution::Control.reset!
+        scroll_height = options.fetch(:scroll_height, Presentation::Screen::Ratatui::SCROLL_HEIGHT)
         unless scroll_height.to_s.match?(/\A[1-9]\d*\z/)
           refuse("--scroll-height must be a whole number of lines, 1 or more, not #{scroll_height.inspect}.", 64)
         end
-        screen   = (Screen::Ratatui.new(scroll_height: scroll_height.to_i) if UI.animate? && commit?(options))
-        console  = (Console.new(screen:) if screen)
+        screen   = (Presentation::Screen::Ratatui.new(scroll_height: scroll_height.to_i) if UI.animate? && commit?(options))
+        console  = (Presentation::Console.new(screen:) if screen)
         # A dry run gets no keyboard at all: every key it offers speaks to a
         # running agent, and listening costs the terminal's raw mode, whose
         # output post-processing the report below needs left alone.
         keyboard = if screen
-                     Keyboard.new(sink: console).tap { |kb| screen.attach_keyboard(kb) }
+                     Presentation::Keyboard.new(sink: console).tap { |kb| screen.attach_keyboard(kb) }
                    elsif commit?(options)
-                     Keyboard.listen(sink: console)
+                     Presentation::Keyboard.listen(sink: console)
                    end
         UI.line("keys: h for help - s select, k kill, x extend, w wrap up, n stop, q quit") if keyboard && console.nil? && !quiet?(options)
 
-        runner = Runner.new(
+        runner = Engine::Runner.new(
           tree:,
           agents:,
           isolation:,
           jobs:,
           plans:,
           state:,
-          worktree:  (::Agentilda::Worktree.new(root:) if isolation == :worktree),
+          worktree:  (::Agentilda::Vcs::Worktree.new(root:) if isolation == :worktree),
           rounds:    (options[:rounds] || config[:rounds])&.to_i,
-          executor:  Executor.new(root:,
+          executor:  Execution::Executor.new(root:,
             timeout:,
             dry_run:      !commit?(options),
             instructions: instructions_from(options[:prompt]),
@@ -172,7 +172,7 @@ module Agentilda
         started  = UI.monotonic
         attempts = begin
           screen&.open
-          Control.on_interrupt { runner.call { |dispatcher| console&.attach(dispatcher) } }
+          Execution::Control.on_interrupt { runner.call { |dispatcher| console&.attach(dispatcher) } }
         ensure
           screen&.close
           keyboard&.stop
@@ -192,7 +192,7 @@ module Agentilda
       # from the rows themselves, so the columns are as narrow as the run
       # allows and still square.
       #
-      # @param attempts [Array<Agentilda::Runner::Attempt>]
+      # @param attempts [Array<Agentilda::Engine::Runner::Attempt>]
       # @return [Array<String>] one line per attempt, indented by two
       def attempt_lines(attempts)
         rows   = attempts.map { |a| [a.ordinal.to_s, a.agent.to_s, "[R:#{a.round}]", mark(a), a.note.to_s] }
@@ -205,7 +205,7 @@ module Agentilda
         end
       end
 
-      # @param attempt [Agentilda::Runner::Attempt]
+      # @param attempt [Agentilda::Engine::Runner::Attempt]
       # @return [String] what the attempt did to its plan's state
       def mark(attempt)
         return "FAIL" unless attempt.ok
@@ -228,9 +228,9 @@ module Agentilda
         File.read(prompt)
       end
 
-      # @param agents [Agentilda::Agents]
+      # @param agents [Agentilda::Agents::Registry]
       # @param name [String]
-      # @return [Agentilda::Agents] holding only the agent named — the
+      # @return [Agentilda::Agents::Registry] holding only the agent named — the
       #   restriction has to reach assignments, not just chaining, or a flag
       #   like `--prompt` aimed at one agent leaks to the whole round
       def filtered(agents, name)
@@ -243,12 +243,12 @@ module Agentilda
       # already-restricted one, so `--skip` misspelled is a refusal rather
       # than a silent no-op — the same reasoning `--plan` applies to numbers.
       #
-      # @param agents [Agentilda::Agents]
+      # @param agents [Agentilda::Agents::Registry]
       # @param text [String] comma-separated agent names
       # @param restricted [String, nil] what `--agent` asked for, if anything
-      # @return [Agentilda::Agents] without the agents named
+      # @return [Agentilda::Agents::Registry] without the agents named
       def skipped(agents, text, restricted)
-        roster = Agentilda::Agents.new
+        roster = Agentilda::Agents::Registry.new
         names  = text.split(",").map(&:strip).reject(&:empty?)
         names.each do |name|
           roster.find(name) or
@@ -268,13 +268,13 @@ module Agentilda
       # this exists to prevent, so an unknown one is refused rather than
       # dropped.
       #
-      # @param tree [Agentilda::Tree]
+      # @param tree [Agentilda::Plans::Tree]
       # @param text [String]
-      # @return [Array<Agentilda::Ordinal>]
+      # @return [Array<Agentilda::Plans::Ordinal>]
       def scoped(tree, text)
         known = tree.subjects.map { |s| s.feature.ordinal }
         text.split(",").map(&:strip).reject(&:empty?).map { |token|
-          ordinal = Ordinal.parse(token)
+          ordinal = Plans::Ordinal.parse(token)
           unless ordinal && known.include?(ordinal)
             refuse("No plan #{token} in #{tree.dir}.\n\n" \
                    "Known: #{known.join(", ")}",
@@ -290,34 +290,34 @@ module Agentilda
       # agent and a plan meant them to meet, so a pairing that cannot happen
       # is refused up front with the agent that would actually take each plan.
       #
-      # @param agents [Agentilda::Agents] already narrowed to the one agent
-      # @param tree [Agentilda::Tree]
-      # @param plans [Array<Agentilda::Ordinal>, nil]
+      # @param agents [Agentilda::Agents::Registry] already narrowed to the one agent
+      # @param tree [Agentilda::Plans::Tree]
+      # @param plans [Array<Agentilda::Plans::Ordinal>, nil]
       # @param name [String]
       # @return [void]
       def assignable!(agents, tree, plans, name)
         agent  = agents.find(name)
         active = tree.subjects.select { |s|
           (plans.nil? || plans.include?(s.feature.ordinal)) &&
-            !StateMachine::SETTLED.include?(s.status.key)
+            !Plans::StateMachine::SETTLED.include?(s.status.key)
         }
         return if active.empty? || active.any? { |s| agent.handles?(s.status) }
 
-        roster  = Agentilda::Agents.new
+        roster  = Agentilda::Agents::Registry.new
         lines   = active.map { |s|
           takers = roster.for_status(s.status).map(&:name)
           verb   = takers.size == 1 ? "takes" : "take"
           "  #{s.feature.ordinal} is #{s.status.emoji} #{s.status.label}" \
             "#{" - #{takers.join(" and ")} #{verb} it" unless takers.empty?}"
         }
-        handled = agent.handles.map { |k| Agentilda::STATUS_BY_KEY[k]&.then { |st| "#{st.emoji} #{st.label}" } || k }
+        handled = agent.handles.map { |k| Agentilda::Plans::STATUS_BY_KEY[k]&.then { |st| "#{st.emoji} #{st.label}" } || k }
         refuse("#{name} handles #{handled.join(", ")}, and no plan in scope is there:\n\n" \
                "#{lines.join("\n")}\n\nName the agent that takes these states, or drop --agent.",
           65)
       end
 
-      # @param attempts [Array<Agentilda::Runner::Attempt>]
-      # @return [Array<Agentilda::Runner::Attempt>]
+      # @param attempts [Array<Agentilda::Engine::Runner::Attempt>]
+      # @return [Array<Agentilda::Engine::Runner::Attempt>]
       def failures(attempts) = attempts.reject(&:ok)
 
       # The one thing this harness does that leaves the machine — pushing a
@@ -332,11 +332,11 @@ module Agentilda
       # @param root [String]
       # @param isolation [Symbol]
       # @param options [Hash]
-      # @return [Agentilda::Publisher, nil]
+      # @return [Agentilda::Vcs::Publisher, nil]
       def publisher_for(root, isolation, options)
         return nil if isolation != :worktree || options[:git_push] == false
 
-        Publisher.new(root:, dry_run: !commit?(options))
+        Vcs::Publisher.new(root:, dry_run: !commit?(options))
       end
 
       # One line per attempt: the plan, who ran, which of that agent's rounds
@@ -344,8 +344,8 @@ module Agentilda
       # because the loop has no rounds of its own: each agent counts its own
       # per plan, so two agents on one plan can be on different numbers.
       #
-      # @param runner [Agentilda::Runner]
-      # @param attempts [Array<Agentilda::Runner::Attempt>]
+      # @param runner [Agentilda::Engine::Runner]
+      # @param attempts [Array<Agentilda::Engine::Runner::Attempt>]
       # @param options [Hash]
       # @param seconds [Float] wall clock for the whole loop
       # @return [void]
@@ -360,12 +360,12 @@ module Agentilda
         # What the run cost, on STDOUT with the attempts it belongs to, so a run
         # redirected to a file keeps its bill. A dry run spent nothing and gets
         # none of this.
-        tally = Tally.new(attempts:, seconds:)
+        tally = Engine::Tally.new(attempts:, seconds:)
         puts("", tally.render) if commit?(options)
 
         return if quiet?(options)
 
-        if Control.quit?
+        if Execution::Control.quit?
           warn("Stopped from the keyboard — q. Unfinished plans keep their state; " \
                "re-run to resume where they stand.")
         end

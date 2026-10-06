@@ -9,8 +9,8 @@ require "tmpdir"
 RSpec.describe Agentilda::CLI::Agents::Describe do
   subject(:command) { described_class.new(agents:, viewer:) }
 
-  let(:agents) { Agentilda::Agents.new(dir: @dir) }
-  let(:viewer) { instance_double(Agentilda::Viewer, open: nil, mdfried: nil) }
+  let(:agents) { Agentilda::Agents::Registry.new(dir: @dir) }
+  let(:viewer) { instance_double(Agentilda::Presentation::Viewer, open: nil, mdfried: nil) }
 
   around do |example|
     Dir.mktmpdir("agents") do |tmp|

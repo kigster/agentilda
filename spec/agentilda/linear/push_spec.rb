@@ -7,7 +7,7 @@
 RSpec.describe Agentilda::Linear::Push, :tree do
   subject(:push) { described_class.new(import:, api:, tree:) }
 
-  let(:tree) { Agentilda::Tree.new(dir: plans_root) }
+  let(:tree) { Agentilda::Plans::Tree.new(dir: plans_root) }
   let(:project) { { "id" => "p-1", "name" => "US Tax Law: Self Contained Ruby Gem", "url" => "https://linear.app/p-1" } }
   let(:api) { Agentilda::Linear::API.new(transport: fake) }
   let(:calls) { [] }
@@ -40,7 +40,7 @@ RSpec.describe Agentilda::Linear::Push, :tree do
   end
 
   def fresh_import
-    Agentilda::Linear::Import.new(tree: Agentilda::Tree.new(dir: plans_root), team: "TAX", project:)
+    Agentilda::Linear::Import.new(tree: Agentilda::Plans::Tree.new(dir: plans_root), team: "TAX", project:)
   end
 
   def response_for(document, variables)

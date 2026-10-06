@@ -106,7 +106,7 @@ module Agentilda
       prefix.register "projects", Linear::Projects
     end
 
-    # What a paired agent shells out to between steps. See {Agentilda::Mailbox}.
+    # What a paired agent shells out to between steps. See {Agentilda::Plans::Mailbox}.
     register "mail" do |prefix|
       prefix.register "send", Mail::Send
       prefix.register "read", Mail::Read
