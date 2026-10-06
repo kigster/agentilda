@@ -9,7 +9,7 @@ module Agentilda
       example [""]
 
       # @return [void]
-      def call(**) = $stdout.write(Presentation::Diagram.new.render)
+      def call(**) = $stdout.write(Presentation.diagram)
     end
   end
 end

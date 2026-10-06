@@ -47,11 +47,11 @@ module Agentilda
       def call(plans:, **options)
         tree = tree_for(options)
         quiet?(options)
-        unblocker = Lifecycle::Unblocker.new(tree:,
+        unblocker = Lifecycle.unblocker(tree:,
           agent: agent_for(options),
           root: options[:root],
           commit: commit?(options),
-          executor: Execution::Executor.new(root: options[:root] || File.dirname(tree.dir),
+          executor: Execution.executor(root: options[:root] || File.dirname(tree.dir),
             dry_run: !commit?(options)))
 
         targets = unblocker.resolve(plans)
@@ -62,7 +62,7 @@ module Agentilda
         credentials_warning if commit?(options) && !quiet?(options)
         preflight(subjects, unblocker, options)
 
-        outcomes = Execution::Control.on_interrupt { unblocker.call(subjects) }
+        outcomes = Execution.on_interrupt { unblocker.call(subjects) }
         outcomes.each { |outcome| report(outcome, options) }
         footer(outcomes, options) unless quiet?(options)
         exit(worst(targets, outcomes))
@@ -74,7 +74,7 @@ module Agentilda
       # @return [Agentilda::Agents::Agent]
       def agent_for(options)
         name = options.fetch(:agent, DEFAULT_AGENT)
-        agents = Agentilda::Agents::Registry.new
+        agents = Agentilda::Agents.registry
         agents.find(name) or
           refuse("No agent called #{name}.\n\nKnown: #{agents.all.map(&:name).join(", ")}", 65)
       end

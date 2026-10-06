@@ -23,7 +23,7 @@ module Agentilda
             refuse("No plan #{options[:plan]} in #{tree.dir}.\n\nKnown: #{tree.ordinals.join(", ")}", 66)
           end
 
-          Plans::Mailbox.new(dir: subject.feature.path)
+          Plans.mailbox(subject.feature.path)
         end
       end
     end

@@ -32,7 +32,7 @@ module Agentilda
         #
         # @param agents [Agentilda::Agents::Registry]
         # @param viewer [Agentilda::Presentation::Viewer]
-        def initialize(agents: Agentilda::Agents::Registry.new, viewer: Presentation::Viewer.new)
+        def initialize(agents: Agentilda::Agents.registry, viewer: Presentation.viewer)
           super()
           @agents = agents
           @viewer = viewer

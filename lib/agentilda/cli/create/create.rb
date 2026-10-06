@@ -67,12 +67,11 @@ module Agentilda
         words, seed = resolve_seed(words, options)
         prs = fetch_prs(options)
         result =
-          Lifecycle::Creator.new(dir:).create(
+          Lifecycle.create(dir:,
             words:,
-            after: options[:after],
+            after:  options[:after],
             status: options[:status],
-            prs:
-          )
+            prs:)
 
         result.either(
           ->(path) { created(path, prs, options, seed:) },
@@ -159,7 +158,7 @@ module Agentilda
           )
         end
 
-        Vcs::GitHub.new.pull_requests(Vcs::GitHub.parse_refs(options[:prs]))
+        Vcs.github.pull_requests(Vcs::GitHub.parse_refs(options[:prs]))
       rescue Agentilda::Error => e
         refuse("Could not read the pull requests:\n#{e.message}", 65)
       end
@@ -199,7 +198,7 @@ module Agentilda
       # @param options [Hash]
       # @return [String] the folder's path, which the resync may have renamed
       def synthesize(path, options)
-        agent = Agentilda::Agents::Registry.new.find(Agentilda::RETROACTIVE_WRITER) or
+        agent = Agentilda::Agents.registry.find(Agentilda::RETROACTIVE_WRITER) or
           return path
         root = options[:root] || File.dirname(path, 2)
 
@@ -209,7 +208,7 @@ module Agentilda
           plan:  feature.ordinal.to_s,
           root:) do |line|
           handle = line.handle if line.is_a?(Presentation::Dashboard::Tracker)
-          Execution::Executor.new(root:).call(agent, Plans::Subject.new(feature), handle:, &line)
+          Execution.executor(root:).call(agent, Plans.subject(feature), handle:, &line)
         end
         warn_about(note) unless ok
 
@@ -232,7 +231,7 @@ module Agentilda
         return path if feature.status.key == :retroactive
 
         root = options[:root] || File.dirname(path, 2)
-        brief = Lifecycle::Brief.new(path:, title: feature.title, root:, seed:)
+        brief = Lifecycle.brief(path:, title: feature.title, root:, seed:)
         brief.write_scaffold!
 
         if options.fetch(:draft, true)
@@ -258,7 +257,7 @@ module Agentilda
       # @yieldparam line [Agentilda::UI::Line]
       # @return [Object] the block's value
       def on_agent_row(label, agent:, plan:, root:, &block)
-        Execution::Control.on_interrupt do
+        Execution.on_interrupt do
           UI.concurrently([plan],
             label,
             jobs:   1,
@@ -287,7 +286,7 @@ module Agentilda
       # @param path [String]
       # @return [String] where the folder ended up
       def settle(path)
-        tree = Plans::Tree.new(dir: File.dirname(path))
+        tree = Plans.tree(File.dirname(path))
         change =
           Agentilda::Lifecycle::Resync::Dirs
           .new(tree:)

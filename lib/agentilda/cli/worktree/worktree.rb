@@ -35,7 +35,7 @@ module Agentilda
         end
 
         root = File.dirname(tree.dir)
-        worktree = ::Agentilda::Vcs::Worktree.new(root:)
+        worktree = Agentilda::Vcs.worktree(root:)
 
         checkout = worktree.checkout_for(feature)
 

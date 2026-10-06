@@ -89,7 +89,7 @@ module Agentilda
 
         tree   = tree_for(options)
         root   = options[:root] || File.dirname(tree.dir)
-        agents = Agentilda::Agents::Registry.new
+        agents = Agentilda::Agents.registry
         agents = filtered(agents, options[:agent]) if options[:agent]
         agents = skipped(agents, options[:skip], options[:agent]) if options[:skip]
         plans  = options[:plan] ? scoped(tree, options[:plan]) : nil
@@ -99,7 +99,7 @@ module Agentilda
         jobs      = (options[:jobs] || config[:jobs] || UI.default_jobs).to_i
         timeout   = (options[:timeout] || config[:timeout])&.to_i
 
-        if isolation == :worktree && !::Agentilda::Vcs::Worktree.new(root:).repository?
+        if isolation == :worktree && !Agentilda::Vcs.worktree(root:).repository?
           refuse("#{root} is not a git repository, so plans cannot be isolated.\n\n" \
                  "Run with --isolation shared to work in one tree, serially.",
             66)
@@ -119,7 +119,7 @@ module Agentilda
         # so it never rides along in a commit. Editing somebody's .gitignore
         # is announced, the once it happens. The runner drops the file on a
         # dry run, which is why it can be built unconditionally.
-        state = Engine::StateFile.new(path: Engine::StateFile.for(tree))
+        state = Engine.state_file(tree)
         if commit?(options) && Engine::StateFile.ensure_ignored!(root) && !quiet?(options)
           info("Added #{Engine::StateFile::IGNORE.join(" and ")} to .gitignore: the run keeps its state there.")
         end
@@ -146,16 +146,16 @@ module Agentilda
                    end
         UI.line("keys: h for help - s select, k kill, x extend, w wrap up, n stop, q quit") if keyboard && console.nil? && !quiet?(options)
 
-        runner = Engine::Runner.new(
+        runner = Engine.runner(
           tree:,
           agents:,
           isolation:,
           jobs:,
           plans:,
           state:,
-          worktree:  (::Agentilda::Vcs::Worktree.new(root:) if isolation == :worktree),
+          worktree:  (Agentilda::Vcs.worktree(root:) if isolation == :worktree),
           rounds:    (options[:rounds] || config[:rounds])&.to_i,
-          executor:  Execution::Executor.new(root:,
+          executor:  Execution.executor(root:,
             timeout:,
             dry_run:      !commit?(options),
             instructions: instructions_from(options[:prompt]),
@@ -172,7 +172,7 @@ module Agentilda
         started  = UI.monotonic
         attempts = begin
           screen&.open
-          Execution::Control.on_interrupt { runner.call { |dispatcher| console&.attach(dispatcher) } }
+          Execution.on_interrupt { runner.call { |dispatcher| console&.attach(dispatcher) } }
         ensure
           screen&.close
           keyboard&.stop
@@ -248,7 +248,7 @@ module Agentilda
       # @param restricted [String, nil] what `--agent` asked for, if anything
       # @return [Agentilda::Agents::Registry] without the agents named
       def skipped(agents, text, restricted)
-        roster = Agentilda::Agents::Registry.new
+        roster = Agentilda::Agents.registry
         names  = text.split(",").map(&:strip).reject(&:empty?)
         names.each do |name|
           roster.find(name) or
@@ -303,7 +303,7 @@ module Agentilda
         }
         return if active.empty? || active.any? { |s| agent.handles?(s.status) }
 
-        roster  = Agentilda::Agents::Registry.new
+        roster  = Agentilda::Agents.registry
         lines   = active.map { |s|
           takers = roster.for_status(s.status).map(&:name)
           verb   = takers.size == 1 ? "takes" : "take"
@@ -336,7 +336,7 @@ module Agentilda
       def publisher_for(root, isolation, options)
         return nil if isolation != :worktree || options[:git_push] == false
 
-        Vcs::Publisher.new(root:, dry_run: !commit?(options))
+        Vcs.publisher(root:, dry_run: !commit?(options))
       end
 
       # One line per attempt: the plan, who ran, which of that agent's rounds
@@ -360,7 +360,7 @@ module Agentilda
         # What the run cost, on STDOUT with the attempts it belongs to, so a run
         # redirected to a file keeps its bill. A dry run spent nothing and gets
         # none of this.
-        tally = Engine::Tally.new(attempts:, seconds:)
+        tally = Engine.tally(attempts:, seconds:)
         puts("", tally.render) if commit?(options)
 
         return if quiet?(options)

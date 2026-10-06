@@ -21,8 +21,8 @@ module Agentilda
         # @param options [Hash]
         # @return [void]
         def call(**options)
-          changes = Agentilda::Lifecycle::Resync::Dirs.new(tree: tree_for(options))
-                                                      .call(commit: commit?(options))
+          changes = Agentilda::Lifecycle.resync_dirs(tree: tree_for(options))
+                                        .call(commit: commit?(options))
 
           if changes.empty?
             success("Every folder is already named NNN.MM-<emoji> → <slug> and the emoji matches.") unless quiet?(options)

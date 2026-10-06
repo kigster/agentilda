@@ -53,7 +53,7 @@ module Agentilda
       # @param options [Hash]
       # @return [Agentilda::Plans::Tree]
       def tree_for(options)
-        tree = Plans::Tree.new(dir: options.fetch(:dir, Agentilda::PLANS_DIR))
+        tree = Plans.tree(options.fetch(:dir, Agentilda::PLANS_DIR))
         unless tree.exist?
           refuse("No #{Agentilda::PLANS_DIR} directory at\n#{tree.dir}\n\n" \
                  "Run this from the project root, or pass -D.",
