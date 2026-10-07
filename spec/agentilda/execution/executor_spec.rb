@@ -36,6 +36,44 @@ RSpec.describe Agentilda::Execution::Executor, :tree do
 
   after { Agentilda::Execution::Control.reset! }
 
+  describe "choosing the coding agent" do
+    let(:writer) { agent.with(phase: "specification") }
+    let(:spec_md) { "---\nphases:\n  specification: { adapter: codex, effort: medium }\n---\n#{spec_body}" }
+    let!(:built) do
+      plans { |t| t.plan "000.00", :new, "a-feature", files: { "spec.md" => spec_md } }
+    end
+    let(:argv) { executor.invocation(writer, subject_plan) }
+
+    it "hands the plan to the adapter its spec.md names for the agent's phase" do
+      expect(argv.first(2)).to eq(%w[codex exec])
+    end
+
+    it "translates the effort into that CLI's flag" do
+      expect(argv).to include('model_reasoning_effort="medium"')
+    end
+
+    it "does not tell the agent a CLI enforces what it cannot" do
+      expect([argv.last.include?("cannot withhold them"), argv.last.include?("not merely discouraged")]).to eq([true, false])
+    end
+
+    it "names the profile the board shows" do
+      expect(executor.profile_for(writer, subject_plan).label).to eq("codex:default")
+    end
+  end
+
+  describe "starting agents lean" do
+    let(:argv) { executor.invocation(agent, subject_plan) }
+
+    it "keeps personal plugins, skills and MCP servers out by default" do
+      expect(argv).to include("--strict-mcp-config", "--disable-slash-commands")
+    end
+
+    it "lets them in for a run started with --user-config" do
+      expect(described_class.new(root:, spawn:, lean: false).invocation(agent, subject_plan))
+        .not_to include("--disable-slash-commands")
+    end
+  end
+
   describe "#invocation" do
     let(:argv) { executor.invocation(agent, subject_plan) }
 

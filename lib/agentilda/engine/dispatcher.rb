@@ -161,7 +161,7 @@ module Agentilda
           role: task.agent.role,
           round: task.round,
           rounds: rounds_for(task.agent),
-          model: model_for(task.agent),
+          model: model_for(task.agent, task.subject),
           remaining: job.handle.remaining,
           phase: job.handle.phase,
           up: job.up.to_i,
@@ -190,10 +190,17 @@ module Agentilda
       def rounds_for(agent) = [agent.rounds, @rounds_cap].compact.min
 
       # @param agent [Agentilda::Agents::Agent]
+      # @param subject [Agentilda::Plans::Subject, nil] whose spec.md may override it
       # @return [String]
-      def model_for(agent)
+      def model_for(agent, subject = nil)
         executor = @runner.executor
-        (executor.respond_to?(:model) && executor.model) || agent.model || "default"
+        unless subject && executor.respond_to?(:profile_for)
+          return (executor.respond_to?(:model) && executor.model) || agent.model || "default"
+        end
+
+        # Asked on every frame of the board, so spec.md is read once per plan
+        # and agent rather than once per frame.
+        (@models ||= {})[[subject.feature.ordinal.to_s, agent.name]] ||= executor.profile_for(agent, subject).label
       end
 
       # ---- starting ---------------------------------------------------------
@@ -304,7 +311,7 @@ module Agentilda
           round:,
           status:     "Started",
           state:      from.to_s,
-          model:      model_for(agent),
+          model:      model_for(agent, subject),
           file:       agent.ledger.first,
           started_at: Time.now.iso8601)
         UI.log("started", **task.log_fields)
@@ -611,7 +618,7 @@ module Agentilda
           seconds: spend.call(:seconds),
           round: task.round,
           file: job.file || task.agent.ledger.first.to_s,
-          model: model_for(task.agent),
+          model: model_for(task.agent, task.subject),
           status: job.status)
       end
 
