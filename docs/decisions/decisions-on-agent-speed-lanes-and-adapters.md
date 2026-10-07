@@ -88,12 +88,16 @@ Writes are atomic: a lock file, a temp file, then a rename. Agents never edit it
 
 ### D8. Evals per agent, at the requested depth
 
-`evals/cases/<agent>/*.yml` describes a fixture plan, the depth asked for, and expectations for that depth. `agentilda eval` scores a finished plan folder against those expectations. Every agent is checked twice:
+`evals/cases/<agent>/<case>.yml` describes a fixture plan (and repository files), the depth asked for, and the checks. `agentilda eval` (and `just eval`) scores each case. Every agent is checked twice:
 
-- did it finish the task: state reached, artifacts present, ledger signed
-- did it work at the depth requested: size and section bounds, sources cited, time and token budget per depth
+- **did it finish the task:** the state reached, files present or absent, required sections, the ledger signed, the paths it changed and the paths it left alone
+- **did it work at the depth requested:** words and pattern counts (sources, units, findings) between per-depth bounds, plus `max_seconds` and `max_tokens`. Too shallow fails at `deep`; too slow or too large fails at `fast`.
 
-Offline mode (the default, run in CI) scores recorded fixtures, including deliberately failing ones, so the scorers themselves are tested. `--live` runs the real agent in a temp repo, under an explicit token cap.
+Each case ships two recordings: `pass/` must pass and `fail/` must fail. Each is laid out as `plan/`, `repo/` and `run.json`, and a spec enforces both, so the scorers are themselves tested. Offline scoring is the default and runs in CI. `--live` runs the real agent in a temp git repo, under a token cap (300,000 by default). All 8 agents are covered by 11 cases; leah, palpatine and r2d2 each have cases at two depths. Coding and review agents are not checked for their final state, because reaching it needs a published PR and a review verdict, which an eval never produces. Their checks cover the signature, the diff and the paths left untouched.
+
+### D9. Delivery
+
+Two stacked pull requests: the module reorganisation (pure move plus facades, #40), then everything in this document on top of it. Commits are atomic per decision.
 
 ### D10. SOLID, applied where it pays
 
@@ -103,7 +107,3 @@ Offline mode (the default, run in CI) scores recorded fixtures, including delibe
 - **Interface segregation.** The CLI depends on each namespace's facade (`Plans.tree`, `Agents.registry`, …) rather than on its classes.
 - **Dependency inversion.** The executor depends on the adapter interface, not on `claude`. `spawn:` and the `GitHub` and `Linear::API` seams stay injectable.
 - **Not done.** `Engine::Dispatcher` (~770 lines) still mixes dispatch, settlement and crash recovery. Settlement shares six pieces of dispatcher state, so extracting it is a refactor of its own and was left out to keep this pull request reviewable.
-
-### D9. Delivery
-
-Two stacked pull requests: the module reorganisation (pure move plus facades, #40), then everything in this document on top of it. Commits are atomic per decision.
