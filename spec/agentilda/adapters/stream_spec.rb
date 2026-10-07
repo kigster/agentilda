@@ -24,6 +24,10 @@ RSpec.describe Agentilda::Adapters::Stream do
     expect([stream.up, stream.down]).to eq([1200, 300])
   end
 
+  it "keeps the cached input apart" do
+    expect(stream).to have_attributes(cached: 800, fresh: 700)
+  end
+
   it "counts tool calls by the shape of the event type" do
     expect(stream.tools).to eq(1)
   end

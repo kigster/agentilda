@@ -40,6 +40,13 @@ RSpec.describe Agentilda::Execution::Transcript do
       expect(transcript.up).to eq(1002)
     end
 
+    it "keeps the cache reads apart, so a budget can leave them out" do
+      transcript.push(delta({ "input_tokens" => 2, "cache_creation_input_tokens" => 100,
+                              "cache_read_input_tokens" => 900, "output_tokens" => 40 }))
+
+      expect(transcript).to have_attributes(cached: 900, fresh: 142)
+    end
+
     # The `assistant` event carries a usage block whose output count is the
     # placeholder the API sends when a message starts: 2, for an answer of
     # four thousand tokens. Only `message_delta` settles it.
