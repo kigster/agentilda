@@ -36,7 +36,7 @@ The Claude adapter passes `--setting-sources project,local`, `--strict-mcp-confi
 | yoda-writer | sonnet / xhigh | sonnet / medium | prose, not reasoning |
 | palpatine-planner | opus / xhigh | opus / high | the one place depth pays |
 | luke-backend | fable / xhigh | opus / high | cap at Opus |
-| rey-frontend | fable / xhigh | sonnet / medium | UI work is narrower |
+| rey-frontend | fable / xhigh | sonnet / medium | UI work is narrower, and only runs when there is some |
 | hansolo-reviewer | opus / high | sonnet / high | asked for: Sonnet reviews |
 | lando-broker | sonnet | haiku / low | folding answers is clerical |
 | r2d2-mechanic (new) | — | haiku / medium | short mechanical tasks |
@@ -62,7 +62,7 @@ phases:            # optional per-phase overrides
 
 - `full`: leah → yoda → palpatine → luke (+ rey) → han. Today's behaviour.
 - `plan`: skips research and rewriting. The harness writes a blank `plan.md` and moves the folder ⚪️ → 📋 itself (an existing edge), and palpatine plans from the spec as written.
-- `quick`: skips research, rewriting and planning. The harness writes a one-heading `plan.md` (`## Task`) and `r2d2-mechanic` takes the plan ⚪️ → 🟡 → 🟢. Han still reviews. This needed one new edge, `new → building`, on the existing `build` event.
+- `quick`: skips research, rewriting and planning. The harness writes a one-unit `plan.md` (`## Task`) and moves the folder ⚪️ → ⭐️ through the existing `plan` event, where `r2d2-mechanic` is the only builder serving the lane. It takes the plan 🟡 → 🟢, and Han still reviews. No new state and no new edge were needed.
 - `agentilda create --lane quick "split large migration"` writes the frontmatter.
 
 Agents declare the lanes they serve (`lanes: [full]`, …). Absent means every lane.

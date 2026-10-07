@@ -28,7 +28,7 @@ RSpec.describe Agentilda::Engine::Runner, :tree do
             :researched,
             "needs-a-writer",
             files: { "spec.md" => "#{spec_body}\n## Research\n\nWhat was found.\n" }
-          t.plan "001.00", :planned, "needs-a-plan", files: { "spec.md" => spec_body, "plan.md" => "# P" }
+          t.plan "001.00", :planned, "needs-a-plan", files: { "spec.md" => spec_body, "plan.md" => "# P", "plan-frontend.md" => "## F1" }
           t.plan "002.00", :blocked, "needs-a-human", files: { "blocked.md" => "B1. Which?" }
           t.plan "003.00", :approved, "finished", prs: [t.merged(3, "done")]
         end

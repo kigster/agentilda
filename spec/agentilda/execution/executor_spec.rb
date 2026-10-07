@@ -201,11 +201,11 @@ RSpec.describe Agentilda::Execution::Executor, :tree do
     end
 
     it "passes the agent's effort when it declares one" do
-      expect(executor.invocation(agent, subject_plan).each_cons(2).to_a).to include(["--effort", "xhigh"])
+      expect(executor.invocation(agent, subject_plan).each_cons(2).to_a).to include(["--effort", "medium"])
     end
 
     it "passes no effort for an agent that declares none" do
-      argv = executor.invocation(agents.find("lando-broker"), subject_plan)
+      argv = executor.invocation(agent.with(effort: nil), subject_plan)
       expect(argv).not_to include("--effort")
     end
   end
@@ -616,8 +616,9 @@ RSpec.describe Agentilda::Execution::Executor, :tree do
     end
 
     it "tells an agent that can fan out to spend its budget concurrently" do
-      expect(agent.allowed_tools).to include("Task")
-      expect(prompt_for(agent)).to include("one wave of concurrent sub-agents")
+      researcher = agents.find("leah-researcher")
+      expect(researcher.allowed_tools).to include("Task")
+      expect(prompt_for(researcher)).to include("one wave of concurrent sub-agents")
     end
 
     it "says nothing about concurrency to an agent without Task" do

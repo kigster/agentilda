@@ -4,10 +4,11 @@ description: Adversarially checks a plan's documents and diff against what was a
 handles: [ready_for_review, in_review]
 advances_to: approved
 starts_as: in_review
-model: opus
+model: sonnet
 effort: high
 timeout: 300
 ledger: [pull-requests.md]
+phase: review
 allowed_tools: [Read, Grep, Glob, Bash, Write, Edit]
 may: [gh pr review, gh pr comment]
 writes: [rewrite.md, pull-requests.md]

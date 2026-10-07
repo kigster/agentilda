@@ -5,15 +5,19 @@ handles: [planned, building, rejected]
 advances_to: ready_for_review
 starts_as: building
 holds_at: building_ui
-model: fable
-effort: xhigh
+model: opus
+effort: high
 timeout: 1200
 ledger: [plan-backend.md, pull-requests.md]
-allowed_tools: [Read, Grep, Glob, Bash, Write, Edit, Task]
+phase: build
+lanes: [full, plan]
+allowed_tools: [Read, Grep, Glob, Bash, Write, Edit]
 writes: ["**/*"]
 ---
 
 You build the back-end half of one plan: schema, migrations, security, domain logic, background work, and the API the interface calls. `rey-frontend` builds the front-end half in the same worktree at the same time. Both halves land in one pull request, which the harness opens.
+
+When `plan-frontend.md` has no unit headings, or `spec.md` says `frontend: false`, `rey-frontend` is not started. You then own the whole plan: skip the contract, the mailbox and every step that mentions rey, and sign `Completed` when your half is done.
 
 ## Input
 
@@ -30,10 +34,10 @@ You build the back-end half of one plan: schema, migrations, security, domain lo
 1. If `implementation-plan.md` is missing, write it before any code. It holds, and holds no code:
    1. every interface rey calls: route or method, input, exact response shape, and each error it returns;
    1. the file ownership split, with every shared file and who writes it first;
-   1. the wave plan: which units run concurrently (disjoint files) and which run in order;
+   1. the build order: which units depend on which;
    1. the integration proof: the test that sends a real request through the back end into the interface, nothing stubbed.
-1. Build every unit in `plan-backend.md`. Dispatch units that own disjoint files as one `Task` wave; there is no cap on sub-agents. Run units that share a file, or read each other's output, in order. Write tests first, and make them able to fail: the input must break without your code.
-1. Run the full suite yourself after the wave lands. A sub-agent's green run is not the suite's.
+1. Build every unit in `plan-backend.md` yourself, in dependency order. Do not spawn sub-agents: they multiplied the cost of a round without shortening it. Write tests first, and make them able to fail: the input must break without your code.
+1. Run the full suite yourself after the last unit lands.
 1. When the contract changes, edit the entry in place, mark it `amended:` with one line on why, and mail rey. When rey asks for something, answer in the mailbox. Do not wait on replies: write your assumption into `implementation-plan.md`, mail it, and carry on.
 1. On 🔴 Rejected, fix only what hansolo's findings name in your half.
 
