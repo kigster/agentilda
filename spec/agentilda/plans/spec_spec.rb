@@ -1,0 +1,73 @@
+# frozen_string_literal: true
+
+RSpec.describe Agentilda::Plans::Spec do
+  def parse(frontmatter) = described_class.parse("---\n#{frontmatter}\n---\n# Title\n")
+
+  describe ".parse" do
+    it "defaults to the full lane with nothing overridden" do
+      expect(described_class.parse("# Just a body\n")).to be_default
+    end
+
+    it "reads lane, frontend and depth" do
+      expect(parse("lane: quick\nfrontend: false\ndepth: deep").to_h.slice(:lane, :frontend, :depth))
+        .to eq(lane: :quick, frontend: false, depth: :deep)
+    end
+
+    it "reads per-phase overrides" do
+      expect(parse("phases:\n  build: { adapter: codex, model: gpt-5-codex, effort: medium }").override_for(:build))
+        .to eq("adapter" => "codex", "model" => "gpt-5-codex", "effort" => "medium")
+    end
+
+    it "returns no override for a phase the author did not name" do
+      expect(parse("lane: plan").override_for("review")).to eq({})
+    end
+  end
+
+  describe "what it ignores, and says so" do
+    it "an unknown lane falls back to full" do
+      expect(parse("lane: express").to_h.slice(:lane, :problems))
+        .to eq(lane: :full, problems: ["lane: \"express\" is not one of full, plan, quick"])
+    end
+
+    it "a frontend that is not a boolean" do
+      expect(parse("frontend: maybe").problems).to eq(["frontend: \"maybe\" is not true or false"])
+    end
+
+    it "an effort outside the scale, and keeps the rest of the phase" do
+      expect(parse("phases:\n  review: { model: opus, effort: ultra }").override_for(:review)).to eq("model" => "opus")
+    end
+
+    it "an adapter nothing answers to" do
+      expect(parse("phases:\n  build: { adapter: gpt }").problems.first).to start_with("phases.build.adapter:")
+    end
+
+    it "an unknown key in a phase" do
+      expect(parse("phases:\n  build: { temperature: 1 }").problems).to eq(["phases.build.temperature: unknown key"])
+    end
+
+    it "phases that are not a mapping" do
+      expect(parse("phases: [build]").problems.first).to start_with("phases: must be a mapping")
+    end
+
+    it "a phase that is not a mapping" do
+      expect(parse("phases:\n  build: codex").problems).to eq(["phases.build: must be a mapping"])
+    end
+
+    it "frontmatter that is not YAML" do
+      expect(parse("lane: [unclosed").problems.first).to start_with("spec.md frontmatter is not valid YAML")
+    end
+  end
+
+  describe ".load" do
+    let(:dir) { Dir.mktmpdir }
+
+    it "reads spec.md from a plan folder" do
+      File.write(File.join(dir, "spec.md"), "---\nlane: plan\n---\n# T\n")
+      expect(described_class.load(dir).lane).to eq(:plan)
+    end
+
+    it "is the default when there is no spec.md" do
+      expect(described_class.load(dir)).to be_default
+    end
+  end
+end

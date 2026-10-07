@@ -51,6 +51,7 @@ RSpec.describe Agentilda::Engine::Dispatcher, :tree do
           "Completed"
         when "palpatine-planner"
           File.write(File.join(subject.feature.path, "plan.md"), "# Plan\n\n## Unit 1\n")
+          File.write(File.join(subject.feature.path, "plan-frontend.md"), "# Front end\n\n## F1\n")
           "Completed"
         end
       end
@@ -157,7 +158,9 @@ RSpec.describe Agentilda::Engine::Dispatcher, :tree do
         t.plan "001.00",
           :new,
           "already-planned",
-          files: { "spec.md" => "#{spec_body}\n## Research\n\nWhat was found.\n", "plan.md" => "# P\n\n## Unit 1\n" }
+          files: { "spec.md"          => "#{spec_body}\n## Research\n\nWhat was found.\n",
+                   "plan.md"          => "# P\n\n## Unit 1\n",
+                   "plan-frontend.md" => "# Front end\n\n## F1\n" }
       end
     end
 
@@ -184,7 +187,7 @@ RSpec.describe Agentilda::Engine::Dispatcher, :tree do
     let!(:built) do
       plans do |t|
         t.plan "000.00", :new, "alone", files: { "spec.md" => spec_body }
-        t.plan "001.00", :building, "paired", files: { "spec.md" => spec_body, "plan.md" => "# P" }
+        t.plan "001.00", :building, "paired", files: { "spec.md" => spec_body, "plan.md" => "# P", "plan-frontend.md" => "## F1" }
       end
     end
 
@@ -203,6 +206,167 @@ RSpec.describe Agentilda::Engine::Dispatcher, :tree do
         ["luke-backend", "001.00"]    => ["rey-frontend"],
         ["rey-frontend", "001.00"]    => ["luke-backend"]
       )
+    end
+  end
+
+  describe "routing" do
+    let(:seen) { [] }
+    let(:executor) do
+      lambda { |agent, subject, **|
+        seen << [agent.name, subject.feature.ordinal.to_s]
+        Agentilda::Execution::Executor::Result.new(ok: true, note: "noop", up: 0, down: 0, subagents: 0, delegated: 0, seconds: 0.0)
+      }
+    end
+
+    context "when the plan has no front-end units" do
+      let!(:built) do
+        plans do |t|
+          t.plan "001.00",
+            :planned,
+            "backend-only",
+            files: { "spec.md" => spec_body, "plan.md" => "# P\n\n## U1\n", "plan-frontend.md" => "# Front end\n\nNone.\n" }
+        end
+      end
+
+      it "starts luke-backend alone" do
+        runner_with(executor).call
+        expect(seen.map(&:first).uniq).to eq(%w[luke-backend])
+      end
+    end
+
+    context "when spec.md switches the front end off" do
+      let!(:built) do
+        plans do |t|
+          t.plan "001.00",
+            :planned,
+            "no-ui",
+            files: { "spec.md" => "---\nfrontend: false\n---\n#{spec_body}", "plan.md" => "# P\n\n## U1\n",
+                     "plan-frontend.md" => "## F1\n" }
+        end
+      end
+
+      it "never starts rey-frontend, units or not" do
+        runner_with(executor).call
+        expect(seen.map(&:first).uniq).to eq(%w[luke-backend])
+      end
+    end
+
+    context "when spec.md forces the front end on" do
+      let!(:built) do
+        plans do |t|
+          t.plan "001.00",
+            :planned,
+            "ui",
+            files: { "spec.md" => "---\nfrontend: true\n---\n#{spec_body}", "plan.md" => "# P\n\n## U1\n" }
+        end
+      end
+
+      it "starts the pair without a plan-frontend.md" do
+        runner_with(executor).call
+        expect(seen.map(&:first).uniq).to contain_exactly("luke-backend", "rey-frontend")
+      end
+    end
+
+    context "with the plan lane" do
+      let!(:built) do
+        plans { |t| t.plan "001.00", :new, "known", files: { "spec.md" => "---\nlane: plan\n---\n#{spec_body}" } }
+      end
+
+      it "skips research and rewriting and goes to the planner" do
+        runner_with(executor).call
+        expect(seen.map(&:first).first).to eq("palpatine-planner")
+      end
+
+      it "leaves the blank plan.md the planner expects, under the 📋 name" do
+        runner_with(executor).call
+        expect(tree.reload.subjects.first.status.key).to eq(:ready_for_planning)
+      end
+    end
+
+    context "with the quick lane" do
+      let!(:built) do
+        plans do |t|
+          t.plan "001.00", :new, "split-migration", files: { "spec.md" => "---\nlane: quick\n---\n#{spec_body}" }
+        end
+      end
+
+      it "hands the plan straight to r2d2-mechanic" do
+        runner_with(executor).call
+        expect(seen.map(&:first).uniq).to eq(%w[r2d2-mechanic])
+      end
+
+      it "writes a one-unit plan.md so the folder may claim ⭐️ and then 🟡" do
+        runner_with(executor).call
+        expect(tree.reload.subjects.first.read("plan.md")).to include("## Task")
+      end
+    end
+
+    context "with the quick lane on a dry run" do
+      let!(:built) do
+        plans do |t|
+          t.plan "001.00", :new, "split-migration", files: { "spec.md" => "---\nlane: quick\n---\n#{spec_body}" }
+        end
+      end
+
+      it "previews r2d2-mechanic and writes nothing" do
+        runner_with(executor, dry_run: true).call
+        expect([seen.map(&:first).uniq, tree.reload.subjects.first.read("plan.md")]).to eq([%w[r2d2-mechanic], nil])
+      end
+    end
+  end
+
+  describe "state.json" do
+    let!(:built) do
+      plans { |t| t.plan "001.00", :new, "fresh", files: { "spec.md" => spec_body } }
+    end
+    let(:plan_state) { Agentilda::Plans::PlanState.for(path_of("001.00")) }
+
+    context "when an agent signs through `agentilda state sign`" do
+      let(:executor) do
+        lambda { |agent, subject, round: 1, **|
+          calls << [agent.name, subject.feature.ordinal.to_s, round]
+          if agent.name == "leah-researcher"
+            File.write(File.join(subject.feature.path, "spec.md"), "#{spec_body}\n## Research\n\nFound it.\n")
+            Agentilda::Plans::PlanState.for(subject.feature.path).sign!(agent: agent.name, round:, status: "Completed")
+          end
+          Agentilda::Execution::Executor::Result.new(ok: true, note: "completed", up: 10, down: 2, subagents: 0, delegated: 0, seconds: 1.0)
+        }
+      end
+
+      before { runner_with(executor, agents: agents.only("leah-researcher")).call }
+
+      it "settles the round from the JSON signature alone" do
+        expect(tree.reload.subjects.first.status.key).to eq(:researched)
+      end
+
+      it "records the stage, with its outcome and spend" do
+        expect(plan_state.stages.first.values_at("agent", "round", "status", "from", "to", "up"))
+          .to eq(["leah-researcher", 1, "Completed", "new", "researched", 10])
+      end
+
+      it "records the state the folder moved to" do
+        expect(plan_state.state).to eq("researched")
+      end
+    end
+
+    context "when a dead harness left a stage Started" do
+      before do
+        Agentilda::Plans::PlanState.for(path_of("001.00"))
+                                   .stage!(agent: "leah-researcher", round: 1, status: "Started", run: { "pid" => 999_999, "host" => Socket.gethostname })
+        runner_with(executor_with { |*| nil }, agents: agents.only("leah-researcher"), state: nil).call
+      end
+
+      it "marks it Interrupted, and says the harness died" do
+        expect(plan_state.stages.find { |s| s["round"] == 1 }.values_at("status", "note")).to eq(["Interrupted", "harness died"])
+      end
+
+      it "writes the harness's Interrupted line where the agent signs, as the state file path does" do
+        expect(File.read(File.join(path_of("001.00"), "spec.md"))).to include("Interrupted, round 1 (harness died)")
+      end
+
+      it "counts the stranded round against the agent's rounds" do
+        expect(calls).to eq([])
+      end
     end
   end
 
@@ -360,7 +524,7 @@ RSpec.describe Agentilda::Engine::Dispatcher, :tree do
         t.plan "001.00",
           :planned,
           "both",
-          files: { "spec.md" => spec_body, "plan.md" => "# Plan\n\n## U1\n" },
+          files: { "spec.md" => spec_body, "plan.md" => "# Plan\n\n## U1\n", "plan-frontend.md" => "## F1\n" },
           prs:   [t.open(7, "[001.00](A) Both")]
       }
     end

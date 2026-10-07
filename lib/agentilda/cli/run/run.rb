@@ -29,8 +29,13 @@ module Agentilda
         desc: "Never assign this agent; its plans wait, the rest of the pipeline runs. " \
               "Comma separated for several"
       option :model,
-        desc: "Model for every agent this run, overriding each agent's own frontmatter " \
-              "(default: what the agent declares, else the claude CLI's default)"
+        desc: "Model for every agent this run, overriding each agent's own frontmatter and spec.md " \
+              "(default: what the agent declares, else the CLI's default). Claude models above Opus run as Opus"
+      option :user_config,
+        type:    :boolean,
+        default: false,
+        desc:    "Start agents with your personal plugins, skills, hooks and MCP servers. " \
+                 "Off by default: they cost every agent context and start-up time on every turn"
       option :max_tokens,
         desc: "Token budget per agent invocation, input plus output, sub-agents " \
               "included. The agent is told the number so it can finish inside it; the meter aborts it past " \
@@ -161,7 +166,8 @@ module Agentilda
             instructions: instructions_from(options[:prompt]),
             model:        options[:model],
             max_tokens:   (options[:max_tokens] || config[:max_tokens])&.to_i,
-            interactive:  !keyboard.nil? && commit?(options)),
+            interactive:  !keyboard.nil? && commit?(options),
+            lean:         !options[:user_config]),
           dry_run:   !commit?(options),
           publisher: publisher_for(root, isolation, options),
           on_board:  console&.method(:paint)
@@ -305,7 +311,7 @@ module Agentilda
 
         roster  = Agentilda::Agents.registry
         lines   = active.map { |s|
-          takers = roster.for_status(s.status).map(&:name)
+          takers = Agentilda::Agents::Routing.filter(roster.for_status(s.status), s).map(&:name)
           verb   = takers.size == 1 ? "takes" : "take"
           "  #{s.feature.ordinal} is #{s.status.emoji} #{s.status.label}" \
             "#{" - #{takers.join(" and ")} #{verb} it" unless takers.empty?}"

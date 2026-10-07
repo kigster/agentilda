@@ -107,10 +107,40 @@ module Agentilda
           path:          path,
           ledger:        Array(meta["ledger"]).map(&:to_s),
           rounds:        meta["rounds"].to_i.clamp(1, Agent::MAX_ROUNDS),
-          effort:        meta["effort"]&.to_s,
+          effort:        effort(meta["effort"], path),
           starts_as:     symbol_or_nil(meta["starts_as"]),
-          holds_at:      symbol_or_nil(meta["holds_at"])
+          holds_at:      symbol_or_nil(meta["holds_at"]),
+          adapter:       adapter(meta["adapter"], path),
+          phase:         meta["phase"]&.to_s,
+          lanes:         Array(meta["lanes"]).map { |l| l.to_s.to_sym },
+          needs:         Array(meta["needs"]).map(&:to_s),
+          toggle:        meta["toggle"]&.to_s
         )
+      end
+
+      # A definition is checked in with the code, so a bad value in one is a
+      # bug to stop on, not a preference to work around.
+      #
+      # @param value [Object, nil]
+      # @param path [String]
+      # @return [String, nil]
+      # @raise [Agentilda::Error]
+      def effort(value, path)
+        return nil if value.nil?
+        return value.to_s if Adapters.effort?(value)
+
+        raise Agentilda::Error, "#{File.basename(path)}: effort #{value.inspect} is not one of #{Adapters::EFFORTS.join(", ")}"
+      end
+
+      # @param value [Object, nil]
+      # @param path [String]
+      # @return [String]
+      # @raise [Agentilda::Error]
+      def adapter(value, path)
+        return Adapters::DEFAULT if value.nil?
+        return value.to_s if Adapters.known?(value)
+
+        raise Agentilda::Error, "#{File.basename(path)}: adapter #{value.inspect} is not one of #{Adapters.names.join(", ")}"
       end
 
       # @param value [Object, nil]

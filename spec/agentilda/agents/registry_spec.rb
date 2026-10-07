@@ -155,9 +155,35 @@ RSpec.describe Agentilda::Agents::Registry do
     it "reads the model and effort the definitions declare" do
       aggregate_failures do
         expect(agents.find("leah-researcher").model).to eq("haiku")
-        expect(agents.find("leah-researcher").effort).to eq("xhigh")
-        expect(agents.find("hansolo-reviewer").effort).to eq("high")
-        expect(agents.find("lando-broker").effort).to be_nil
+        expect(agents.find("leah-researcher").effort).to eq("medium")
+        expect(agents.find("hansolo-reviewer").model).to eq("sonnet")
+        expect(agents.find("lando-broker").effort).to eq("low")
+      end
+    end
+
+    # The ceiling is Opus. Anything costlier is clamped by the adapter, but a
+    # definition that asks for it is still a definition that misleads.
+    it "asks for no model above Opus" do
+      expect(agents.all.map(&:model).uniq - %w[haiku sonnet opus]).to eq([])
+    end
+
+    it "reads the adapter, phase, lanes, needs and toggle" do
+      rey = agents.find("rey-frontend")
+      expect([rey.adapter, rey.phase, rey.lanes, rey.needs, rey.toggle])
+        .to eq(["claude", "frontend", %i[full plan], ["plan-frontend.md"], "frontend"])
+    end
+
+    it "refuses an effort outside the scale" do
+      Dir.mktmpdir do |dir|
+        File.write(File.join(dir, "x.md"), "---\nname: x\neffort: ultra\n---\nbody\n")
+        expect { described_class.new(dir:).all }.to raise_error(Agentilda::Error, /effort "ultra"/)
+      end
+    end
+
+    it "refuses an adapter nothing answers to" do
+      Dir.mktmpdir do |dir|
+        File.write(File.join(dir, "x.md"), "---\nname: x\nadapter: gpt\n---\nbody\n")
+        expect { described_class.new(dir:).all }.to raise_error(Agentilda::Error, /adapter "gpt"/)
       end
     end
 
@@ -248,7 +274,7 @@ RSpec.describe Agentilda::Agents::Registry do
 
     it "counts the partner who finished and holds the plan as part of its team" do
       expect(names(agents.team_for(status(:building_ui)))).to contain_exactly("luke-backend", "rey-frontend")
-      expect(names(agents.team_for(status(:building)))).to contain_exactly("luke-backend", "rey-frontend")
+      expect(names(agents.team_for(status(:building)))).to contain_exactly("luke-backend", "r2d2-mechanic", "rey-frontend")
       expect(names(agents.team_for(status(:new)))).to eq(%w[leah-researcher])
     end
   end
