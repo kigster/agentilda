@@ -291,15 +291,15 @@ Ctrl-C once asks each running agent to write a `RESUME:` note into its plan's `m
 
 ### How agents hand off
 
-An agent never renames its plan folder. Instead, it signs the document it owns, and the harness moves the folder based on the signature:
+An agent never renames its plan folder. Instead, it signs the plan's `state.json`, and the harness moves the folder based on the signature:
 
-```text
-> [!NOTE]
->
-> [2026-09-04 11:29:20 AM PDT] [ agent: leah-researcher   status: Started, round 1 ]
-> [2026-09-04 11:44:03 AM PDT] [ agent: leah-researcher   status: Completed, round 1 ]
-> [2026-09-04 11:44:04 AM PDT] [ next: yoda-writer ]
+```bash
+agentilda state sign --plan 003 --agent leah-researcher --round 1 --status Started
+agentilda state sign --plan 003 --agent leah-researcher --round 1 --status Completed --next yoda-writer
+agentilda state show --plan 003 | jq '.stages[] | {agent, round, status, model, seconds}'
 ```
+
+`state.json` lives in every plan folder and is committed with it. It holds the harness's record of each round (adapter, model, effort, tokens, seconds), the agents' signatures, and the messages between them (`tilda mail`). Its shape is `schemas/plan-state.schema.json`. Writes go through a lock, so two agents on one plan cannot overwrite each other. Signatures written the old way, as `> [!NOTE]` lines in the markdown, are still read.
 
 | Status                            | What the harness does                                               |
 | :-------------------------------- | :------------------------------------------------------------------ |
@@ -307,7 +307,7 @@ An agent never renames its plan folder. Instead, it signs the document it owns, 
 | `Blocked`                         | parks the folder at ⭕️, or at 🅱️ when the note says `product`       |
 | `Almost completed`, `Interrupted` | gives the agent another round, up to its limit                      |
 
-Suppose an agent stops without signing, because it crashed, timed out or was killed. The harness signs `Interrupted` for it. If the work is on disk anyway, the harness also signs `Completed` for it. The run's own state, such as process ids and token counts, lives in `.plans/agentilda-state.json`, gitignored. A later run picks up where a dead one stopped.
+Suppose an agent stops without signing, because it crashed, timed out or was killed. The harness signs `Interrupted` for it. If the work is on disk anyway, the harness also signs `Completed` for it. A round left `Started` by a harness that has since died is found in `state.json` (and in the run's own gitignored `.plans/agentilda-state.json`), marked `Interrupted`, and picked up by the next run.
 
 ## GitHub and Linear
 
