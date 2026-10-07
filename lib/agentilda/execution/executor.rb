@@ -454,7 +454,7 @@ module Agentilda
           Repository root: #{root}
 
           #{"The folder's name is not currently justified: #{subject.violation}" if subject.violation}
-          #{operator_instructions}#{ledger_section(agent, round:, successor:)}#{budget_section}#{time_budget_section(agent)}#{control_section(control, agent, subject)}#{mailbox_section(agent, subject, partners)}
+          #{operator_instructions}#{ledger_section(agent, subject, round:, successor:)}#{budget_section}#{time_budget_section(agent)}#{control_section(control, agent, subject)}#{mailbox_section(agent, subject, partners)}
           ## Boundary — enforced, not requested
 
           You may read anything, and write source, tests and the plan's own
@@ -469,16 +469,16 @@ module Agentilda
           is a request; a check is a guarantee.
 
           Claim each directory or file before you write it, and release it when
-          that write is done. Name yourself on every call, since `alo` would
+          that write is done. Name yourself on every call, since `alock` would
           otherwise sign with a fingerprint your sub-agents share; give each
           sub-agent its own suffix, e.g. `AGENT_ID=#{agent.name}-schema`:
 
-              AGENT_ID=#{agent.name} alo acquire <path> "<why>"
-              AGENT_ID=#{agent.name} alo release <path>
+              AGENT_ID=#{agent.name} alock acquire <path> "<why>"
+              AGENT_ID=#{agent.name} alock release <path>
 
           A refused `acquire` means another agent holds it: work on something
-          else, never write it anyway. Before your closing ledger line, run
-          `AGENT_ID=#{agent.name} alo release-all`.
+          else, never write it anyway. Before your closing signature, run
+          `AGENT_ID=#{agent.name} alock release-all`.
         PROMPT
       end
 
@@ -503,34 +503,36 @@ module Agentilda
       # the harness's facts rather than the agent's guesses.
       #
       # @param agent [Agentilda::Agents::Agent]
+      # @param subject [Agentilda::Plans::Subject]
       # @param round [Integer]
       # @param successor [String, nil]
       # @return [String]
-      def ledger_section(agent, round:, successor:)
-        documents = agent.ledger.map { |f| "`#{f}`" }.join(", then ")
-        handoff = successor ? "\n    > [<now>] [ next: #{successor} ]" : ""
+      def ledger_section(agent, subject, round:, successor:)
+        sign = "agentilda state sign --dir \"#{File.dirname(subject.feature.path)}\" --plan #{subject.feature.ordinal} " \
+               "--agent #{agent.name} --round #{round}"
+        handoff = successor ? " --next #{successor}" : ""
         <<~SECTION
 
-          ## The ledger - write this at the start and at the end
+          ## The ledger - sign at the start and at the end
 
-          You sign the document you are working in: #{documents}. Get `<now>` from
-          `date "+%Y-%m-%d %I:%M:%S %p %Z"`. Before you do any work, append:
+          You sign this plan's `state.json`, through the command below. Never
+          edit `state.json` by hand: the command takes a lock, so you and an
+          agent working beside you cannot overwrite each other. Before you do
+          any work:
 
-              > [!NOTE]
-              >
-              > [<now>] [ agent: #{agent.name}   status: Started, round #{round} ]
+              #{sign} --status Started
 
-          When you finish, append:
+          When you finish:
 
-              > [!NOTE]
-              >
-              > [<now>] [ agent: #{agent.name}   status: Completed, round #{round} ]#{handoff}
+              #{sign} --status Completed#{handoff}
 
-          Write `Completed` only if your assignment is genuinely done. Otherwise write
-          `Almost completed`, `Interrupted` or `Blocked` in its place and NO `next:` line.
-          The harness renames the plan folder and starts the next agent from these
-          lines; you never rename the folder yourself. A short note in parentheses
-          after the round is welcome, e.g. `Completed, round 1 (approved)`.
+          Sign `Completed` only if your assignment is genuinely done. Otherwise
+          use `--status "Almost completed"`, `Interrupted` or `Blocked`, with no
+          `--next`. Where your instructions say to sign `Blocked, round N
+          (technical)` or `Completed, round N (approved)`, pass the words in
+          parentheses as `--note technical` or `--note approved`. The harness
+          renames the plan folder and starts the next agent from these
+          signatures; you never rename the folder yourself.
         SECTION
       end
 
@@ -584,7 +586,7 @@ module Agentilda
           "file below tells you how it is going: `WARN: 10 minutes left`, `WARN: 5 minutes left`, " \
           "`WRAP_UP: 1 minute left, write to disk now`, then `STOP`. Sixty seconds after STOP " \
           "the process is killed, and anything unwritten is lost. Write each result to disk as " \
-          "you reach it, and write your closing ledger line before anything else once you see " \
+          "you reach it, and sign your closing ledger entry before anything else once you see " \
           "WRAP_UP.#{concurrency_advice(agent)}\n"
       end
 
@@ -623,9 +625,8 @@ module Agentilda
           ## Mailbox - poll it between steps
 
           #{who}. You share one worktree and one branch, but not a process, so
-          the only way to reach each other is the plan's mailbox:
-
-              #{File.join(subject.feature.path, Plans::Mailbox::FILENAME)}
+          the only way to reach each other is the plan's mailbox, kept in the
+          plan's `state.json`. Use the commands; never edit the file by hand.
 
           Read it before each significant step and whenever you finish a unit:
 
@@ -671,7 +672,7 @@ module Agentilda
           Read this file before each significant step. Empty means carry on.
           A line starting WARN: tells you how much time is left. WRAP_UP: means
           finish the essential remainder now. STOP means write what you have,
-          write your ledger line, and end your turn.
+          sign your ledger entry, and end your turn.
 
           INTERRUPT means the operator pressed Ctrl-C and the run will be started
           again later. Start nothing new. Finish the write you are in the middle
@@ -681,7 +682,7 @@ module Agentilda
 
               agentilda mail send --dir "#{plans_dir}" --plan #{plan} --from #{agent.name} --to #{agent.name} "RESUME: ..."
 
-          Then write your ledger line as `Interrupted` with NO `next:` line, and
+          Then sign `--status Interrupted`, with no `--next`, and
           end your turn.
 
           Before you start, check for such a note from an earlier run:

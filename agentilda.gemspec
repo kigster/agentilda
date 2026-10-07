@@ -29,7 +29,7 @@ Gem::Specification.new do |spec|
   # require a git checkout — the same reason the executables resolve their own
   # bundle rather than trusting the caller's working directory.
   spec.files = Dir.chdir(__dir__) do
-    Dir.glob(["*.gemspec", "lib/**/*.rb", "agents/*.md", "exe/*", "bin/*"]).select { |f| File.file?(f) }
+    Dir.glob(["*.gemspec", "lib/**/*.rb", "agents/*.md", "schemas/*.json", "exe/*", "bin/*"]).select { |f| File.file?(f) }
   end
 
   spec.bindir = "exe"

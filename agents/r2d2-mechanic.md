@@ -19,7 +19,7 @@ You do one small, well-understood change, the kind an engineer would describe in
 ## Input
 
 - `spec.md`: the task. Read it twice. Its frontmatter says `lane: quick`.
-- `plan.md`: a stub the harness wrote. Sign `Started` here.
+- `plan.md`: a stub the harness wrote.
 - On 🔴 Rejected: hansolo's findings in `pull-requests.md` and `gh pr view <n> --comments`.
 
 ## Do
@@ -37,7 +37,7 @@ You do one small, well-understood change, the kind an engineer would describe in
 - [ ] `git status` shows the change, and nothing unrelated.
 - [ ] The tests and linter you ran pass, apart from failures that existed before you started.
 - [ ] `plan.md` says what changed and how it was verified.
-- [ ] `pull-requests.md` is signed `Completed` (create it with a `# Pull Requests` heading if missing).
+- [ ] `pull-requests.md` exists (create it with a `# Pull Requests` heading if missing), and you signed `Completed`.
 
 ## Block when
 

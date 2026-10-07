@@ -29,15 +29,28 @@ RSpec.describe Agentilda::Plans::Mailbox, :tree do
       .to eq([[1, "luke-backend", "rey-frontend"], [2, "rey-frontend", "luke-backend"]])
   end
 
-  it "writes the file into the plan folder, with a title once at the top" do
+  it "keeps messages in the plan's state.json" do
     luke_to_rey("first")
     luke_to_rey("second")
 
-    text = File.read(File.join(folder, "mailbox.md"))
-    aggregate_failures do
-      expect(text.lines.first).to eq("# Mailbox\n")
-      expect(text.scan(/^# Mailbox$/).size).to eq(1)
-      expect(text).to include("## 1 · ", "## 2 · ", "luke-backend → rey-frontend")
+    expect(Agentilda::Plans::PlanState.for(folder).messages.map { |m| [m["number"], m["body"]] })
+      .to eq([[1, "first"], [2, "second"]])
+  end
+
+  it "writes no mailbox.md any more" do
+    luke_to_rey("first")
+    expect(File.exist?(File.join(folder, "mailbox.md"))).to be(false)
+  end
+
+  context "with messages from before state.json, in mailbox.md" do
+    before do
+      File.write(File.join(folder, "mailbox.md"),
+        "# Mailbox\n\n## 1 · 2026-09-06 10:30:53 -0700 · luke-backend → rey-frontend\n\nold news\n")
+    end
+
+    it "still reads them, and numbers new messages after them" do
+      luke_to_rey("new news")
+      expect(mailbox.messages.map { |m| [m.number, m.body] }).to eq([[1, "old news"], [2, "new news"]])
     end
   end
 

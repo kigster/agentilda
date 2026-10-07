@@ -46,7 +46,7 @@ RSpec.describe "agentilda mail", :tree do
   it "writes into the plan's own folder, where a person can read it after the round" do
     send(body: "hello", plan: "001", from: "luke-backend", to: "rey-frontend")
 
-    expect(File.read(File.join(folder, "mailbox.md"))).to include("## 1 · ", "hello")
+    expect(Agentilda::Plans::PlanState.for(folder).messages.map { |m| m["body"] }).to eq(["hello"])
   end
 
   it "shows a reader nothing that was addressed to somebody else" do
