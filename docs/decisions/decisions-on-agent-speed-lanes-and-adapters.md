@@ -95,6 +95,15 @@ Writes are atomic: a lock file, a temp file, then a rename. Agents never edit it
 
 Offline mode (the default, run in CI) scores recorded fixtures, including deliberately failing ones, so the scorers themselves are tested. `--live` runs the real agent in a temp repo, under an explicit token cap.
 
+### D10. SOLID, applied where it pays
+
+- **Single responsibility.** `Execution::Prompt` now owns what an agent is told, and `Executor` owns running it: 741 lines became 485 + 313. `Agents::Profile` decides adapter, model and effort. `Agents::Routing` decides who gets a plan. `Lifecycle::Lanes` decides which phases a plan skips. Each was previously inline in the executor or the dispatcher.
+- **Open/closed.** A new coding agent is a new `Adapters::Base` subclass plus one registry entry. Nothing in the run loop changes.
+- **Liskov.** Every adapter's transcript answers the same interface as `Execution::Transcript`, so the executor and the board cannot tell them apart.
+- **Interface segregation.** The CLI depends on each namespace's facade (`Plans.tree`, `Agents.registry`, …) rather than on its classes.
+- **Dependency inversion.** The executor depends on the adapter interface, not on `claude`. `spawn:` and the `GitHub` and `Linear::API` seams stay injectable.
+- **Not done.** `Engine::Dispatcher` (~770 lines) still mixes dispatch, settlement and crash recovery. Settlement shares six pieces of dispatcher state, so extracting it is a refactor of its own and was left out to keep this pull request reviewable.
+
 ### D9. Delivery
 
 Two stacked pull requests: the module reorganisation (pure move plus facades, #40), then everything in this document on top of it. Commits are atomic per decision.
