@@ -22,6 +22,7 @@ loader.inflector.inflect(
 loader.collapse("#{__dir__}/agentilda/support")
 loader.collapse("#{__dir__}/agentilda/cli/create")
 loader.collapse("#{__dir__}/agentilda/cli/docs")
+loader.collapse("#{__dir__}/agentilda/cli/eval")
 loader.collapse("#{__dir__}/agentilda/cli/index")
 loader.collapse("#{__dir__}/agentilda/cli/list_plans")
 loader.collapse("#{__dir__}/agentilda/cli/run")
