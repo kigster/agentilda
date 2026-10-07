@@ -6,7 +6,9 @@ require "tmpdir"
 
 module Agentilda
   module Execution
-    # Runs one agent against one plan by shelling out to the `claude` CLI.
+    # Runs one agent against one plan by shelling out to a coding agent CLI:
+    # `claude` unless the agent's definition or the plan's spec.md names
+    # another {Agentilda::Adapters adapter}.
     #
     # The autonomy boundary is "docs plus code, but nothing leaves the machine",
     # and it is enforced twice over:
@@ -199,8 +201,10 @@ module Agentilda
       #   the keyboard help reads. Every invocation gets a control file either
       #   way, because the clock writes its own warnings into it regardless of
       #   whether anyone is watching.
+      # @param lean [Boolean] start agents without the operator's personal
+      #   plugins, skills, hooks and MCP servers; `run --user-config` turns it off
       def initialize(root:, spawn: Child.method(:spawn), timeout: nil, dry_run: false,
-        trace_dir: TRACE_DIR, instructions: nil, model: nil, max_tokens: nil, interactive: false)
+        trace_dir: TRACE_DIR, instructions: nil, model: nil, max_tokens: nil, interactive: false, lean: true)
         @root = File.expand_path(root)
         @spawn = spawn
         @timeout = timeout
@@ -210,10 +214,24 @@ module Agentilda
         @model = model
         @max_tokens = max_tokens
         @interactive = interactive
+        @lean = lean
       end
 
       # @return [String]
       attr_reader :root
+
+      # @return [String, nil] what `run --model` typed
+      attr_reader :model
+
+      # Which CLI, model and effort this agent gets on this plan.
+      #
+      # @param agent [Agentilda::Agents::Agent]
+      # @param subject [Agentilda::Plans::Subject, nil]
+      # @return [Agentilda::Agents::Profile]
+      def profile_for(agent, subject = nil)
+        spec = subject ? Plans::Spec.for(subject) : nil
+        Agents::Profile.resolve(agent, spec:, model: @model)
+      end
 
       # The clock this agent runs against: the tighter of its own frontmatter
       # and `--timeout`. A flag that could only loosen was useless the day
@@ -252,7 +270,8 @@ module Agentilda
         handle ||= Handle.new
         before = head(root)
         trace = trace_path(agent, subject)
-        transcript = Transcript.new(trace:, &on_progress)
+        profile = profile_for(agent, subject)
+        transcript = profile.adapter.transcript(trace:, &on_progress)
         control = Control.register(@trace_dir, "#{subject.feature.ordinal}-#{agent.name}")
         handle.control = control
         argv = invocation(agent, subject, root:, control:, round:, successor:, partners:)
@@ -284,10 +303,16 @@ module Agentilda
             note:   "#{killed_note(handle.killed, clock)}, last seen #{transcript.activity || "starting up"} - trace: #{trace}")
         end
         unless status.success?
-          return failure(transcript, started, "claude exited #{status.exitstatus}: #{said(transcript)} - trace: #{trace}", pid: child.pid)
+          return failure(transcript,
+            started,
+            "#{profile.adapter.executable} exited #{status.exitstatus}: #{said(transcript)} - trace: #{trace}",
+            pid: child.pid)
         end
         if transcript.failed?
-          return failure(transcript, started, "claude reported: #{transcript.error} - trace: #{trace}", pid: child.pid)
+          return failure(transcript,
+            started,
+            "#{profile.adapter.executable} reported: #{transcript.error} - trace: #{trace}",
+            pid: child.pid)
         end
 
         violation = boundary_violation(before, root)
@@ -352,19 +377,20 @@ module Agentilda
       # @param partners [Array<Agentilda::Agents::Agent>]
       # @return [Array<String>]
       def invocation(agent, subject, root: @root, control: nil, round: 1, successor: nil, partners: [])
-        # `--include-partial-messages` is what the token meter runs on. Without
-        # it the stream reports a settled input count and a placeholder output
-        # count — 2 for a four-thousand-token answer — and a spinner counting
-        # what came back would read zero all run. See {Transcript#meter}.
-        argv = ["claude", "-p", prompt_for(agent, subject, root, control:, round:, successor:, partners:), "--add-dir", root,
-                "--output-format", "stream-json", "--verbose", "--include-partial-messages", "--brief"]
-        denied = denied_for(agent)
-        argv += ["--disallowedTools", denied.join(",")] unless denied.empty?
-        argv += ["--allowedTools", agent.allowed_tools.join(",")] unless agent.allowed_tools.empty?
-        model = @model || agent.model
-        argv += ["--model", model] if model
-        argv += ["--effort", agent.effort] if agent.effort
-        argv
+        profile = profile_for(agent, subject)
+        profile.adapter.argv(
+          Adapters::Invocation.new(
+            prompt:          prompt_for(agent, subject, root, control:, round:, successor:, partners:, profile:),
+            root:,
+            model:           profile.model,
+            effort:          profile.effort,
+            allowed_tools:   agent.allowed_tools,
+            denied_tools:    denied_for(agent),
+            denied_commands: denied_commands(agent),
+            network:         agent.network,
+            lean:            @lean
+          )
+        )
       end
 
       # What this particular agent may not touch: the network tools unless it
@@ -413,7 +439,8 @@ module Agentilda
       # @param successor [String, nil]
       # @param partners [Array<Agentilda::Agents::Agent>]
       # @return [String]
-      def prompt_for(agent, subject, root = @root, control: nil, round: 1, successor: nil, partners: [])
+      def prompt_for(agent, subject, root = @root, control: nil, round: 1, successor: nil, partners: [],
+        profile: profile_for(agent, subject))
         <<~PROMPT
           #{agent.prompt}
 
@@ -433,8 +460,7 @@ module Agentilda
           You may read anything, and write source, tests and the plan's own
           markdown.
 
-          These are withheld from you, not merely discouraged — `claude` is
-          invoked with them disallowed:
+          #{withheld_preamble(profile)}
 
           #{denied_commands(agent).map { |c| "  #{c}" }.join("\n")}
           #{granted(agent)}
@@ -454,6 +480,21 @@ module Agentilda
           else, never write it anyway. Before your closing ledger line, run
           `AGENT_ID=#{agent.name} alo release-all`.
         PROMPT
+      end
+
+      # Only a CLI that actually refuses the commands may be described as
+      # refusing them.
+      #
+      # @param profile [Agentilda::Agents::Profile]
+      # @return [String]
+      def withheld_preamble(profile)
+        if profile.adapter.enforces_tool_denial?
+          "These are withheld from you, not merely discouraged — `#{profile.adapter.executable}` is\n" \
+            "invoked with them disallowed:"
+        else
+          "You must not run these. `#{profile.adapter.executable}` cannot withhold them, so the\n" \
+            "check below is what catches a run that does:"
+        end
       end
 
       # The one paragraph every agent gets, identically, about the ledger. It
