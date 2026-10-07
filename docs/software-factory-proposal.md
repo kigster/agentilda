@@ -234,7 +234,7 @@ This is a PR-sized delivery plan. Each item has a separate review boundary. Use 
 
 ### PR 7: Make quality and spend measurable
 
-- [ ] Turn `evals/cases.jsonl` into executable fixtures under `evals/fixtures/`; add `evals/run.rb`, deterministic scorers and per-agent entry points. Add offline/live recipes to `justfile` and an offline CI job.
+- [x] Turn `evals/cases.jsonl` into executable cases under `evals/cases/`, with deterministic per-depth scorers, pass/fail recordings, `agentilda eval` (offline by default, `--live` under a token cap) and `just eval`. The offline run is part of the spec suite.
 - [ ] For code tasks, create tiny repositories with failing acceptance tests and expected ownership. Evaluate actual resulting code rather than whether the response claims success. Use replay fakes for GitHub mutations.
 - [ ] Run each of the seven agent roles and all workflow gates against positive, negative and ambiguous cases. Add injected secret strings, misleading repo instructions, interrupted processes and stale-commit cases.
 - [ ] Produce a Braintrust comparison with model/prompt/config versions, cost caps and held-out results. Block releases on deterministic safety failures; treat the small starter corpus as insufficient evidence for statistical claims.

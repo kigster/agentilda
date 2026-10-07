@@ -109,6 +109,8 @@ lib/agentilda/
                          documentation.rb (`agentilda docs`), diagram.rb (`agentilda states`), reporter.rb, viewer.rb
   support/               collapsed by Zeitwerk, so these stay Agentilda::UI, ::Config, ::Markdown, ::Frontmatter
   linear/                one-way export of .plans to Linear projects and issues
+  evals/                 Agentilda::Evals — per-agent cases (evals/cases/<agent>/<id>.yml), deterministic
+                         checks per depth, offline scoring of recordings, --live runs in a temp repo
   cli.rb                 the dry-cli registry, and the dry-cli-help `help` block that titles it
   cli/base.rb            shared flags, tree_for, refuse, the dry-run footer
   cli/<command>/         one file per command (create/create.rb, run/run.rb, …),
