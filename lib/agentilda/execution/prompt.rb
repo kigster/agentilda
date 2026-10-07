@@ -1,5 +1,7 @@
 # frozen_string_literal: true
 
+require "shellwords"
+
 module Agentilda
   module Execution
     # What one agent is told on one plan: its own definition, then the facts
@@ -12,6 +14,11 @@ module Agentilda
     # executor that enforces it, so the prompt and the enforcement cannot
     # disagree.
     class Prompt
+      # This checkout's own executable, named in every command the agent is
+      # told to run. A bare `agentilda` resolves through the agent's PATH to
+      # whatever release is installed, which can predate `state sign`.
+      EXECUTABLE = File.expand_path("../../../exe/agentilda", __dir__)
+
       # @param agent [Agentilda::Agents::Agent]
       # @param subject [Agentilda::Plans::Subject]
       # @param root [String] the checkout the agent works in
@@ -26,7 +33,7 @@ module Agentilda
       # @param denied [Array<String>] commands withheld
       # @param granted [Array<String>] commands lifted for this agent
       def initialize(agent:, subject:, root:, profile:, round: 1, successor: nil, partners: [], control: nil,
-        instructions: "", max_tokens: nil, seconds: nil, denied: [], granted: [])
+        instructions: "", max_tokens: nil, fresh_budget: false, seconds: nil, denied: [], granted: [])
         @agent = agent
         @subject = subject
         @root = root
@@ -37,6 +44,7 @@ module Agentilda
         @control = control
         @instructions = instructions.to_s.strip
         @max_tokens = max_tokens
+        @fresh_budget = fresh_budget
         @seconds = seconds
         @denied = denied
         @granted = granted
@@ -115,7 +123,7 @@ module Agentilda
       # @param successor [String, nil]
       # @return [String]
       def ledger_section(agent, subject, round:, successor:)
-        sign = "agentilda state sign --dir \"#{File.dirname(subject.feature.path)}\" --plan #{subject.feature.ordinal} " \
+        sign = "#{cli} state sign --dir \"#{File.dirname(subject.feature.path)}\" --plan #{subject.feature.ordinal} " \
                "--agent #{agent.name} --round #{round}"
         handoff = successor ? " --next #{successor}" : ""
         <<~SECTION
@@ -124,8 +132,10 @@ module Agentilda
 
           You sign this plan's `state.json`, through the command below. Never
           edit `state.json` by hand: the command takes a lock, so you and an
-          agent working beside you cannot overwrite each other. Before you do
-          any work:
+          agent working beside you cannot overwrite each other. Run it by the
+          path given, not as a bare `agentilda`: the one on your PATH may be an
+          older release without these commands, and wherever your instructions
+          say `agentilda`, they mean `#{cli}`. Before you do any work:
 
               #{sign} --status Started
 
@@ -152,12 +162,18 @@ module Agentilda
         return "" unless @max_tokens&.positive?
 
         "\n## Token budget — #{@max_tokens} tokens, enforced\n\n" \
-          "This invocation is aborted once its total spend (input plus output, " \
+          "This invocation is aborted once its total spend (#{spend}, " \
           "sub-agents included) crosses #{@max_tokens} tokens. Budget the work: " \
           "plan what fits, write results to disk as you go, and finish — or " \
           "write a handoff note into the plan folder — before the meter runs " \
           "out. Anything unwritten at the cap is lost.\n"
       end
+
+      # @return [String] the executable, quoted for a shell
+      def cli = Shellwords.escape(EXECUTABLE)
+
+      # @return [String] what the budget counts
+      def spend = @fresh_budget ? "new input plus output; cache reads are free" : "input plus output"
 
       # The section describing the advisory clock this invocation runs against,
       # stated in the prompt so an agent can pace itself. The number is
@@ -222,14 +238,14 @@ module Agentilda
 
           Read it before each significant step and whenever you finish a unit:
 
-              agentilda mail read --dir "#{plans_dir}" --plan #{plan} --for #{agent.name}
+              #{cli} mail read --dir "#{plans_dir}" --plan #{plan} --for #{agent.name}
 
           Pass `--after N`, with the number of the last message you have read,
           to see only what is new. Write to it when you land an interface your
           partner is waiting on, when you amend the contract, when you need
           something from their half, and when you finish:
 
-              agentilda mail send --dir "#{plans_dir}" --plan #{plan} --from #{agent.name} --to #{partners.first.name} "what you need them to know"
+              #{cli} mail send --dir "#{plans_dir}" --plan #{plan} --from #{agent.name} --to #{partners.first.name} "what you need them to know"
 
           Every message is appended with a number and a timestamp and never
           edited, so a person can read the exchange after the round. A question
@@ -272,14 +288,14 @@ module Agentilda
           whoever runs next — most likely you — saying what is done, what is
           not, and the exact next step:
 
-              agentilda mail send --dir "#{plans_dir}" --plan #{plan} --from #{agent.name} --to #{agent.name} "RESUME: ..."
+              #{cli} mail send --dir "#{plans_dir}" --plan #{plan} --from #{agent.name} --to #{agent.name} "RESUME: ..."
 
           Then sign `--status Interrupted`, with no `--next`, and
           end your turn.
 
           Before you start, check for such a note from an earlier run:
 
-              agentilda mail read --dir "#{plans_dir}" --plan #{plan} --for #{agent.name}
+              #{cli} mail read --dir "#{plans_dir}" --plan #{plan} --for #{agent.name}
 
           If there is a RESUME note, continue from it and do not redo what it
           says is done; check the files it names rather than taking it on trust.

@@ -47,9 +47,14 @@ module Agentilda
       #     cap, :quit when the grace period after q ran out, nil otherwise
       # @!attribute [r] pid
       #   @return [Integer, nil]
+      # @!attribute [r] cached
+      #   @return [Integer] of {#up}, read back from the prompt cache
       # @return [Data]
-      Result = Data.define(:ok, :note, :up, :down, :subagents, :delegated, :seconds, :killed, :pid) do
-        def initialize(killed: nil, pid: nil, **rest) = super
+      Result = Data.define(:ok, :note, :up, :down, :subagents, :delegated, :seconds, :killed, :pid, :cached) do
+        def initialize(killed: nil, pid: nil, cached: 0, **rest) = super
+
+        # @return [Integer] new input, cache writes and output
+        def fresh = up - cached + down
 
         # @return [Array(Boolean, String)]
         def to_ary = [ok, note]
@@ -197,6 +202,8 @@ module Agentilda
       #   output, sub-agents included. The prompt states it so the agent can
       #   plan to finish inside it, and the meter enforces it so the statement
       #   is true. nil is unmetered.
+      # @param fresh_budget [Boolean] count only new tokens against
+      #   +max_tokens+, leaving out cache reads; what `eval --live` uses
       # @param interactive [Boolean] whether someone is at the keyboard, which
       #   the keyboard help reads. Every invocation gets a control file either
       #   way, because the clock writes its own warnings into it regardless of
@@ -204,7 +211,8 @@ module Agentilda
       # @param lean [Boolean] start agents without the operator's personal
       #   plugins, skills, hooks and MCP servers; `run --user-config` turns it off
       def initialize(root:, spawn: Child.method(:spawn), timeout: nil, dry_run: false,
-        trace_dir: TRACE_DIR, instructions: nil, model: nil, max_tokens: nil, interactive: false, lean: true)
+        trace_dir: TRACE_DIR, instructions: nil, model: nil, max_tokens: nil, interactive: false, lean: true,
+        fresh_budget: false)
         @root = File.expand_path(root)
         @spawn = spawn
         @timeout = timeout
@@ -215,6 +223,7 @@ module Agentilda
         @max_tokens = max_tokens
         @interactive = interactive
         @lean = lean
+        @fresh_budget = fresh_budget
       end
 
       # @return [String]
@@ -343,7 +352,8 @@ module Agentilda
           delegated: transcript.delegated,
           seconds: UI.monotonic - started,
           killed:,
-          pid:)
+          pid:,
+          cached: transcript.cached)
       end
 
       # @param transcript [Agentilda::Execution::Transcript]
@@ -451,6 +461,7 @@ module Agentilda
           control:,
           instructions: @instructions,
           max_tokens:   @max_tokens,
+          fresh_budget: @fresh_budget,
           seconds:      timeout_for(agent),
           denied:       denied_commands(agent),
           granted:      granted_to(agent)).to_s
@@ -463,7 +474,7 @@ module Agentilda
       # @param handle [Agentilda::Execution::Executor::Handle]
       # @return [void]
       def abort_if_over(transcript, handle)
-        spent = transcript.up + transcript.down
+        spent = @fresh_budget ? transcript.fresh : transcript.up + transcript.down
         if @max_tokens&.positive? && spent > @max_tokens
           handle.kill!(grace: 0, reason: :budget)
         elsif Control.overdue?

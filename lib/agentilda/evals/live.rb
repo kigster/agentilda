@@ -63,7 +63,7 @@ module Agentilda
           result = executor(root).call(@agent, start(plans), root:)
           Lifecycle.resync_dirs(tree: Plans.tree(plans)).call(commit: true)
           found = Plans.tree(plans).find(ORDINAL)
-          run = Run.new(seconds: result.seconds, tokens: result.up + result.down)
+          run = Run.new(seconds: result.seconds, tokens: result.fresh)
           score = Scorer.new(@kase, registry: @registry)
                         .call(folder: found&.feature&.path || File.join(plans, "missing"), run:, repo: root)
           Outcome.new(score:, result:, root: @keep ? root : nil)
@@ -116,7 +116,7 @@ module Agentilda
 
       # @return [Agentilda::Execution::Executor]
       def executor(root)
-        options = { root:, max_tokens: @max_tokens, timeout: @timeout }
+        options = { root:, max_tokens: @max_tokens, fresh_budget: true, timeout: @timeout }
         options[:spawn] = @spawn if @spawn
         options[:trace_dir] = @trace_dir if @trace_dir
         Execution.executor(**options)

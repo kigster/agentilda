@@ -36,6 +36,11 @@ RSpec.describe Agentilda::Execution::Prompt, :tree do
     expect(text).to include("--round 3 --status Completed --next hansolo-reviewer")
   end
 
+  # The agent's PATH can hold an older release that has no `state sign`.
+  it "signs through this checkout's own executable, not whatever is on PATH" do
+    expect(text).to include("#{described_class::EXECUTABLE} state sign --dir")
+  end
+
   it "lists what is withheld and what is granted" do
     expect(text).to include("  git push", "You may run these, which most agents may not:\n\n  gh pr review")
   end

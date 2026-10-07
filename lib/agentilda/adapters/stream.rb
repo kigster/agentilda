@@ -25,6 +25,7 @@ module Agentilda
         @trace = trace && File.open(trace, "a")
         @up = 0
         @down = 0
+        @cached = 0
         @tools = 0
         @activity = nil
         @result = nil
@@ -36,6 +37,9 @@ module Agentilda
 
       # @return [Integer] tokens generated
       attr_reader :down
+
+      # @return [Integer] of {#up}, input the CLI reports as served from cache
+      attr_reader :cached
 
       # @return [Integer]
       attr_reader :tools
@@ -68,6 +72,9 @@ module Agentilda
 
       # @return [String, nil] nothing is sent through a side channel
       def message = nil
+
+      # @return [Integer] new input plus output
+      def fresh = up - cached + down
 
       # @return [Boolean]
       def failed? = !@error.nil?
@@ -143,6 +150,7 @@ module Agentilda
 
         @up += usage["input_tokens"].to_i
         @down += usage["output_tokens"].to_i
+        @cached += usage["cached_input_tokens"].to_i
       end
 
       # @param event [Hash]

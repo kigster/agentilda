@@ -423,7 +423,7 @@ RSpec.describe Agentilda::Execution::Executor, :tree do
         event: { type: "message_delta", usage: { input_tokens: 2, cache_creation_input_tokens: 100,
                                                cache_read_input_tokens: 900, output_tokens: 40 } })
 
-      expect(streaming.call(agent, subject_plan)).to have_attributes(up: 1002, down: 40)
+      expect(streaming.call(agent, subject_plan)).to have_attributes(up: 1002, down: 40, cached: 900, fresh: 142)
     end
 
     # The prompt states the budget so the agent can finish inside it; this is
@@ -452,6 +452,24 @@ RSpec.describe Agentilda::Execution::Executor, :tree do
         stream << event(type: "result", is_error: false, result: "done")
 
         expect(metered.call(agent, subject_plan).ok).to be(true)
+      end
+
+      # Every turn re-reads the whole context from cache. Counted, those reads
+      # end a live eval after ten turns of a 30k-token context.
+      context "when only fresh tokens count" do
+        subject(:metered) { described_class.new(root:, spawn:, trace_dir: @traces, max_tokens: 100, fresh_budget: true) }
+
+        it "lets cache reads past the budget" do
+          stream << event(type: "stream_event",
+            event: { type: "message_delta", usage: { input_tokens: 10, cache_read_input_tokens: 5000, output_tokens: 40 } })
+          stream << event(type: "result", is_error: false, result: "done")
+
+          expect(metered.call(agent, subject_plan)).to have_attributes(ok: true, fresh: 50)
+        end
+
+        it "says so in the prompt" do
+          expect(metered.invocation(agent, subject_plan)[2]).to include("cache reads are free")
+        end
       end
     end
 

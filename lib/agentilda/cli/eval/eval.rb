@@ -83,7 +83,7 @@ module Agentilda
           UI.line("running #{kase} at #{kase.depth}, capped at #{cap} tokens")
           outcome = Evals.run_live(kase, max_tokens: cap)
           result = outcome.result
-          [outcome.score, Evals::Run.new(seconds: result.seconds, tokens: result.up + result.down)]
+          [outcome.score, Evals::Run.new(seconds: result.seconds, tokens: result.fresh)]
         end
       end
 

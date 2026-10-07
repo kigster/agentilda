@@ -105,7 +105,7 @@ module Agentilda
         @trace_path = trace
         @trace = trace && File.open(trace, "a")
         @tools = 0
-        @main = { up: 0, down: 0 }
+        @main = { up: 0, down: 0, cached: 0 }
         @streamed = {}
         @tasks = {}
         @spawned = 0
@@ -121,6 +121,18 @@ module Agentilda
 
       # @return [Integer] tokens the model generated, thinking included
       def down = @main[:down] + streamed[:down]
+
+      # Of {#up}, what was read back from the prompt cache: the context every
+      # turn re-sends. A budget that counts it ends a 30k-context agent after
+      # ten turns, whatever it was doing, so {#fresh} leaves it out.
+      #
+      # @return [Integer]
+      def cached = @main[:cached] + streamed[:cached]
+
+      # What this invocation added: new input, cache writes and output.
+      #
+      # @return [Integer]
+      def fresh = up - cached + down
 
       # @return [Integer] sub-agents this invocation started
       attr_reader :spawned
@@ -298,6 +310,7 @@ module Agentilda
           "cache_creation_input_tokens",
           "cache_read_input_tokens").compact.sum
         bucket[:down] += usage["output_tokens"].to_i
+        bucket[:cached] += usage["cache_read_input_tokens"].to_i
         publish
       end
 
@@ -306,14 +319,15 @@ module Agentilda
       def bucket_for(parent)
         return @main if parent.nil?
 
-        @streamed[parent] ||= { up: 0, down: 0 }
+        @streamed[parent] ||= { up: 0, down: 0, cached: 0 }
       end
 
       # @return [Hash] every streamed sub-agent's counters, added together
       def streamed
-        @streamed.values.each_with_object({ up: 0, down: 0 }) do |b, sum|
+        @streamed.values.each_with_object({ up: 0, down: 0, cached: 0 }) do |b, sum|
           sum[:up] += b[:up]
           sum[:down] += b[:down]
+          sum[:cached] += b[:cached]
         end
       end
 
@@ -441,10 +455,11 @@ module Agentilda
         return unless usage.is_a?(Hash)
 
         @main = {
-          up:   usage.values_at("input_tokens",
+          up:     usage.values_at("input_tokens",
             "cache_creation_input_tokens",
             "cache_read_input_tokens").compact.sum,
-          down: usage["output_tokens"].to_i
+          down:   usage["output_tokens"].to_i,
+          cached: usage["cache_read_input_tokens"].to_i
         }
       end
 
