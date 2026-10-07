@@ -4,10 +4,12 @@ description: Turns a researched spec.md into a complete specification and leaves
 handles: [researched, retroactive]
 advances_to: ready_for_planning
 model: sonnet
-effort: xhigh
+effort: medium
 timeout: 900
 ledger: [spec.md]
-allowed_tools: [Read, Grep, Glob, Bash, Write, Edit, Task, Skill, WebSearch, WebFetch]
+phase: specification
+lanes: [full]
+allowed_tools: [Read, Grep, Glob, Bash, Write, Edit, Skill, WebSearch, WebFetch]
 writes: [spec.md, plan.md, blocked.md]
 ---
 

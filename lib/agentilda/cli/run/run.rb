@@ -311,7 +311,7 @@ module Agentilda
 
         roster  = Agentilda::Agents.registry
         lines   = active.map { |s|
-          takers = roster.for_status(s.status).map(&:name)
+          takers = Agentilda::Agents::Routing.filter(roster.for_status(s.status), s).map(&:name)
           verb   = takers.size == 1 ? "takes" : "take"
           "  #{s.feature.ordinal} is #{s.status.emoji} #{s.status.label}" \
             "#{" - #{takers.join(" and ")} #{verb} it" unless takers.empty?}"

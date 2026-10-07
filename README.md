@@ -134,8 +134,48 @@ A plan can also leave the main path. It stops at ⭕️ Technical Block or 🅱�
 | `rey-frontend`      | ⭐️, 🟡, 🎨, 🔴 | 🟢                  | `plan-frontend.md`, `pull-requests.md` | Builds the interface against Luke's API and proves the two halves work together          |
 | `hansolo-reviewer`  | 🟢, 👀         | 👀 approved, 🔴, 💩 | `pull-requests.md`                     | Reviews the diff against the plan; rejects at most twice; never merges                   |
 | `lando-broker`      | ⭕️, 🅱️         | ⭐️                  | `plan.md`                              | Folds your answers from `blocked.md` back into the spec and plan                         |
+| `r2d2-mechanic`     | ⭐️, 🟡, 🔴     | 🟢                  | `plan.md`, `pull-requests.md`          | Quick lane only: does one short mechanical task straight from `spec.md`                  |
 
-Luke and Rey work at the same time, in the same worktree, toward one pull request. They talk through `mailbox.md` in the plan folder, using `tilda mail send` and `tilda mail read`.
+Luke and Rey work at the same time, in the same worktree, toward one pull request. They talk through `tilda mail send` and `tilda mail read`. Rey only starts when `plan-frontend.md` has work units, so a back-end-only plan costs one builder, not two.
+
+| Agent               | Model / effort | Why                                    |
+| :------------------ | :------------- | :------------------------------------- |
+| `leah-researcher`   | haiku / medium | lookups, fanned out                    |
+| `yoda-writer`       | sonnet / medium| prose                                  |
+| `palpatine-planner` | opus / high    | the one place depth pays               |
+| `luke-backend`      | opus / high    | builds; Opus is the ceiling            |
+| `rey-frontend`      | sonnet / medium| narrower work                          |
+| `hansolo-reviewer`  | sonnet / high  | review                                 |
+| `lando-broker`      | haiku / low    | clerical                               |
+| `r2d2-mechanic`     | haiku / medium | short mechanical tasks                 |
+
+No agent runs above Opus: the Claude adapter clamps Fable and anything costlier to Opus. Agents start without your personal plugins, skills, hooks and MCP servers, which on a typical setup cuts a quarter of every turn's context and half the start-up time. `tilda run --user-config` lets them back in.
+
+### Lanes, and what spec.md can ask for
+
+The frontmatter of `spec.md` steers how the plan is worked. Every key is optional:
+
+```yaml
+---
+lane: quick          # full (default) | plan | quick
+frontend: false      # true forces rey-frontend; false keeps it out
+depth: fast          # fast | medium | deep: the default effort for every phase
+phases:              # per-phase overrides: research, specification, planning,
+  build:             # build, frontend, review, unblock
+    adapter: codex   # claude (default) | codex | pi
+    model: gpt-5-codex
+    effort: medium   # low | medium | high | xhigh | max
+  review: { model: opus }
+---
+```
+
+| Lane    | Route                                                        | For                                              |
+| :------ | :----------------------------------------------------------- | :----------------------------------------------- |
+| `full`  | leah → yoda → palpatine → luke (+ rey) → han                 | features you want researched and specified        |
+| `plan`  | palpatine → luke (+ rey) → han                               | a spec you already trust; skip research and rewrite |
+| `quick` | r2d2-mechanic → han                                          | "split the big migration into smaller ones"       |
+
+`tilda create --lane quick split big migration` writes the frontmatter for you. Precedence for model and effort, highest first: `run --model`, then `phases.<phase>`, then `depth`, then the agent's own definition.
 
 Run `tilda agents list` for the same table, or `tilda describe <agent>` to read one agent's prompt.
 
@@ -154,6 +194,7 @@ Partial answers are fine. The plan stays blocked until the last question is answ
 
 ```bash
 tilda create tax rule dsl              # a new plan: 003.00-⚪️ → tax-rule-dsl
+tilda create --lane quick split big migration  # one agent, straight to a pull request
 tilda create --from notes/dsl.md       # a new plan named by the file's frontmatter title
 tilda create --after 002 k1 sync       # a retroactive plan: 002.01-🕰️ → k1-sync
 tilda list-plans                       # every plan, its state and its pull requests
@@ -181,6 +222,7 @@ tilda run --commit --plan 003,005.01       # only these plans
 tilda run --commit --agent yoda-writer --prompt "Rework the risks section first"
 tilda run --commit --skip hansolo-reviewer # everyone but the reviewer; its plans wait
 tilda run --commit --model opus            # one model for every agent
+tilda run --commit --user-config           # agents load your personal plugins and skills too
 tilda run --commit --timeout 600           # at most ten minutes per agent
 tilda run --commit --scroll-height 5       # each agent's last five statuses under its row
 tilda run --commit --agent luke-backend --prompt steer.md  # a short --prompt naming a file is read

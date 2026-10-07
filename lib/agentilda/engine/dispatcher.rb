@@ -239,11 +239,11 @@ module Agentilda
         @runner.in_scope.each do |subject|
           # After {#reconcile} this is the folder's name. On a dry run, which
           # renames nothing, it is what the name would have become.
-          state = Lifecycle::Resync::Dirs.target(subject)
+          state = Lifecycle::Lanes.target(subject) || Lifecycle::Resync::Dirs.target(subject)
           next if Plans::StateMachine::SETTLED.include?(state.key)
           next if @finished_plans.include?(subject.feature.ordinal.to_s)
 
-          candidates = @runner.agents.for_status(state)
+          candidates = Agents::Routing.filter(@runner.agents.for_status(state), subject)
           preferred = @preferred[subject.feature.ordinal.to_s]
           candidates = candidates.sort_by { |a| a.name == preferred ? 0 : 1 } if preferred
           agent = candidates.find { |a| eligible?(a, subject) }
@@ -265,6 +265,22 @@ module Agentilda
       def reconcile
         busy = @running.map { |j| j.task.subject.feature.ordinal.to_s }
         Lifecycle::Resync::Dirs.new(tree: @runner.tree.reload, except: busy).call(commit: !@runner.dry_run?)
+        fast_forward(busy) unless @runner.dry_run?
+      end
+
+      # Plans whose lane skips research, rewriting or planning are moved past
+      # those phases before anyone is assigned, so the first agent they meet
+      # is the one their lane starts with.
+      #
+      # @param busy [Array<String>] ordinals an agent is working right now
+      # @return [void]
+      def fast_forward(busy)
+        @runner.in_scope.each do |subject|
+          next if busy.include?(subject.feature.ordinal.to_s)
+
+          moved = Lifecycle::Lanes.advance(subject, commit: true) or next
+          UI.log("lane: #{moved.first} -> #{moved.last}", plan: subject.feature.ordinal.to_s)
+        end
       end
 
       # @param agent [Agentilda::Agents::Agent]
@@ -301,10 +317,15 @@ module Agentilda
           down: 0,
           subagents: 0,
           frame: 0)
-        successor = @runner.agents.for_status(Plans::STATUS_BY_KEY.fetch(agent.advances_to)).first&.name if agent.advances_to && Plans::STATUS_BY_KEY.key?(agent.advances_to)
+        if agent.advances_to && Plans::STATUS_BY_KEY.key?(agent.advances_to)
+          successor = Agents::Routing.filter(@runner.agents.for_status(Plans::STATUS_BY_KEY.fetch(agent.advances_to)),
+            subject).first&.name
+        end
         # Each member of a pair is told who the others are, so the executor
-        # can name them beside the plan's mailbox.
-        partners = @runner.agents.team_for(Lifecycle::Resync::Dirs.target(subject)) - [agent]
+        # can name them beside the plan's mailbox. A partner routing would
+        # never start is not a partner.
+        team = @runner.agents.team_for(Lifecycle::Resync::Dirs.target(subject))
+        partners = Agents::Routing.filter(team, subject) - [agent]
         remember(ordinal, agent.name, job.state, "Started", round)
         @state&.record(ordinal,
           agent:      agent.name,
