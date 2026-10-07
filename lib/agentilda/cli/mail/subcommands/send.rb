@@ -35,7 +35,7 @@ module Agentilda
 
           # One line, not a box: an agent runs this between steps, and a
           # four-line frame around "#7 → rey-frontend" is noise it reads.
-          UI.line("##{message.number} → #{message.to}, in #{File.basename(mailbox.dir)}/#{Mailbox::FILENAME}")
+          UI.line("##{message.number} → #{message.to}, in #{File.basename(mailbox.dir)}/#{Plans::Mailbox::FILENAME}")
         end
       end
     end

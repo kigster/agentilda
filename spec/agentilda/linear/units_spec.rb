@@ -4,7 +4,7 @@
 # parser was written against one convention, run over thirty-eight plans, and
 # rewritten twice — these are the shapes that broke it.
 RSpec.describe Agentilda::Linear::Units, :tree do
-  subject(:units) { described_class.new(subject: Agentilda::Tree.new(dir: plans_root).find(ordinal)).all }
+  subject(:units) { described_class.new(subject: Agentilda::Plans::Tree.new(dir: plans_root).find(ordinal)).all }
 
   let(:ordinal) { "010.00" }
 
@@ -107,7 +107,7 @@ RSpec.describe Agentilda::Linear::Units, :tree do
           prs:   [t.merged(38, "Clerk authentication behind the dev-fixture seam"),
                   t.merged(39, "Frontend: Clerk sign-in + mockup design system")]
       end
-      found = described_class.new(subject: Agentilda::Tree.new(dir: plans_root).find("020.00")).all
+      found = described_class.new(subject: Agentilda::Plans::Tree.new(dir: plans_root).find("020.00")).all
 
       expect(found.map { |u| u.pull_requests.map(&:number) }).to eq([["38"], ["39"]])
     end
@@ -139,14 +139,14 @@ RSpec.describe Agentilda::Linear::Units, :tree do
           files: { "spec.md" => spec_body, "plan.md" => "## PR-1 — One\n\n## PR-2 — Two\n" },
           prs:   [t.merged(9, "Spec 011 PR-1 and PR-2: both at once")]
       end
-      found = described_class.new(subject: Agentilda::Tree.new(dir: plans_root).find("011.00")).all
+      found = described_class.new(subject: Agentilda::Plans::Tree.new(dir: plans_root).find("011.00")).all
 
       expect(found.flat_map { |u| u.pull_requests.map(&:number) }).to eq(["9"])
     end
   end
 
   describe "a plan that never divided itself" do
-    def units_of(ordinal) = described_class.new(subject: Agentilda::Tree.new(dir: plans_root).find(ordinal)).all
+    def units_of(ordinal) = described_class.new(subject: Agentilda::Plans::Tree.new(dir: plans_root).find(ordinal)).all
 
     # Its own issue still exists — the folder always gets one. What it has no
     # business inventing is a child standing for the same thing.

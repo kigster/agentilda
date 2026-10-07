@@ -6,7 +6,7 @@ require "uri"
 
 module Agentilda
   module Linear
-    # Linear's GraphQL API, wrapped as thinly as {Agentilda::GitHub} wraps
+    # Linear's GraphQL API, wrapped as thinly as {Agentilda::Vcs::GitHub} wraps
     # `gh`, and for the same reason: it is a seam. Every example in the suite
     # injects a transport here, so nothing in the tests reaches Linear.
     #

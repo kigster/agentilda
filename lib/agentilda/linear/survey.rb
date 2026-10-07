@@ -25,7 +25,7 @@ module Agentilda
         def why = { ordinal: "its name carries the plan number", slug: "its name is the plan's slug" }.fetch(rule)
       end
 
-      # @param tree [Agentilda::Tree]
+      # @param tree [Agentilda::Plans::Tree]
       # @param projects [Array<Hash>] `{"id", "name", "url", "status"}` from {API#projects}
       def initialize(tree:, projects:)
         @tree = tree
@@ -46,13 +46,13 @@ module Agentilda
 
       # Plans with no project. An import would create one for each.
       #
-      # @return [Array<Agentilda::Subject>]
+      # @return [Array<Agentilda::Plans::Subject>]
       def uncovered = tree.subjects - matches.map(&:subject)
 
       # Projects whose name shares the plan's words without matching either
       # rule, best first.
       #
-      # @param subject [Agentilda::Subject]
+      # @param subject [Agentilda::Plans::Subject]
       # @return [Array<Hash>]
       def near(subject) = scored(subject).map(&:first)
 
@@ -65,7 +65,7 @@ module Agentilda
       # obvious to a person and, to this, indistinguishable from
       # `tax-engine-consolidation` matching `Tax Law Engine`, which is wrong.
       #
-      # @param subject [Agentilda::Subject]
+      # @param subject [Agentilda::Plans::Subject]
       # @return [Array(Hash, Integer), nil] the project and its score
       def guess(subject)
         best, score = scored(subject).first
@@ -109,7 +109,7 @@ module Agentilda
 
       private
 
-      # @return [Agentilda::Tree]
+      # @return [Agentilda::Plans::Tree]
       attr_reader :tree
 
       # @param project [Hash]
@@ -126,7 +126,7 @@ module Agentilda
 
       # Every project that shares a word with this plan, best first.
       #
-      # @param subject [Agentilda::Subject]
+      # @param subject [Agentilda::Plans::Subject]
       # @return [Array<Array(Hash, Integer)>]
       def scored(subject)
         wanted = plan_words(subject)
@@ -138,7 +138,7 @@ module Agentilda
         }.sort_by { |_, overlap| -overlap }
       end
 
-      # @param subject [Agentilda::Subject]
+      # @param subject [Agentilda::Plans::Subject]
       # @return [Array<String>]
       def plan_words(subject)
         words(subject.feature.slug) | words(slugify(subject.feature.title)) |

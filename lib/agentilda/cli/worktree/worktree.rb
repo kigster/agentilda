@@ -35,7 +35,7 @@ module Agentilda
         end
 
         root = File.dirname(tree.dir)
-        worktree = ::Agentilda::Worktree.new(root:)
+        worktree = Agentilda::Vcs.worktree(root:)
 
         checkout = worktree.checkout_for(feature)
 
@@ -66,12 +66,12 @@ module Agentilda
 
       # Find the plan that matches the given identifier.
       #
-      # @param tree [Agentilda::Tree] plans directory wrapper
+      # @param tree [Agentilda::Plans::Tree] plans directory wrapper
       # @param plan [String] ordinal, folder name, or slug
-      # @return [Agentilda::Feature, nil]
+      # @return [Agentilda::Plans::Feature, nil]
       def resolve_plan(tree, plan)
         # Try parsing as an ordinal first
-        ordinal = ::Agentilda::Ordinal.parse(plan)
+        ordinal = ::Agentilda::Plans::Ordinal.parse(plan)
         if ordinal
           found = tree.features.find { |f| f.ordinal == ordinal }
           return found if found

@@ -13,7 +13,7 @@ module Agentilda
         example ["", "| less -R"]
 
         # @return [void]
-        def call(**) = $stdout.write(Roster.new.list)
+        def call(**) = $stdout.write(Agentilda::Agents.roster.list)
       end
     end
   end

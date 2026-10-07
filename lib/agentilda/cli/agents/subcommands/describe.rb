@@ -30,9 +30,9 @@ module Agentilda
         # default to the real thing; the suite hands in its own to keep
         # viewers from opening on the box running it.
         #
-        # @param agents [Agentilda::Agents]
-        # @param viewer [Agentilda::Viewer]
-        def initialize(agents: Agentilda::Agents.new, viewer: Viewer.new)
+        # @param agents [Agentilda::Agents::Registry]
+        # @param viewer [Agentilda::Presentation::Viewer]
+        def initialize(agents: Agentilda::Agents.registry, viewer: Presentation.viewer)
           super()
           @agents = agents
           @viewer = viewer

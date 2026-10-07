@@ -59,10 +59,10 @@ module Agentilda
     # disagree. Everything that needs the network — the project, the repository
     # pull request list — is handed in.
     class Import
-      # @param tree [Agentilda::Tree]
+      # @param tree [Agentilda::Plans::Tree]
       # @param team [String] the team key, e.g. "TAX"
       # @param project [Hash] the Linear project, `{"id", "name", "url"}`
-      # @param adopted [Hash{String => Array<Agentilda::PullRequest>}]
+      # @param adopted [Hash{String => Array<Agentilda::Plans::PullRequest>}]
       #   pull requests {Attribution} placed, by folder name
       # @param since [String, nil] skip plans numbered below this
       # @param statuses [Array<Symbol>, nil] only these states
@@ -72,7 +72,7 @@ module Agentilda
         @team = team.to_s.strip.upcase
         @project = project
         @adopted = adopted
-        @since = since && Ordinal.parse(since)
+        @since = since && Plans::Ordinal.parse(since)
         @statuses = statuses
         @force = force
       end
@@ -100,7 +100,7 @@ module Agentilda
 
       # Plans in a state nobody has decided how to file, and why not.
       #
-      # @return [Hash{Agentilda::Status => Array<String>}] state => ordinals
+      # @return [Hash{Agentilda::Plans::Status => Array<String>}] state => ordinals
       def unplaced
         @unplaced ||= (chosen - subjects).group_by(&:status)
                                          .transform_values { |group| group.map { |s| s.feature.ordinal.to_s } }
@@ -108,13 +108,13 @@ module Agentilda
 
       private
 
-      # @return [Agentilda::Tree]
+      # @return [Agentilda::Plans::Tree]
       attr_reader :tree
 
       # @return [Hash]
       attr_reader :adopted
 
-      # @return [Agentilda::Ordinal, nil]
+      # @return [Agentilda::Plans::Ordinal, nil]
       attr_reader :since
 
       # @return [Array<Symbol>, nil]
@@ -123,10 +123,10 @@ module Agentilda
       # @return [Boolean]
       attr_reader :force
 
-      # @return [Array<Agentilda::Subject>]
+      # @return [Array<Agentilda::Plans::Subject>]
       def subjects = @subjects ||= chosen.select { |s| Agentilda::Linear.placement(s.status) }
 
-      # @return [Array<Agentilda::Subject>] before the placement question
+      # @return [Array<Agentilda::Plans::Subject>] before the placement question
       def chosen
         @chosen ||= tree.subjects.select { |s|
           (since.nil? || s.feature.ordinal >= since) &&
@@ -138,7 +138,7 @@ module Agentilda
       # `plan.md` declares, plus any pull request {Attribution} placed here
       # that none of them already claims.
       #
-      # @param subject [Agentilda::Subject]
+      # @param subject [Agentilda::Plans::Subject]
       # @return [Array<Agentilda::Linear::Unit>]
       def units_for(subject)
         (@units ||= {})[subject.feature.path] ||= begin
@@ -149,7 +149,7 @@ module Agentilda
         end
       end
 
-      # @param pull [Agentilda::PullRequest]
+      # @param pull [Agentilda::Plans::PullRequest]
       # @return [Agentilda::Linear::Unit]
       def adopted_unit(pull)
         Unit.new(key: "##{pull.number}",
@@ -158,11 +158,11 @@ module Agentilda
           pull_requests: [pull])
       end
 
-      # @param subject [Agentilda::Subject]
+      # @param subject [Agentilda::Plans::Subject]
       # @return [Agentilda::Linear::Issues]
       def record_for(subject) = (@records ||= {})[subject.feature.path] ||= Issues.new(dir: subject.feature.path)
 
-      # @param subject [Agentilda::Subject]
+      # @param subject [Agentilda::Plans::Subject]
       # @return [Array<Agentilda::Linear::Action>]
       def actions_for(subject)
         [plan_action(subject)] + units_for(subject).map { |unit| unit_action(subject, unit) }
@@ -170,7 +170,7 @@ module Agentilda
 
       # The issue that stands for the whole plan folder.
       #
-      # @param subject [Agentilda::Subject]
+      # @param subject [Agentilda::Plans::Subject]
       # @return [Agentilda::Linear::Action]
       def plan_action(subject)
         placement = Agentilda::Linear.placement(subject.status)
@@ -195,7 +195,7 @@ module Agentilda
           reason:)
       end
 
-      # @param subject [Agentilda::Subject]
+      # @param subject [Agentilda::Plans::Subject]
       # @param unit [Agentilda::Linear::Unit]
       # @return [Agentilda::Linear::Action]
       def unit_action(subject, unit)
@@ -238,7 +238,7 @@ module Agentilda
         [:update, "the plan has changed since #{existing} was pushed"]
       end
 
-      # @param subject [Agentilda::Subject]
+      # @param subject [Agentilda::Plans::Subject]
       # @return [String]
       def plan_title(subject) = "[#{subject.feature.ordinal}] #{heading(subject)}"
 
@@ -246,7 +246,7 @@ module Agentilda
       # `spec.md` gives it a real sentence — "Tenancy: users, households,
       # memberships" — while the folder slug can only carry kebab-case.
       #
-      # @param subject [Agentilda::Subject]
+      # @param subject [Agentilda::Plans::Subject]
       # @return [String]
       def heading(subject)
         line = subject.read("spec.md").to_s[/^[ \t]{0,3}#[ \t]+(.+)$/, 1]
@@ -254,7 +254,7 @@ module Agentilda
         cleaned.empty? ? subject.feature.title : cleaned
       end
 
-      # @param subject [Agentilda::Subject]
+      # @param subject [Agentilda::Plans::Subject]
       # @return [String]
       def plan_description(subject)
         [
@@ -265,7 +265,7 @@ module Agentilda
         ].compact.reject(&:empty?).join("\n\n")
       end
 
-      # @param subject [Agentilda::Subject]
+      # @param subject [Agentilda::Plans::Subject]
       # @param unit [Agentilda::Linear::Unit]
       # @return [String]
       def unit_description(subject, unit)

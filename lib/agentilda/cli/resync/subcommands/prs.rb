@@ -31,13 +31,13 @@ module Agentilda
         # @param options [Hash]
         # @return [void]
         def call(**options)
-          github = GitHub.new
+          github = Vcs.github
           tree = tree_for(options)
-          changes = Agentilda::Resync::Prs.new(tree:,
+          changes = Agentilda::Lifecycle.resync_prs(tree:,
             github:,
             adopt: options.fetch(:adopt, true),
             root: File.dirname(tree.dir))
-                                          .call(commit: commit?(options))
+                                        .call(commit: commit?(options))
 
           if changes.empty?
             success("Every pull request title already carries a prefix.") unless quiet?(options)

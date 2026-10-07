@@ -14,8 +14,8 @@ RSpec.describe Agentilda::CLI::Run, :tree do
   # A suite run from a terminal must never have the listener put that
   # terminal into raw mode and eat the developer's keys byte by byte.
   before {
-    allow(Agentilda::Keyboard).to receive(:listen).and_return(nil)
-    allow(Agentilda::Runner).to receive(:new).and_wrap_original do |original, **keywords|
+    allow(Agentilda::Presentation::Keyboard).to receive(:listen).and_return(nil)
+    allow(Agentilda::Engine::Runner).to receive(:new).and_wrap_original do |original, **keywords|
       original.call(**keywords, sleeper: ->(_) {})
     end
   }
@@ -59,14 +59,14 @@ RSpec.describe Agentilda::CLI::Run, :tree do
   # The `--commit` seam. The block sees the subject and the agent before
   # answering, so an example can have "the agent" actually change the folder
   # and sign its own ledger. It answers `[ok, note]`, wrapped here into the
-  # {Agentilda::Executor::Result} the dispatcher reads.
+  # {Agentilda::Execution::Executor::Result} the dispatcher reads.
   def with_executor(&decide)
-    executor = instance_double(Agentilda::Executor)
+    executor = instance_double(Agentilda::Execution::Executor)
     allow(executor).to receive(:call) do |agent, subject, **|
       ok, note = decide ? decide.call(subject, agent) : [true, "completed"]
-      Agentilda::Executor::Result.new(ok:, note:, up: 0, down: 0, subagents: 0, delegated: 0, seconds: 0.0)
+      Agentilda::Execution::Executor::Result.new(ok:, note:, up: 0, down: 0, subagents: 0, delegated: 0, seconds: 0.0)
     end
-    allow(Agentilda::Executor).to receive(:new).and_return(executor)
+    allow(Agentilda::Execution::Executor).to receive(:new).and_return(executor)
     executor
   end
 
@@ -99,7 +99,7 @@ RSpec.describe Agentilda::CLI::Run, :tree do
       with_executor
       run(commit: true, timeout: "1800")
 
-      expect(Agentilda::Executor).to have_received(:new).with(hash_including(timeout: 1800))
+      expect(Agentilda::Execution::Executor).to have_received(:new).with(hash_including(timeout: 1800))
     end
 
     it "reads the default timeout from ~/.local/config/agentilda.json" do
@@ -107,7 +107,7 @@ RSpec.describe Agentilda::CLI::Run, :tree do
       with_executor
       run(commit: true)
 
-      expect(Agentilda::Executor).to have_received(:new).with(hash_including(timeout: 2400))
+      expect(Agentilda::Execution::Executor).to have_received(:new).with(hash_including(timeout: 2400))
     end
 
     it "lets the typed flag beat the config file" do
@@ -115,7 +115,7 @@ RSpec.describe Agentilda::CLI::Run, :tree do
       with_executor
       run(commit: true, timeout: "600")
 
-      expect(Agentilda::Executor).to have_received(:new).with(hash_including(timeout: 600))
+      expect(Agentilda::Execution::Executor).to have_received(:new).with(hash_including(timeout: 600))
     end
 
     # The executor falls back to 900 only for an agent with no clock of its
@@ -124,7 +124,7 @@ RSpec.describe Agentilda::CLI::Run, :tree do
       with_executor
       run(commit: true)
 
-      expect(Agentilda::Executor).to have_received(:new).with(hash_including(timeout: nil))
+      expect(Agentilda::Execution::Executor).to have_received(:new).with(hash_including(timeout: nil))
     end
 
     it "refuses an unreadable config file rather than silently ignoring it" do
@@ -143,13 +143,13 @@ RSpec.describe Agentilda::CLI::Run, :tree do
     it "reaches the runner as a cap on every agent's own rounds" do
       run(rounds: 1)
 
-      expect(Agentilda::Runner).to have_received(:new).with(hash_including(rounds: 1))
+      expect(Agentilda::Engine::Runner).to have_received(:new).with(hash_including(rounds: 1))
     end
 
     it "leaves each agent to its own count when none is given" do
       run
 
-      expect(Agentilda::Runner).to have_received(:new).with(hash_including(rounds: nil))
+      expect(Agentilda::Engine::Runner).to have_received(:new).with(hash_including(rounds: nil))
     end
   end
 
@@ -199,7 +199,7 @@ RSpec.describe Agentilda::CLI::Run, :tree do
     it "listens for no keys, since there is no agent for a key to reach" do
       run
 
-      expect(Agentilda::Keyboard).not_to have_received(:listen)
+      expect(Agentilda::Presentation::Keyboard).not_to have_received(:listen)
     end
 
     it "says where the progress log is going before the loop starts" do
@@ -246,7 +246,7 @@ RSpec.describe Agentilda::CLI::Run, :tree do
       with_executor
       run(commit: true, max_tokens: "50000")
 
-      expect(Agentilda::Executor).to have_received(:new).with(hash_including(max_tokens: 50_000))
+      expect(Agentilda::Execution::Executor).to have_received(:new).with(hash_including(max_tokens: 50_000))
     end
 
     it "reads a default budget from the config file" do
@@ -254,14 +254,14 @@ RSpec.describe Agentilda::CLI::Run, :tree do
       with_executor
       run(commit: true)
 
-      expect(Agentilda::Executor).to have_received(:new).with(hash_including(max_tokens: 80_000))
+      expect(Agentilda::Execution::Executor).to have_received(:new).with(hash_including(max_tokens: 80_000))
     end
 
     it "meters nothing when neither names a budget" do
       with_executor
       run(commit: true)
 
-      expect(Agentilda::Executor).to have_received(:new).with(hash_including(max_tokens: nil))
+      expect(Agentilda::Execution::Executor).to have_received(:new).with(hash_including(max_tokens: nil))
     end
   end
 
@@ -272,7 +272,7 @@ RSpec.describe Agentilda::CLI::Run, :tree do
       with_executor
       run(commit: true, agent: "luke-backend", prompt: "Focus on the parser")
 
-      expect(Agentilda::Executor).to have_received(:new)
+      expect(Agentilda::Execution::Executor).to have_received(:new)
         .with(hash_including(instructions: "Focus on the parser"))
     end
 
@@ -284,7 +284,7 @@ RSpec.describe Agentilda::CLI::Run, :tree do
       end
 
       it "reads the instructions from the file" do
-        expect(Agentilda::Executor).to have_received(:new)
+        expect(Agentilda::Execution::Executor).to have_received(:new)
           .with(hash_including(instructions: "Focus on the parser, from a file"))
       end
     end
@@ -299,7 +299,7 @@ RSpec.describe Agentilda::CLI::Run, :tree do
       end
 
       it "takes the prompt as the text" do
-        expect(Agentilda::Executor).to have_received(:new).with(hash_including(instructions: long_path))
+        expect(Agentilda::Execution::Executor).to have_received(:new).with(hash_including(instructions: long_path))
       end
     end
 
@@ -320,7 +320,7 @@ RSpec.describe Agentilda::CLI::Run, :tree do
       with_executor
       run(commit: true, model: "opus")
 
-      expect(Agentilda::Executor).to have_received(:new).with(hash_including(model: "opus"))
+      expect(Agentilda::Execution::Executor).to have_received(:new).with(hash_including(model: "opus"))
     end
   end
 
@@ -445,7 +445,7 @@ RSpec.describe Agentilda::CLI::Run, :tree do
     # arrives three minutes later, once per agent, looking like an agent bug.
     it "warns up front when a credential in the shell will shadow the login" do
       with_executor
-      allow(Agentilda::Executor).to receive(:foreign_credentials).and_return(["ANTHROPIC_API_KEY"])
+      allow(Agentilda::Execution::Executor).to receive(:foreign_credentials).and_return(["ANTHROPIC_API_KEY"])
       _out, err, = run(commit: true, rounds: 1)
 
       expect(unwrapped(err)).to include("ANTHROPIC_API_KEY is set in this shell", "401 API key is invalid")
@@ -453,31 +453,31 @@ RSpec.describe Agentilda::CLI::Run, :tree do
   end
 
   describe "the dashboard" do
-    let(:fake_screen) { instance_double(Agentilda::Screen::Ratatui, attach_keyboard: nil, open: nil, close: nil, draw: nil) }
+    let(:fake_screen) { instance_double(Agentilda::Presentation::Screen::Ratatui, attach_keyboard: nil, open: nil, close: nil, draw: nil) }
 
     before { allow(Agentilda::UI).to receive(:animate?).and_return(true) }
 
     context "when the run is committed" do
       before do
-        allow(Agentilda::Screen::Ratatui).to receive(:new).and_return(fake_screen)
-        allow(Agentilda::Keyboard).to receive(:new).and_call_original
+        allow(Agentilda::Presentation::Screen::Ratatui).to receive(:new).and_return(fake_screen)
+        allow(Agentilda::Presentation::Keyboard).to receive(:new).and_call_original
         run(commit: true)
       end
 
-      it { expect(Agentilda::Screen::Ratatui).to have_received(:new) }
-      it { expect(Agentilda::Keyboard).to have_received(:new) }
-      it("never starts the keyboard listener") { expect(Agentilda::Keyboard).not_to have_received(:listen) }
+      it { expect(Agentilda::Presentation::Screen::Ratatui).to have_received(:new) }
+      it { expect(Agentilda::Presentation::Keyboard).to have_received(:new) }
+      it("never starts the keyboard listener") { expect(Agentilda::Presentation::Keyboard).not_to have_received(:listen) }
       it { expect(fake_screen).to have_received(:attach_keyboard) }
     end
 
     context "with --scroll-height" do
       before do
-        allow(Agentilda::Screen::Ratatui).to receive(:new).and_return(fake_screen)
+        allow(Agentilda::Presentation::Screen::Ratatui).to receive(:new).and_return(fake_screen)
         run(commit: true, scroll_height: "5")
       end
 
       it "hands it to the screen" do
-        expect(Agentilda::Screen::Ratatui).to have_received(:new).with(scroll_height: 5)
+        expect(Agentilda::Presentation::Screen::Ratatui).to have_received(:new).with(scroll_height: 5)
       end
     end
 
@@ -497,7 +497,7 @@ RSpec.describe Agentilda::CLI::Run, :tree do
       context "with the default options" do
         let(:options) { { commit: true } }
 
-        it { is_expected.to be_a(Agentilda::Publisher) }
+        it { is_expected.to be_a(Agentilda::Vcs::Publisher) }
       end
 
       context "with --no-git-push" do
@@ -509,12 +509,12 @@ RSpec.describe Agentilda::CLI::Run, :tree do
 
     context "when the run is dry" do
       before do
-        allow(Agentilda::Screen::Ratatui).to receive(:new)
+        allow(Agentilda::Presentation::Screen::Ratatui).to receive(:new)
         run
       end
 
       it "draws nothing" do
-        expect(Agentilda::Screen::Ratatui).not_to have_received(:new)
+        expect(Agentilda::Presentation::Screen::Ratatui).not_to have_received(:new)
       end
     end
   end
@@ -546,7 +546,7 @@ RSpec.describe Agentilda::CLI::Run, :tree do
 
       aggregate_failures do
         expect(File).not_to exist(File.join(root, ".gitignore"))
-        expect(File).not_to exist(File.join(plans_root, Agentilda::StateFile::FILENAME))
+        expect(File).not_to exist(File.join(plans_root, Agentilda::Engine::StateFile::FILENAME))
       end
     end
   end
@@ -559,14 +559,14 @@ RSpec.describe Agentilda::CLI::Run, :tree do
     # clean, so the publisher is constructed and then rightly never pushes.
     it "wires a publisher in and runs each plan in its own checkout" do
       building_plan
-      checkout = Agentilda::Worktree::Checkout.new(
-        ordinal: Agentilda::Ordinal.parse("001.00"),
+      checkout = Agentilda::Vcs::Worktree::Checkout.new(
+        ordinal: Agentilda::Plans::Ordinal.parse("001.00"),
         branch:  "kig/001.00-tax-rule-dsl",
         path:    plans_root,
         created: true
       )
-      worktree = instance_double(Agentilda::Worktree, repository?: true, checkout_for: checkout)
-      allow(Agentilda::Worktree).to receive(:new).and_return(worktree)
+      worktree = instance_double(Agentilda::Vcs::Worktree, repository?: true, checkout_for: checkout)
+      allow(Agentilda::Vcs::Worktree).to receive(:new).and_return(worktree)
 
       out, err, status = run(isolation: "worktree")
 

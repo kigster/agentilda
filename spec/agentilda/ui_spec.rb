@@ -170,7 +170,7 @@ RSpec.describe Agentilda::UI do
   end
 
   describe ".meter" do
-    def progress(up, down) = Agentilda::Transcript::Progress.new(activity: nil, up:, down:, subagents: 0)
+    def progress(up, down) = Agentilda::Execution::Transcript::Progress.new(activity: nil, up:, down:, subagents: 0)
 
     it "shows both directions" do
       expect(described_class.meter(progress(1002, 40))).to include("↑").and include("↓")
@@ -349,7 +349,7 @@ RSpec.describe Agentilda::UI do
   # The identity bracket between an agent's name and its activity: the round
   # from the log fields, the pid once the harness has found the child.
   describe "a line's identity bracket" do
-    def update(pid: nil) = Agentilda::Transcript::Progress.new(activity: nil, up: 0, down: 0, subagents: 0, pid:)
+    def update(pid: nil) = Agentilda::Execution::Transcript::Progress.new(activity: nil, up: 0, down: 0, subagents: 0, pid:)
 
     it "renders round alone until the pid is known, then both, pid first" do
       line = described_class::Line.new(fields: { round: "01" })
@@ -458,8 +458,8 @@ RSpec.describe Agentilda::UI do
     context "on a terminal" do
       before do
         allow(described_class).to receive(:tty?).and_return(true)
-        allow(Agentilda::Screen::Ratatui).to receive(:new).and_return(
-          instance_double(Agentilda::Screen::Ratatui, attach_keyboard: nil, open: nil, close: nil, draw: nil)
+        allow(Agentilda::Presentation::Screen::Ratatui).to receive(:new).and_return(
+          instance_double(Agentilda::Presentation::Screen::Ratatui, attach_keyboard: nil, open: nil, close: nil, draw: nil)
         )
       end
 
@@ -480,7 +480,7 @@ RSpec.describe Agentilda::UI do
     let(:handle) { Dry::CLI::UI::Line.new }
 
     def progress(activity, up: 10, down: 2)
-      Agentilda::Transcript::Progress.new(activity:, up:, down:, subagents: 0)
+      Agentilda::Execution::Transcript::Progress.new(activity:, up:, down:, subagents: 0)
     end
 
     around do |example|
@@ -566,11 +566,11 @@ RSpec.describe Agentilda::UI do
   # On a terminal the work is drawn on the ratatui dashboard. The screen is
   # a double: the suite has no terminal for ratatui to take over.
   describe ".concurrently on a terminal" do
-    let(:screen) { instance_double(Agentilda::Screen::Ratatui, attach_keyboard: nil, open: nil, close: nil, draw: nil) }
+    let(:screen) { instance_double(Agentilda::Presentation::Screen::Ratatui, attach_keyboard: nil, open: nil, close: nil, draw: nil) }
 
     before do
       allow(described_class).to receive(:tty?).and_return(true)
-      allow(Agentilda::Screen::Ratatui).to receive(:new).and_return(screen)
+      allow(Agentilda::Presentation::Screen::Ratatui).to receive(:new).and_return(screen)
     end
 
     context "with every item succeeding" do
@@ -646,18 +646,18 @@ RSpec.describe Agentilda::UI do
       before { described_class.concurrently(%i[a b], "round", jobs: 2) { |_item, line| seen << line } }
 
       it "hands each item a dashboard row" do
-        expect(seen).to all(be_a(Agentilda::Dashboard::Tracker))
+        expect(seen).to all(be_a(Agentilda::Presentation::Dashboard::Tracker))
       end
 
       it "gives each row an executor handle" do
-        expect(seen.map(&:handle)).to all(be_a(Agentilda::Executor::Handle))
+        expect(seen.map(&:handle)).to all(be_a(Agentilda::Execution::Executor::Handle))
       end
     end
 
     context "when drawing the final frame" do
       let!(:boards) { [] }
       let(:failure) { ->(result) { result if result.is_a?(String) } }
-      let(:progress) { Agentilda::Transcript::Progress.new(activity: "reading blocked.md", up: 10, down: 2, subagents: 0) }
+      let(:progress) { Agentilda::Execution::Transcript::Progress.new(activity: "reading blocked.md", up: 10, down: 2, subagents: 0) }
       let(:rows) { boards.last.rows.sort_by(&:ordinal) }
 
       before do
@@ -698,7 +698,7 @@ RSpec.describe Agentilda::UI do
 
     before do
       allow(described_class).to receive(:tty?).and_return(true)
-      allow(Agentilda::Dashboard).to receive(:open)
+      allow(Agentilda::Presentation::Dashboard).to receive(:open)
       described_class.quiet = true
     end
 
@@ -712,7 +712,7 @@ RSpec.describe Agentilda::UI do
 
     it "opens no dashboard" do
       result
-      expect(Agentilda::Dashboard).not_to have_received(:open)
+      expect(Agentilda::Presentation::Dashboard).not_to have_received(:open)
     end
   end
 
@@ -748,7 +748,7 @@ RSpec.describe Agentilda::UI do
     end
 
     it "never returns something wider than the column it was given" do
-      widths = Agentilda::STATUSES.map { |s| described_class.display_width(described_class.fit(s.emoji, 2)) }
+      widths = Agentilda::Plans::STATUSES.map { |s| described_class.display_width(described_class.fit(s.emoji, 2)) }
 
       expect(widths.uniq).to eq([2])
     end

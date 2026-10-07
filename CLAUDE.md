@@ -14,25 +14,11 @@ The gem's responsibilities are:
 * running one or more agents on one or more plans concurrently using the state machine defined for each plan, and the agents that do the work to move plan from one state to the next.
 * maintaining project's `.plans/` directory sync'ed up with its GitHub pull requests and Linear issues, then drives specialist Claude subagents over those plan folders until nothing moves.
 
-This repo is the tool. It does not keep plans of its own, and it has no `.plans/` directory. The workflow it implements is documented at length in `README.md`, which is worth reading once before touching `status.rb` or `state_machine.rb`.
+This repo is the tool. It does not keep plans of its own, and it has no `.plans/` directory. The workflow it implements is documented at length in `README.md`, which is worth reading once before touching `plans/status.rb` or `plans/state_machine.rb`.
 
 ## Repository state, read this before running anything
 
-There are no commits yet. All 103 paths are staged for an initial commit.
-
-The gem was carved out of the `~/.agents` monorepo and still refers to parts of it that did not come along:
-
-| Missing                                                  | Referenced by                                                       |
-| -------------------------------------------------------- | ------------------------------------------------------------------- |
-| `bin/install`, `bin/setup`                               | `spec/install_spec.rb`, `justfile` recipes `install` and `build`    |
-| `scripts/install-sources`, `configuration.schema.json`   | `spec/install_sources_spec.rb`, `spec/configuration_schema_spec.rb` |
-| `bin/setup-worktree`                                     | `spec/setup_worktree_spec.rb`, `Worktree::SEEDER`                   |
-| `lefthook.yml`                                           | `justfile` recipe `lefthook`                                        |
-| `workflow/README.md`, `just doctor`, `configuration.yml` | `README.md`, `blah.md`                                              |
-
-So the suite is red on arrival. The baseline is **648 examples, 121 failures**, all of them in five files: 118 across the four orphan spec files above, and 3 seeding examples in `spec/agentilda/worktree_spec.rb`. A failure anywhere else is yours.
-
-`blah.md` is a stray fragment of the monorepo README, not a document anything reads.
+The suite is green: `bundle exec rspec` reports 0 failures, with 3 pending seeding examples in `spec/agentilda/vcs/worktree_spec.rb` (they need `bin/setup-worktree`, which did not come along from the `~/.agents` monorepo). A failure anywhere is yours.
 
 ## Commands
 
@@ -42,8 +28,8 @@ Ruby 4.0.x under rbenv. There is no `.ruby-version`, so activate before every Ru
 eval "$(rbenv init -)"
 
 bundle exec rspec                                    # whole suite
-bundle exec rspec spec/agentilda/ordinal_spec.rb     # one file
-bundle exec rspec spec/agentilda/runner_spec.rb:42   # one example, by line
+bundle exec rspec spec/agentilda/plans/ordinal_spec.rb    # one file
+bundle exec rspec spec/agentilda/engine/runner_spec.rb:42 # one example, by line
 bundle exec rspec -e "parse"                         # by example name
 just test                                            # the same, through the justfile
 ./exe/agentilda --help                               # the CLI, from the checkout
@@ -51,11 +37,9 @@ just test                                            # the same, through the jus
 
 SimpleCov starts on every rspec run, not only under `COVERAGE=true`, so a single-file run still prints a whole-library coverage figure. Ignore it. `spec/spec_helper.rb` computes `REPO_ROOT` as two levels up from `spec/`, which in this layout is the parent of the repository, so the coverage badge lands in `~/github/kigster/docs/badges/`. Another leftover from `workflow/`.
 
-### Linting does not currently run
+### Linting
 
-`just lint` shells out to `bundle exec rubocop` and `just format` to `rubocop -a`. This repo has no `.rubocop.yml` and no `.standard.yml`, so both walk up to `~/.rubocop.yml` and `~/.standard.yml`, which pull in `rubocop-rspec`, `rubocop-rails-omakase` and `standard-rails`. None of those are in this bundle, and both linters die on load.
-
-Write to standard's style anyway. The gem's dev group depends on `standard`, and the code is already shaped for it, down to the `# standard:disable Style/StderrPuts` comment in `exe/agentilda`. A project-local `.standard.yml` plus a `justfile` change from `rubocop` to `standardrb` is the fix, if you are asked for one.
+`just lint` runs `bundle exec rubocop` against the project's `.rubocop.yml`, which inherits `.rubocop_todo.yml`. Keep it at zero offenses. The todo file lists paths, so a moved file must move there too.
 
 ## Architecture
 
@@ -74,10 +58,10 @@ The code repeatedly explains, in comments, which duplicated table burned it. Bef
 
 | Fact                                                 | Source of truth                                    | Read back by                                                                      |
 | ---------------------------------------------------- | -------------------------------------------------- | --------------------------------------------------------------------------------- |
-| Status vocabulary, emoji, required files, invariants | `lib/agentilda/status.rb`, `STATUSES`              | `documentation.rb`, `diagram.rb`, `reporter.rb`, `index.rb`                       |
-| Which transitions are legal                          | `lib/agentilda/state_machine.rb`, the `aasm` block | `StateMachine.inbound`, `.outbound`, `.edge?`, `Status#terminal?`, both renderers |
-| Numbering rules                                      | `lib/agentilda/ordinal.rb`                         | `documentation.rb`, `creator.rb`                                                  |
-| Which agent handles which state                      | `agents/*.md` frontmatter                          | `Agents`, `Roster`, `Runner` routing, `Executor` tool grants                      |
+| Status vocabulary, emoji, required files, invariants | `lib/agentilda/plans/status.rb`, `STATUSES`        | `documentation.rb`, `diagram.rb`, `reporter.rb`, `index.rb`                       |
+| Which transitions are legal                          | `lib/agentilda/plans/state_machine.rb`, `aasm`     | `StateMachine.inbound`, `.outbound`, `.edge?`, `Status#terminal?`, both renderers |
+| Numbering rules                                      | `lib/agentilda/plans/ordinal.rb`                   | `documentation.rb`, `creator.rb`                                                  |
+| Which agent handles which state                      | `agents/*.md` frontmatter                          | `Agents::Registry`, `Roster`, `Runner` routing, `Executor` tool grants            |
 
 `agentilda docs` regenerates the whole conventions document from the first three. Hand-writing any of those tables reintroduces the bug the derivation exists to kill.
 
@@ -85,37 +69,49 @@ A status answers to its key and its emoji, and to nothing else. The synonym tabl
 
 ### Layout
 
+Every directory under `lib/agentilda/` is a namespace with a module file of the same name. That file is the facade: a few module methods (`Plans.tree`, `Lifecycle.create`, `Agents.registry`, `Engine.runner`, `Execution.executor`, `Vcs.worktree`, `Presentation.documentation`) that the CLI calls instead of constructing classes. Reach into a namespace from outside only through its facade, unless you need a value type such as `Plans::Status`.
+
 ```
-exe/agentilda          resolves its own BUNDLE_GEMFILE, so the binary works from any project root
+exe/agentilda            resolves its own BUNDLE_GEMFILE, so the binary works from any project root
+lib/agentilda.rb         Zeitwerk loader, move_directory, plans_on_ref
 lib/agentilda/
-  status.rb            STATUSES, the invariants, the block-notation regexes (B1/A1)
-  state_machine.rb     aasm topology, SPINE, PREFERENCE, FAMILIES
-  ordinal.rb           NNN.MM identity, set once, never renumbered
-  feature.rb           one decoded folder name, plus titleize and its acronym tables
-  tree.rb              a .plans directory, decoded and ordered
-  pull_request.rb      rows parsed out of pull-requests.md
-  creator.rb, brief.rb minting a folder and scaffolding its opening spec.md
-  resync.rb            dirs (folder name vs contents) and prs (PR title prefixes)
-  adoption.rb          gives an orphan pull request a retroactive plan of its own
-  agent.rb, roster.rb  loading agents/*.md and reporting on them
-  viewer.rb            hands a Markdown file to `open` or to mdfried
-  runner.rb            the round loop, run until a fixed point
-  executor.rb          one `claude -p` invocation, and the autonomy boundary
-  mailbox.rb           mailbox.md in a plan folder: how a pair talks, append-only and numbered
-  transcript.rb        parses --output-format stream-json into a spinner phrase
-  worktree.rb          a git worktree and branch per plan
-  publisher.rb         push the branch, open the [NNN.MM](X) pull request
-  linear/              one-way export of .plans to Linear projects and issues
-  documentation.rb     `agentilda docs`, the conventions, derived
-  diagram.rb           `agentilda states`, the same machine drawn for a terminal
-  index.rb, reporter.rb, tally.rb   INDEX.md, the status table, the token bill
-  ui.rb                boxes, spinners, concurrency, color, drawn through dry-cli-ui on STDERR
-  cli.rb               the dry-cli registry, and the dry-cli-help `help` block that titles it
-  cli/base.rb          shared flags, tree_for, refuse, the dry-run footer
-  cli/<command>/       one file per command (create/create.rb, run/run.rb, …),
-                       subcommands/ under the prefixed groups (agents, resync,
-                       linear, mail); linear/linear.rb is the shared Team base
+  plans/                 Agentilda::Plans — the plan model, no processes, no network
+    status.rb            STATUSES, the invariants, the block-notation regexes (B1/A1)
+    state_machine.rb     aasm topology, SPINE, PREFERENCE, FAMILIES
+    ordinal.rb           NNN.MM identity, set once, never renumbered
+    feature.rb           one decoded folder name, plus titleize and its acronym tables
+    tree.rb, subject.rb  a .plans directory, decoded and ordered; one folder as the machine sees it
+    pull_request(s).rb   rows parsed out of pull-requests.md
+    ledger.rb            the dated notes agents sign documents with
+    mailbox.rb           mailbox.md in a plan folder: how a pair talks, append-only and numbered
+    index.rb, dev_work.rb  INDEX.md; the dev/none no-plan prefixes
+  lifecycle/             Agentilda::Lifecycle — operations that create, rename or drain plans
+    creator.rb, brief.rb minting a folder and scaffolding its opening spec.md
+    resync.rb            dirs (folder name vs contents) and prs (PR title prefixes)
+    adoption.rb          gives an orphan pull request a retroactive plan of its own
+    unblocker.rb         drains answered questions out of blocked.md
+  agents/                Agentilda::Agents — agents/*.md loaded (Registry), one definition (Agent), the report (Roster)
+  engine/                Agentilda::Engine — the round loop
+    runner.rb            run configuration, until a fixed point
+    dispatcher.rb        the tick loop: assign, poll, settle, rename
+    state_file.rb        restart state; board.rb, tally.rb, progress_log.rb what the run shows and costs
+  execution/             Agentilda::Execution — one agent invocation
+    executor.rb          one `claude -p` invocation, and the autonomy boundary
+    child.rb, clock.rb, control.rb   the process, its advisory timeout, its control file
+    transcript.rb        parses --output-format stream-json into a spinner phrase
+  vcs/                   Agentilda::Vcs — worktree.rb, publisher.rb (push, open the PR), github.rb (the gh seam)
+  presentation/          Agentilda::Presentation — dashboard, console, keyboard, screen/ratatui,
+                         documentation.rb (`agentilda docs`), diagram.rb (`agentilda states`), reporter.rb, viewer.rb
+  support/               collapsed by Zeitwerk, so these stay Agentilda::UI, ::Config, ::Markdown, ::Frontmatter
+  linear/                one-way export of .plans to Linear projects and issues
+  cli.rb                 the dry-cli registry, and the dry-cli-help `help` block that titles it
+  cli/base.rb            shared flags, tree_for, refuse, the dry-run footer
+  cli/<command>/         one file per command (create/create.rb, run/run.rb, …),
+                         subcommands/ under the prefixed groups (agents, resync,
+                         linear, mail); linear/linear.rb is the shared Team base
 ```
+
+Inside `cli/`, `CLI::Agents`, `CLI::Index`, `CLI::Worktree`, `CLI::Resync` and `CLI::Linear` shadow library names, so code there writes `Agentilda::Agents` in full.
 
 ### The run loop
 
@@ -155,7 +151,7 @@ Raw NDJSON traces land in `Dir.tmpdir/agentilda-traces` on purpose, outside the 
 - `GitHub` and `Linear::API` are seams. The suite injects doubles into both and never reaches the network.
 - Specs build real `.plans` trees in temp directories through `PlansFixture` and the `:tree` tag. Do not mock the filesystem. Faking it would test the fake.
 - `spec_helper.rb` forces `NO_COLOR=1` so assertions test content on every machine. Cover the colored path deliberately, by stubbing `UI.color?`.
-- `lib/agentilda.rb` requires each component behind a `File.exist?` guard, which is why `description.rb` and `resolver.rb` can be named in the list without existing.
+- `lib/agentilda.rb` loads everything through Zeitwerk. File path and constant must agree; `support/` and the `cli/<command>/` directories are collapsed.
 
 ## When adding a state
 

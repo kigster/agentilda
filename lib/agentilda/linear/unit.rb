@@ -11,7 +11,7 @@ module Agentilda
     # @!attribute [r] body
     #   @return [String] everything under the heading, as written
     # @!attribute [r] pull_requests
-    #   @return [Array<Agentilda::PullRequest>] the ones this unit claims
+    #   @return [Array<Agentilda::Plans::PullRequest>] the ones this unit claims
     Unit = Data.define(:key, :title, :body, :pull_requests)
 
     # Reads the work units out of a plan folder.
@@ -65,7 +65,7 @@ module Agentilda
       # Pull request numbers named in the heading: "(✔ #38)".
       NUMBERED = /#(\d+)\b/
 
-      # @param subject [Agentilda::Subject]
+      # @param subject [Agentilda::Plans::Subject]
       def initialize(subject:)
         @subject = subject
       end
@@ -101,7 +101,7 @@ module Agentilda
 
       private
 
-      # @return [Agentilda::Subject]
+      # @return [Agentilda::Plans::Subject]
       attr_reader :subject
 
       # @return [Array<Agentilda::Linear::Unit>] possibly empty
@@ -208,7 +208,7 @@ module Agentilda
       # The heading said so: `### PR 020.03 — Clerk webhooks (✔ #44)`.
       #
       # @param unit [Agentilda::Linear::Unit]
-      # @return [Array<Agentilda::PullRequest>]
+      # @return [Array<Agentilda::Plans::PullRequest>]
       def numbered(unit)
         wanted = heading_for(unit.key).to_s.scan(NUMBERED).flatten
         subject.pull_requests.select { |pr| wanted.include?(pr.number.to_s) }
@@ -217,7 +217,7 @@ module Agentilda
       # The pull request title said so: "Spec 010 PR-2: MAGI registry".
       #
       # @param unit [Agentilda::Linear::Unit]
-      # @return [Array<Agentilda::PullRequest>]
+      # @return [Array<Agentilda::Plans::PullRequest>]
       def named(unit)
         pattern = /\bPR[\s_-]?#{unit.key[/\d+\z/]}\b/i
         subject.pull_requests.select { |pr| pr.title.match?(pattern) }

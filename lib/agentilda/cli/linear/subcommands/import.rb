@@ -106,7 +106,7 @@ module Agentilda
           return nil unless options[:status]
 
           options[:status].to_s.split(",").map { |word|
-            Agentilda.status(word.strip)&.key ||
+            Agentilda::Plans.status(word.strip)&.key ||
               raise(Agentilda::Error, "no such state: #{word.strip}")
           }
         end

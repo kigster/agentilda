@@ -22,7 +22,7 @@ module Agentilda
       # @param options [Hash]
       # @return [void]
       def call(**options)
-        index = Agentilda::Index.new(tree: tree_for(options), project: options[:project])
+        index = Agentilda::Plans.index(tree: tree_for(options), project: options[:project])
 
         if options[:output] == "-"
           $stdout.write(index.render)

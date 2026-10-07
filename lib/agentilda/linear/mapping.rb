@@ -31,9 +31,9 @@ module Agentilda
     TYPES = %w[backlog unstarted started completed canceled].freeze
 
     # Every plan state this tool is willing to place, keyed by
-    # {Agentilda::Status#key}.
+    # {Agentilda::Plans::Status#key}.
     #
-    # Between this and {UNPLACED} every entry in {Agentilda::STATUSES} is
+    # Between this and {UNPLACED} every entry in {Agentilda::Plans::STATUSES} is
     # named exactly once, and a spec asserts it. That is the guard against the
     # failure this file is most prone to: a sixteenth state gets added,
     # nothing here changes, and its plans quietly import as Backlog with no
@@ -86,8 +86,8 @@ module Agentilda
     # unit's pull requests are the better evidence, so they are used when
     # there are any.
     #
-    # @param status [Agentilda::Status] the plan's state
-    # @param pulls [Array<Agentilda::PullRequest>] the unit's
+    # @param status [Agentilda::Plans::Status] the plan's state
+    # @param pulls [Array<Agentilda::Plans::PullRequest>] the unit's
     # @return [Agentilda::Linear::Placement, nil]
     def self.placement_for(status, pulls)
       return placement(status) if pulls.empty?
@@ -99,13 +99,13 @@ module Agentilda
 
     # Where a plan in this state belongs on a Linear board.
     #
-    # @param status [Agentilda::Status]
+    # @param status [Agentilda::Plans::Status]
     # @return [Agentilda::Linear::Placement, nil] nil when nobody has decided
     def self.placement(status) = PLACEMENTS[status.key]
 
     # Why a state is not imported, for the report that says so.
     #
-    # @param status [Agentilda::Status]
+    # @param status [Agentilda::Plans::Status]
     # @return [String] the reason, or the louder one for a state nobody has considered at all
     def self.reason_unplaced(status)
       UNPLACED.fetch(status.key) do

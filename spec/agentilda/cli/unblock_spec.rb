@@ -53,12 +53,12 @@ RSpec.describe Agentilda::CLI::Unblock, :tree do
   # `--commit` is the path that was silent, and it is the path that shells out.
   # The executor is replaced so the suite never invokes `claude`.
   def with_executor(result: [true, "completed"], &edit)
-    executor = instance_double(Agentilda::Executor)
+    executor = instance_double(Agentilda::Execution::Executor)
     allow(executor).to receive(:call) do |_agent, subject, **|
       edit&.call(subject)
       result
     end
-    allow(Agentilda::Executor).to receive(:new).and_return(executor)
+    allow(Agentilda::Execution::Executor).to receive(:new).and_return(executor)
   end
 
   describe "a plan that is not there" do
@@ -236,6 +236,6 @@ RSpec.describe Agentilda::CLI::Unblock, :tree do
     path = File.join(subject.feature.path, "blocked.md")
     kept = File.read(path).split(/^(?=\#\# )/).reject { |s| numbers.any? { |n| s.start_with?("## B#{n}") } }
     remaining = kept.join
-    remaining.match?(Agentilda::OPEN_BLOCK) ? File.write(path, remaining) : File.delete(path)
+    remaining.match?(Agentilda::Plans::OPEN_BLOCK) ? File.write(path, remaining) : File.delete(path)
   end
 end

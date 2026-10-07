@@ -99,11 +99,11 @@ RSpec.describe Agentilda::CLI::Create, :tree do
     # A real draft shells out to `claude` for minutes; the Brief is replaced so
     # these examples assert only the seam: attempted, and reported honestly.
     def with_brief(result:)
-      brief = instance_double(Agentilda::Brief,
+      brief = instance_double(Agentilda::Lifecycle::Brief,
         write_scaffold!: nil,
         attempt!:        result,
         spec_path:       File.join(plans_root, "irrelevant", "spec.md"))
-      allow(Agentilda::Brief).to receive(:new).and_return(brief)
+      allow(Agentilda::Lifecycle::Brief).to receive(:new).and_return(brief)
       brief
     end
 
@@ -124,7 +124,7 @@ RSpec.describe Agentilda::CLI::Create, :tree do
       run("tax", "rule", "dsl", open: false)
 
       expect(Agentilda::UI).to have_received(:concurrently)
-        .with(anything, a_string_including(Agentilda::Brief::AGENT_NAME), hash_including(jobs: 1))
+        .with(anything, a_string_including(Agentilda::Lifecycle::Brief::AGENT_NAME), hash_including(jobs: 1))
     end
 
     # The scaffold survives a failed draft, so the failure must not read as a
@@ -168,7 +168,7 @@ RSpec.describe Agentilda::CLI::Create, :tree do
 
     it "hands the seed on to the drafting prompt as the primary source" do
       captured = nil
-      allow(Agentilda::Brief).to(receive(:new).and_wrap_original { |m, **kw|
+      allow(Agentilda::Lifecycle::Brief).to(receive(:new).and_wrap_original { |m, **kw|
         captured = kw[:seed]
         m.call(**kw)
       })
@@ -237,9 +237,9 @@ RSpec.describe Agentilda::CLI::Create, :tree do
   end
 
   describe "--prs" do
-    let(:github) { instance_double(Agentilda::GitHub) }
+    let(:github) { instance_double(Agentilda::Vcs::GitHub) }
 
-    before { allow(Agentilda::GitHub).to receive(:new).and_return(github) }
+    before { allow(Agentilda::Vcs::GitHub).to receive(:new).and_return(github) }
 
     # A retroactive plan documents work that landed somewhere in the sequence,
     # and only its author knows where. Refusing without --after is the guard
@@ -283,12 +283,12 @@ RSpec.describe Agentilda::CLI::Create, :tree do
       # replaced so the suite never invokes `claude`; the double writing
       # spec.md is what the agent would have done.
       def with_executor(result: [true, "completed"], &edit)
-        executor = instance_double(Agentilda::Executor)
+        executor = instance_double(Agentilda::Execution::Executor)
         allow(executor).to receive(:call) do |_agent, subject, **|
           edit&.call(subject)
           result
         end
-        allow(Agentilda::Executor).to receive(:new).and_return(executor)
+        allow(Agentilda::Execution::Executor).to receive(:new).and_return(executor)
       end
 
       it "writes spec.md via the retroactive writer and resettles the folder" do

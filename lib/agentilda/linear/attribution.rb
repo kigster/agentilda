@@ -24,9 +24,9 @@ module Agentilda
       # One pull request, placed.
       #
       # @!attribute [r] pull
-      #   @return [Agentilda::PullRequest]
+      #   @return [Agentilda::Plans::PullRequest]
       # @!attribute [r] subject
-      #   @return [Agentilda::Subject, nil] nil when nothing matched
+      #   @return [Agentilda::Plans::Subject, nil] nil when nothing matched
       # @!attribute [r] score
       #   @return [Integer] words the title and the folder name shared
       # @!attribute [r] rivals
@@ -77,7 +77,7 @@ module Agentilda
       NOISE = %w[the and for with from into that this add adds added fix fixes
                  update updates use uses spec plan pull request pr tax app web api].freeze
 
-      # @param tree [Agentilda::Tree]
+      # @param tree [Agentilda::Plans::Tree]
       def initialize(tree:)
         @tree = tree
       end
@@ -89,7 +89,7 @@ module Agentilda
       # the repository and match everything equally.
       OPENING_WORDS = 20
 
-      # @param pulls [Array<Agentilda::PullRequest>] the ones with no number
+      # @param pulls [Array<Agentilda::Plans::PullRequest>] the ones with no number
       # @param bodies [Hash{String => String}] descriptions, by pull request number
       # @return [Array<Agentilda::Linear::Attribution::Placed>]
       def call(pulls, bodies: {})
@@ -121,10 +121,10 @@ module Agentilda
 
       private
 
-      # @return [Agentilda::Tree]
+      # @return [Agentilda::Plans::Tree]
       attr_reader :tree
 
-      # @param pull [Agentilda::PullRequest]
+      # @param pull [Agentilda::Plans::PullRequest]
       # @param wanted [Array<String>] the words to match on
       # @param floor [Float] how much of a folder name is enough
       # @return [Agentilda::Linear::Attribution::Placed]
@@ -150,7 +150,7 @@ module Agentilda
         Placed.new(pull:, subject: nil, score:, rivals: tied.map { |s, _| s.feature.dirname }, widened: false)
       end
 
-      # @param subject [Agentilda::Subject]
+      # @param subject [Agentilda::Plans::Subject]
       # @return [Array<String>]
       def folder_words(subject)
         (@folder_words ||= {})[subject.feature.path] ||=

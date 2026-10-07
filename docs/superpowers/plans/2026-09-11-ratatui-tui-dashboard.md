@@ -103,7 +103,7 @@ git commit -m "Add ratatui_ruby as a runtime dependency"
 - Test: `spec/agentilda/dispatcher_spec.rb`
 
 **Interfaces:**
-- Produces: `Agentilda::Board::Row#elapsed` (Integer, seconds, default `0`), `Agentilda::Board::Row#subagents` (Integer, default `0`).
+- Produces: `Agentilda::Engine::Board::Row#elapsed` (Integer, seconds, default `0`), `Agentilda::Engine::Board::Row#subagents` (Integer, default `0`).
 
 - [ ] **Step 1: Write the failing test**
 
@@ -270,7 +270,7 @@ A pure, terminal-free helper: given a duration in seconds and a color, builds a 
 
 **Interfaces:**
 - Consumes: nothing from other tasks.
-- Produces: `Agentilda::Screen::Ratatui::Bar.cell(tui, seconds, color) -> RatatuiRuby::Text::Line`, `.elapsed_color(elapsed) -> Symbol`, `.remaining_color(remaining) -> Symbol`. Task 5's `render` calls all three.
+- Produces: `Agentilda::Presentation::Screen::Ratatui::Bar.cell(tui, seconds, color) -> RatatuiRuby::Text::Line`, `.elapsed_color(elapsed) -> Symbol`, `.remaining_color(remaining) -> Symbol`. Task 5's `render` calls all three.
 
 - [ ] **Step 1: Write the failing tests**
 
@@ -279,7 +279,7 @@ A pure, terminal-free helper: given a duration in seconds and a color, builds a 
 
 require "ratatui_ruby"
 
-RSpec.describe Agentilda::Screen::Ratatui::Bar do
+RSpec.describe Agentilda::Presentation::Screen::Ratatui::Bar do
   let(:tui) { RatatuiRuby::TUI.new }
 
   describe ".cell" do
@@ -342,7 +342,7 @@ end
 eval "$(rbenv init -)" && bundle exec rspec spec/agentilda/screen/ratatui/bar_spec.rb
 ```
 
-Expected: `NameError: uninitialized constant Agentilda::Screen::Ratatui` — nothing exists yet.
+Expected: `NameError: uninitialized constant Agentilda::Presentation::Screen::Ratatui` — nothing exists yet.
 
 - [ ] **Step 3: Implement**
 
@@ -436,7 +436,7 @@ Maps a `RatatuiRuby::Event` to the exact string `Keyboard#handle` already expect
 - Test: `spec/agentilda/screen/ratatui/key_translator_spec.rb`
 
 **Interfaces:**
-- Produces: `Agentilda::Screen::Ratatui::KeyTranslator.call(event) -> String, nil`. Task 6's `tick` calls this on every polled event before forwarding to `Keyboard#handle`.
+- Produces: `Agentilda::Presentation::Screen::Ratatui::KeyTranslator.call(event) -> String, nil`. Task 6's `tick` calls this on every polled event before forwarding to `Keyboard#handle`.
 
 - [ ] **Step 1: Write the failing tests**
 
@@ -445,7 +445,7 @@ Maps a `RatatuiRuby::Event` to the exact string `Keyboard#handle` already expect
 
 require "ratatui_ruby"
 
-RSpec.describe Agentilda::Screen::Ratatui::KeyTranslator do
+RSpec.describe Agentilda::Presentation::Screen::Ratatui::KeyTranslator do
   def key(code, modifiers: [])
     RatatuiRuby::Event::Key.new(code:, modifiers:)
   end
@@ -482,7 +482,7 @@ end
 eval "$(rbenv init -)" && bundle exec rspec spec/agentilda/screen/ratatui/key_translator_spec.rb
 ```
 
-Expected: `NameError: uninitialized constant Agentilda::Screen::Ratatui::KeyTranslator`.
+Expected: `NameError: uninitialized constant Agentilda::Presentation::Screen::Ratatui::KeyTranslator`.
 
 - [ ] **Step 3: Implement**
 
@@ -544,8 +544,8 @@ Builds the whole frame from a `Board`: top bar, the agent table (via `TableState
 - Test: `spec/agentilda/screen/ratatui_spec.rb`
 
 **Interfaces:**
-- Consumes: `Agentilda::Screen::Ratatui::Bar.cell/.elapsed_color/.remaining_color` (Task 3).
-- Produces: `Agentilda::Screen::Ratatui#render(tui, frame, area, board, table_state) -> void`. Task 6's `#tick` calls this once per frame.
+- Consumes: `Agentilda::Presentation::Screen::Ratatui::Bar.cell/.elapsed_color/.remaining_color` (Task 3).
+- Produces: `Agentilda::Presentation::Screen::Ratatui#render(tui, frame, area, board, table_state) -> void`. Task 6's `#tick` calls this once per frame.
 
 - [ ] **Step 1: Write the failing tests**
 
@@ -555,7 +555,7 @@ Builds the whole frame from a `Board`: top bar, the agent table (via `TableState
 require "ratatui_ruby"
 require "ratatui_ruby/test_helper"
 
-RSpec.describe Agentilda::Screen::Ratatui do
+RSpec.describe Agentilda::Presentation::Screen::Ratatui do
   subject(:screen) { described_class.new }
 
   let(:tui) { RatatuiRuby::TUI.new }
@@ -564,7 +564,7 @@ RSpec.describe Agentilda::Screen::Ratatui do
   let(:table_state) { tui.table_state }
 
   let(:row) do
-    Agentilda::Board::Row.new(key: "001.00/leah-researcher",
+    Agentilda::Engine::Board::Row.new(key: "001.00/leah-researcher",
       at: Time.new(2026, 9, 4, 11, 29, 20),
       ordinal: "001.00",
       file: "spec.md",
@@ -585,7 +585,7 @@ RSpec.describe Agentilda::Screen::Ratatui do
   end
 
   let(:board) do
-    Agentilda::Board.new(started_at: 0.0,
+    Agentilda::Engine::Board.new(started_at: 0.0,
       status: :running,
       plans: %w[001.00],
       up: 2_700_000,
@@ -658,7 +658,7 @@ end
 eval "$(rbenv init -)" && bundle exec rspec spec/agentilda/screen/ratatui_spec.rb
 ```
 
-Expected: `NameError: uninitialized constant Agentilda::Screen::Ratatui` (this file doesn't exist yet — Task 3/4 only created `Ratatui::Bar`/`Ratatui::KeyTranslator` as nested constants, autoloaded independently; the `Ratatui` class body itself is created here).
+Expected: `NameError: uninitialized constant Agentilda::Presentation::Screen::Ratatui` (this file doesn't exist yet — Task 3/4 only created `Ratatui::Bar`/`Ratatui::KeyTranslator` as nested constants, autoloaded independently; the `Ratatui` class body itself is created here).
 
 - [ ] **Step 3: Implement**
 
@@ -690,7 +690,7 @@ module Agentilda
       # @param tui [RatatuiRuby::TUI]
       # @param frame [RatatuiRuby::Frame]
       # @param area [RatatuiRuby::Layout::Rect]
-      # @param board [Agentilda::Board]
+      # @param board [Agentilda::Engine::Board]
       # @param table_state [RatatuiRuby::TableState]
       # @return [void]
       def render(tui, frame, area, board, table_state)
@@ -707,7 +707,7 @@ module Agentilda
         render_overlay(tui, frame, area, board)
       end
 
-      # @param board [Agentilda::Board]
+      # @param board [Agentilda::Engine::Board]
       # @return [void]
       def sample(board)
         @history << board.running
@@ -716,7 +716,7 @@ module Agentilda
 
       private
 
-      # @param board [Agentilda::Board]
+      # @param board [Agentilda::Engine::Board]
       # @param table_state [RatatuiRuby::TableState]
       # @return [void]
       def sync_selection(board, table_state)
@@ -811,8 +811,8 @@ Adds the thread that owns `RatatuiRuby.run`, the mutex-protected `Board` handoff
 - Modify: `spec/agentilda/screen/ratatui_spec.rb`
 
 **Interfaces:**
-- Consumes: `Screen::Ratatui::KeyTranslator.call` (Task 4), `Agentilda::Keyboard#handle` (existing), `Agentilda::UI.monotonic` (existing).
-- Produces: `Agentilda::Screen::Ratatui#attach_keyboard(keyboard)`, `#open`, `#draw(board)`, `#close`, `#tick(tui, table_state)`. Task 7's CLI wiring calls `#attach_keyboard`, `#open`, `#draw` (indirectly, via `Console#paint`), `#close`.
+- Consumes: `Screen::Ratatui::KeyTranslator.call` (Task 4), `Agentilda::Presentation::Keyboard#handle` (existing), `Agentilda::UI.monotonic` (existing).
+- Produces: `Agentilda::Presentation::Screen::Ratatui#attach_keyboard(keyboard)`, `#open`, `#draw(board)`, `#close`, `#tick(tui, table_state)`. Task 7's CLI wiring calls `#attach_keyboard`, `#open`, `#draw` (indirectly, via `Console#paint`), `#close`.
 
 - [ ] **Step 1: Write the failing tests**
 
@@ -820,7 +820,7 @@ Append to `spec/agentilda/screen/ratatui_spec.rb`:
 
 ```ruby
 describe "lifecycle" do
-  let(:keyboard) { instance_double(Agentilda::Keyboard, handle: nil) }
+  let(:keyboard) { instance_double(Agentilda::Presentation::Keyboard, handle: nil) }
 
   before { screen.attach_keyboard(keyboard) }
 
@@ -924,7 +924,7 @@ Add to `lib/agentilda/screen/ratatui.rb`, inside the `Ratatui` class. This **rep
         @mutex = Mutex.new
       end
 
-      # @param keyboard [Agentilda::Keyboard] built with `.new`, never
+      # @param keyboard [Agentilda::Presentation::Keyboard] built with `.new`, never
       #   `.start`'d — this is what feeds it keys, from the thread
       #   ratatui_ruby's own loop runs on.
       # @return [void]
@@ -943,7 +943,7 @@ Add to `lib/agentilda/screen/ratatui.rb`, inside the `Ratatui` class. This **rep
       # as {Screen#draw} is. Stores the board; the ratatui thread picks it
       # up on its own next tick, a fraction of a frame later.
       #
-      # @param board [Agentilda::Board]
+      # @param board [Agentilda::Engine::Board]
       # @return [void]
       def draw(board) = @mutex.synchronize { @board = board }
 
@@ -981,7 +981,7 @@ Add to `lib/agentilda/screen/ratatui.rb`, inside the `Ratatui` class. This **rep
 Replace the earlier `#sample` (which only appended unconditionally) with the throttled version, and add `#forward`:
 
 ```ruby
-      # @param board [Agentilda::Board]
+      # @param board [Agentilda::Engine::Board]
       # @return [void]
       def sample(board)
         now = UI.monotonic
@@ -1030,7 +1030,7 @@ Wires `--tui ratatui|spinner` (default `spinner`) and `AGENTILDA_TUI` into `agen
 - Test: `spec/agentilda/cli/run_spec.rb`
 
 **Interfaces:**
-- Consumes: `Agentilda::Screen::Ratatui.new`, `#attach_keyboard`, `#open`, `#close` (Task 6); `Agentilda::Keyboard.new` (existing).
+- Consumes: `Agentilda::Presentation::Screen::Ratatui.new`, `#attach_keyboard`, `#open`, `#close` (Task 6); `Agentilda::Presentation::Keyboard.new` (existing).
 
 - [ ] **Step 1: Write the failing tests**
 
@@ -1041,28 +1041,28 @@ describe "--tui" do
   before { allow(Agentilda::UI).to receive(:animate?).and_return(true) }
 
   it "builds the spinner Screen by default" do
-    allow(Agentilda::Screen).to receive(:new).and_call_original
-    allow(Agentilda::Screen::Ratatui).to receive(:new)
+    allow(Agentilda::Presentation::Screen).to receive(:new).and_call_original
+    allow(Agentilda::Presentation::Screen::Ratatui).to receive(:new)
     run(commit: true)
-    expect(Agentilda::Screen).to have_received(:new)
-    expect(Agentilda::Screen::Ratatui).not_to have_received(:new)
+    expect(Agentilda::Presentation::Screen).to have_received(:new)
+    expect(Agentilda::Presentation::Screen::Ratatui).not_to have_received(:new)
   end
 
   it "builds Screen::Ratatui and a non-started Keyboard when --tui ratatui is passed" do
-    fake_screen = instance_double(Agentilda::Screen::Ratatui, attach_keyboard: nil, open: nil, close: nil)
-    allow(Agentilda::Screen::Ratatui).to receive(:new).and_return(fake_screen)
-    allow(Agentilda::Keyboard).to receive(:new).and_call_original
+    fake_screen = instance_double(Agentilda::Presentation::Screen::Ratatui, attach_keyboard: nil, open: nil, close: nil)
+    allow(Agentilda::Presentation::Screen::Ratatui).to receive(:new).and_return(fake_screen)
+    allow(Agentilda::Presentation::Keyboard).to receive(:new).and_call_original
 
     run(commit: true, tui: "ratatui")
 
-    expect(Agentilda::Screen::Ratatui).to have_received(:new)
-    expect(Agentilda::Keyboard).to have_received(:new)
+    expect(Agentilda::Presentation::Screen::Ratatui).to have_received(:new)
+    expect(Agentilda::Presentation::Keyboard).to have_received(:new)
     expect(fake_screen).to have_received(:attach_keyboard)
   end
 
   it "falls back to AGENTILDA_TUI when the flag is not passed" do
-    allow(Agentilda::Screen::Ratatui).to receive(:new).and_return(
-      instance_double(Agentilda::Screen::Ratatui, attach_keyboard: nil, open: nil, close: nil)
+    allow(Agentilda::Presentation::Screen::Ratatui).to receive(:new).and_return(
+      instance_double(Agentilda::Presentation::Screen::Ratatui, attach_keyboard: nil, open: nil, close: nil)
     )
     begin
       ENV["AGENTILDA_TUI"] = "ratatui"
@@ -1071,12 +1071,12 @@ describe "--tui" do
       ENV.delete("AGENTILDA_TUI")
     end
 
-    expect(Agentilda::Screen::Ratatui).to have_received(:new)
+    expect(Agentilda::Presentation::Screen::Ratatui).to have_received(:new)
   end
 
   it "prefers the flag over AGENTILDA_TUI when both are set" do
-    allow(Agentilda::Screen).to receive(:new).and_call_original
-    allow(Agentilda::Screen::Ratatui).to receive(:new)
+    allow(Agentilda::Presentation::Screen).to receive(:new).and_call_original
+    allow(Agentilda::Presentation::Screen::Ratatui).to receive(:new)
     begin
       ENV["AGENTILDA_TUI"] = "ratatui"
       run(commit: true, tui: "spinner")
@@ -1084,8 +1084,8 @@ describe "--tui" do
       ENV.delete("AGENTILDA_TUI")
     end
 
-    expect(Agentilda::Screen).to have_received(:new)
-    expect(Agentilda::Screen::Ratatui).not_to have_received(:new)
+    expect(Agentilda::Presentation::Screen).to have_received(:new)
+    expect(Agentilda::Presentation::Screen::Ratatui).not_to have_received(:new)
   end
 end
 ```

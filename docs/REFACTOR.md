@@ -295,7 +295,7 @@ Every goal above is checkable with `ls`, `rg`, or `bundle exec rspec` — none r
 
 ## Non-Goals
 
-1. **No renaming of Ruby constants.** `Agentilda::Creator` may or may not become `Agentilda::Commands::Creator` — that decision belongs to the grouping-scheme resolution below — but nothing outside the gem is affected either way, because the public entry point is `require "agentilda"` and the CLI binary. If constants stay flat while files move, that is acceptable; the goal is filesystem navigability, not namespace surgery.
+1. **No renaming of Ruby constants.** `Agentilda::Lifecycle::Creator` may or may not become `Agentilda::Commands::Creator` — that decision belongs to the grouping-scheme resolution below — but nothing outside the gem is affected either way, because the public entry point is `require "agentilda"` and the CLI binary. If constants stay flat while files move, that is acceptable; the goal is filesystem navigability, not namespace surgery.
 1. **No Zeitwerk migration.** The research evaluated it and recommended against; explicit `require` stays because load order matters and the `File.exist?` guard depends on it.
 1. **No fixing the five orphan spec files.** The 121 baseline failures documented in `CLAUDE.md` (`install_spec.rb`, `install_sources_spec.rb`, `configuration_schema_spec.rb`, `setup_worktree_spec.rb`, and 3 seeding examples in `worktree_spec.rb`) predate this work and stay red. Moving them into the new tree is in scope; making them pass is not.
 1. **No emoji substitution.** The research floats replacing 🅱️ with ⛔ in `status.rb`. That changes the on-disk state vocabulary of every existing `.plans` tree that uses this tool, which is a product decision, not a spacing fix. The `--` separator solves the stated problem without it.
