@@ -1,6 +1,8 @@
 # Decisions on agent speed, lanes, adapters, plan state and evals
 
-Date: 2026-10-06. Made without a grilling session (the author was away and asked for decisions to be taken and reviewed afterwards). Every decision below is open to reversal in review.
+Date: 2026-10-06. Made without a grilling session (the author was away and asked for decisions to be taken and reviewed afterwards).
+
+Review, 2026-10-06: the author kept all ten decisions, D1 to D10, unchanged.
 
 ## Why runs were slow: measured, not guessed
 
