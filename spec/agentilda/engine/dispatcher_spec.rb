@@ -315,6 +315,61 @@ RSpec.describe Agentilda::Engine::Dispatcher, :tree do
     end
   end
 
+  describe "state.json" do
+    let!(:built) do
+      plans { |t| t.plan "001.00", :new, "fresh", files: { "spec.md" => spec_body } }
+    end
+    let(:plan_state) { Agentilda::Plans::PlanState.for(path_of("001.00")) }
+
+    context "when an agent signs through `agentilda state sign`" do
+      let(:executor) do
+        lambda { |agent, subject, round: 1, **|
+          calls << [agent.name, subject.feature.ordinal.to_s, round]
+          if agent.name == "leah-researcher"
+            File.write(File.join(subject.feature.path, "spec.md"), "#{spec_body}\n## Research\n\nFound it.\n")
+            Agentilda::Plans::PlanState.for(subject.feature.path).sign!(agent: agent.name, round:, status: "Completed")
+          end
+          Agentilda::Execution::Executor::Result.new(ok: true, note: "completed", up: 10, down: 2, subagents: 0, delegated: 0, seconds: 1.0)
+        }
+      end
+
+      before { runner_with(executor, agents: agents.only("leah-researcher")).call }
+
+      it "settles the round from the JSON signature alone" do
+        expect(tree.reload.subjects.first.status.key).to eq(:researched)
+      end
+
+      it "records the stage, with its outcome and spend" do
+        expect(plan_state.stages.first.values_at("agent", "round", "status", "from", "to", "up"))
+          .to eq(["leah-researcher", 1, "Completed", "new", "researched", 10])
+      end
+
+      it "records the state the folder moved to" do
+        expect(plan_state.state).to eq("researched")
+      end
+    end
+
+    context "when a dead harness left a stage Started" do
+      before do
+        Agentilda::Plans::PlanState.for(path_of("001.00"))
+                                   .stage!(agent: "leah-researcher", round: 1, status: "Started", run: { "pid" => 999_999, "host" => Socket.gethostname })
+        runner_with(executor_with { |*| nil }, agents: agents.only("leah-researcher"), state: nil).call
+      end
+
+      it "marks it Interrupted, and says the harness died" do
+        expect(plan_state.stages.find { |s| s["round"] == 1 }.values_at("status", "note")).to eq(["Interrupted", "harness died"])
+      end
+
+      it "writes the harness's Interrupted line where the agent signs, as the state file path does" do
+        expect(File.read(File.join(path_of("001.00"), "spec.md"))).to include("Interrupted, round 1 (harness died)")
+      end
+
+      it "counts the stranded round against the agent's rounds" do
+        expect(calls).to eq([])
+      end
+    end
+  end
+
   # luke finished and left the plan at 🎨; rey died before signing. Rey
   # resumes it, and still hears from luke through the mailbox.
   describe "a plan held at Building UI" do

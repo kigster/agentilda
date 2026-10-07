@@ -48,7 +48,7 @@ When no `## B<n>` remains, delete `blocked.md`. Folding one answer out of four i
 - [ ] Every qualifying answer is in `spec.md` or `plan.md` and gone from `blocked.md`.
 - [ ] Every other question is untouched.
 - [ ] `blocked.md` is deleted if and only if no question remains.
-- [ ] `spec.md` is signed. Never create `plan.md` just to sign it: a new `plan.md` moves the folder to 📋.
+- [ ] You signed `Completed`. Never create `plan.md`: a new `plan.md` moves the folder to 📋.
 - [ ] Your report lists: each folded question, where it went and what it says; each open question and why (no answer, or which test the answer failed); whether `blocked.md` still exists.
 
 ## Next

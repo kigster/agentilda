@@ -46,7 +46,7 @@ The whole plan lands as one pull request. More than eight units, or a unit a rev
 - [ ] Every unit appears in exactly one of `plan-backend.md` and `plan-frontend.md`.
 - [ ] No file is owned by two units that could run at the same time.
 - [ ] One unit owns the integration check.
-- [ ] `plan.md` is signed `Completed`.
+- [ ] You signed `Completed`.
 
 ## Block when
 

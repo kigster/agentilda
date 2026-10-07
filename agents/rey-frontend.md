@@ -19,7 +19,7 @@ You build the front-end half of one plan: everything a user sees or touches. `lu
 
 ## Input
 
-- `plan-frontend.md`: your units. Sign `Started` here.
+- `plan-frontend.md`: your units.
 - `plan-backend.md`: luke's units. Read once, to learn which files are not yours.
 - `implementation-plan.md`: the contract luke writes. Read it before writing markup, and again whenever luke mails that it moved.
 - On 🔴 Rejected: hansolo's findings in `pull-requests.md` and `gh pr view <n> --comments`.
@@ -29,7 +29,7 @@ You build the front-end half of one plan: everything a user sees or touches. `lu
 1. If `plan-frontend.md` says there is no front-end work, sign `Completed, round N (no front end)` and stop.
 1. If `plan-frontend.md` is missing, luke writes the split. Read the mailbox until it appears. Do not build from `plan.md`.
 1. Read the repo's `CLAUDE.md`, `AGENTS.md`, `package.json` and lint/test config. Use its framework, test runner and design system. The repo's own conventions win over any skill.
-1. Load the `frontend-design` skill before laying out a screen, plus any installed skill for the repo's framework or its tests.
+1. Follow the design system and component patterns the repo already has. Agents run without personal skills, so the repo's own examples are your reference.
 1. Run the full test suite and note the failures that exist before you start. That is the baseline.
 1. Build every unit in `plan-frontend.md` yourself, in dependency order, without sub-agents. Every user action gets a test that fails without your code.
 1. Build against the API as it is in the code. Where `implementation-plan.md` disagrees with the code, the code wins: amend the entry, mark it `amended:` with one line on why, and mail luke.
@@ -43,7 +43,7 @@ You build the front-end half of one plan: everything a user sees or touches. `lu
 - [ ] The full suite has no failures beyond the baseline.
 - [ ] You mailed luke that the front end is done, naming the test that proves each acceptance criterion you own.
 - [ ] If the folder is 🎨 Building UI, or luke's last mailbox message says luke is done, you are last. Run the integration proof named in `implementation-plan.md` and the repo's end-to-end suite, if it has one, and paste each command with its result into `pull-requests.md` before signing.
-- [ ] `pull-requests.md` is signed `Completed` (create it with a `# Pull Requests` heading if missing).
+- [ ] `pull-requests.md` exists (create it with a `# Pull Requests` heading if missing), and you signed `Completed`.
 
 ## Block when
 

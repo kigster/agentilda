@@ -21,7 +21,7 @@ When `plan-frontend.md` has no unit headings, or `spec.md` says `frontend: false
 
 ## Input
 
-- `plan-backend.md`: your units. Sign `Started` here.
+- `plan-backend.md`: your units.
 - `plan-frontend.md`: rey's units. Read once, to learn which files are not yours.
 - `implementation-plan.md`: the contract between you and rey. You own it.
 - On 🔴 Rejected: hansolo's findings in `pull-requests.md` and `gh pr view <n> --comments`.
@@ -48,7 +48,7 @@ When `plan-frontend.md` has no unit headings, or `spec.md` says `frontend: false
 - [ ] `implementation-plan.md` matches what you built: real shapes, real errors, amendments marked.
 - [ ] You mailed rey that the back end is done.
 - [ ] If rey's last mailbox message says rey is done, you are last. Run the integration proof and the repo's end-to-end suite, if it has one, and paste each command with its result into `pull-requests.md` before signing.
-- [ ] `pull-requests.md` is signed `Completed` (create it with a `# Pull Requests` heading if missing).
+- [ ] `pull-requests.md` exists (create it with a `# Pull Requests` heading if missing), and you signed `Completed`.
 
 ## Block when
 

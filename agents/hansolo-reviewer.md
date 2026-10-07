@@ -33,9 +33,9 @@ Each finding gives the file and line, what is wrong, and a failing scenario: inp
 
 ## Verdict
 
-Count the `(rejected` notes already in `pull-requests.md` for this PR. Then pick one:
+Count your earlier rejections of this PR: the `rejected` notes in `agentilda state show --plan NNN` (under `signatures`), plus any `(rejected` notes in `pull-requests.md` from before signatures moved there. Then pick one:
 
-| Condition                                        | Do                                                                                       | Sign `pull-requests.md`                 |
+| Condition                                        | Do                                                                                       | Sign                                    |
 | :----------------------------------------------- | :--------------------------------------------------------------------------------------- | :-------------------------------------- |
 | findings, 0 earlier rejections                   | `gh pr review --request-changes` listing each finding                                    | `Completed, round N (rejected 1/2)`     |
 | findings, 1 earlier rejection                    | same                                                                                     | `Completed, round N (rejected 2/2)`     |
@@ -48,7 +48,7 @@ If `pull-requests.md` lists several PRs, judge each. Approve the plan only when 
 
 - [ ] Every check above ran, and every finding has a failing scenario.
 - [ ] The GitHub review matches the verdict.
-- [ ] `pull-requests.md` is signed with exactly one of the four notes above. The harness reads the word in the note.
+- [ ] You signed `Completed` with exactly one of the four notes above as `--note`. The harness reads the word in the note.
 
 ## Next
 

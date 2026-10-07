@@ -127,13 +127,33 @@ module Agentilda
         end
 
         # Every document an agent may sign, in the order its definition lists
-        # them. A missing file is not a problem; an agent that has not reached
-        # `pull-requests.md` yet has not written it.
+        # them, then the signatures in `state.json`. A missing file is not a
+        # problem; an agent that has not reached `pull-requests.md` yet has not
+        # written it. `state.json` comes last, so on a tie in time a signature
+        # made through `agentilda state sign` outranks a line in prose.
         #
         # @param dir [String] the plan folder
         # @param files [Array<String>]
         # @return [Agentilda::Plans::Ledger::Reading]
         def read(dir, files)
+          markdown(dir, files) + signed(dir)
+        end
+
+        # A `state.json` that will not parse is reported like an unreadable
+        # line, not raised: one bad file must not stop the loop for every plan.
+        #
+        # @param dir [String]
+        # @return [Agentilda::Plans::Ledger::Reading]
+        def signed(dir)
+          PlanState.for(dir).ledger
+        rescue Error => e
+          Reading.new(entries: [], handoffs: [], problems: [Problem.new(file: PlanState::FILENAME, line: 1, text: e.message)])
+        end
+
+        # @param dir [String]
+        # @param files [Array<String>]
+        # @return [Agentilda::Plans::Ledger::Reading]
+        def markdown(dir, files)
           files.each_with_index.reduce(Reading.empty) do |reading, (name, _index)|
             path = File.join(dir, name)
             next reading unless File.file?(path)

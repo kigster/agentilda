@@ -32,9 +32,11 @@ loader.collapse("#{__dir__}/agentilda/cli/worktree")
 loader.collapse("#{__dir__}/agentilda/cli/agents/subcommands")
 loader.collapse("#{__dir__}/agentilda/cli/linear/subcommands")
 loader.collapse("#{__dir__}/agentilda/cli/mail/subcommands")
+loader.collapse("#{__dir__}/agentilda/cli/state/subcommands")
 loader.collapse("#{__dir__}/agentilda/cli/resync/subcommands")
 loader.ignore("#{__dir__}/agentilda/cli/linear/linear.rb")
 loader.ignore("#{__dir__}/agentilda/cli/mail/mail.rb")
+loader.ignore("#{__dir__}/agentilda/cli/state/state.rb")
 loader.ignore("#{__dir__}/agentilda/linear/mapping.rb")
 loader.setup
 

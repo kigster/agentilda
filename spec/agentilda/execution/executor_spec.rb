@@ -143,18 +143,18 @@ RSpec.describe Agentilda::Execution::Executor, :tree do
       expect(paired).to include(
         "## Mailbox",
         "Your partner on this plan is `rey-frontend`",
-        File.join(subject_plan.feature.path, "mailbox.md"),
+        "kept in the\nplan's `state.json`",
         "agentilda mail read --dir \"#{plans_root}\" --plan 000.00 --for luke-backend",
         "agentilda mail send --dir \"#{plans_root}\" --plan 000.00 --from luke-backend --to rey-frontend"
       )
     end
 
-    # `alo` signs a lock with the process fingerprint, which every sub-agent
+    # `alock` signs a lock with the process fingerprint, which every sub-agent
     # of one `claude` shares, so the prompt names the holder explicitly.
-    it "tells the agent to claim files with alo, under its own name" do
+    it "tells the agent to claim files with alock, under its own name" do
       prompt = executor.invocation(agents.find("luke-backend"), subject_plan)[2]
 
-      expect(prompt).to include("AGENT_ID=luke-backend alo acquire", "AGENT_ID=luke-backend alo release-all")
+      expect(prompt).to include("AGENT_ID=luke-backend alock acquire", "AGENT_ID=luke-backend alock release-all")
       expect(prompt).not_to include("agent-lock.sh")
     end
 
@@ -213,17 +213,23 @@ RSpec.describe Agentilda::Execution::Executor, :tree do
   describe "the ledger section" do
     let(:prompt) { executor.invocation(agent, subject_plan, round: 2, successor: "palpatine-planner")[2] }
 
-    it "tells the agent the exact lines to write, with its own name, round and successor" do
+    let(:sign) do
+      "agentilda state sign --dir \"#{plans_root}\" --plan 000.00 --agent yoda-writer --round 2"
+    end
+
+    it "tells the agent the exact commands to sign with, under its own name, round and successor" do
       aggregate_failures do
-        expect(prompt).to include("agent: yoda-writer   status: Started, round 2 ]")
-        expect(prompt).to include("agent: yoda-writer   status: Completed, round 2 ]")
-        expect(prompt).to include("[ next: palpatine-planner ]")
-        expect(prompt).to include("spec.md")
+        expect(prompt).to include("#{sign} --status Started")
+        expect(prompt).to include("#{sign} --status Completed --next palpatine-planner")
       end
     end
 
-    it "names the date command that produces the timestamp" do
-      expect(prompt).to include('date "+%Y-%m-%d %I:%M:%S %p %Z"')
+    it "says how a parenthesised note in the agent's instructions maps onto the command" do
+      expect(prompt).to include("--note technical")
+    end
+
+    it "tells the agent never to edit state.json by hand" do
+      expect(prompt).to include("Never\nedit `state.json` by hand")
     end
 
     it "explains the warnings the control file will carry" do

@@ -43,7 +43,7 @@ A folder numbered `NNN.MM` with `MM > 0` describes work that already shipped. Op
 - [ ] Every section above exists, and In scope holds no item without a check.
 - [ ] Every open question is either answered in the text or listed.
 - [ ] An empty `plan.md` exists next to `spec.md` (`touch plan.md`). Leave it blank. A heading in it tells the harness the plan is already written.
-- [ ] `spec.md` is signed `Completed`.
+- [ ] You signed `Completed`.
 
 ## Block when
 

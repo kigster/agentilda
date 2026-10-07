@@ -26,6 +26,9 @@ require_relative "cli/worktree/worktree"
 require_relative "cli/mail/mail"
 require_relative "cli/mail/subcommands/send"
 require_relative "cli/mail/subcommands/read"
+require_relative "cli/state/state"
+require_relative "cli/state/subcommands/sign"
+require_relative "cli/state/subcommands/show"
 
 module Agentilda
   # The command line. Every command is a thin shell over one library class:
@@ -69,7 +72,7 @@ module Agentilda
       width [90, TTY::Screen.width - 2].min
 
       group "Plans", "create", "list-plans", "index", "resync", "unblock", "worktree"
-      group "Agents", "run", "agents", "describe", "mail"
+      group "Agents", "run", "agents", "describe", "mail", "state"
       group "Reference", "docs", "states", "linear", "completion", "version"
     end
 
@@ -110,6 +113,13 @@ module Agentilda
     register "mail" do |prefix|
       prefix.register "send", Mail::Send
       prefix.register "read", Mail::Read
+    end
+
+    # What every agent shells out to at the start and end of its round. See
+    # {Agentilda::Plans::PlanState}.
+    register "state" do |prefix|
+      prefix.register "sign", State::Sign
+      prefix.register "show", State::Show
     end
 
     register "completion", ::Dry::CLI::Autocomplete::Command[::Agentilda::CLI]
