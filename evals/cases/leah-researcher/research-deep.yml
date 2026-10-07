@@ -1,0 +1,51 @@
+id: research-deep
+agent: leah-researcher
+depth: deep
+description: >
+  A spec that touches a regulated rule. At deep depth leah must survey the
+  code and several primary sources, list contradictions and what it could
+  not settle. A two-paragraph chapter with one link is too shallow here.
+fixture:
+  state: new
+  slug: filing-deadlines
+  files:
+    spec.md: |
+      # Filing Deadlines
+
+      Show each small business its next estimated-tax filing deadline, moved for weekends and holidays.
+
+      ## What research needs to settle
+
+      1. Which deadlines apply, and where do they come from?
+      2. How is a deadline moved when it falls on a weekend or holiday?
+      3. Does the codebase already know about holidays?
+  repo:
+    lib/calendar.rb: |
+      # Business days only; holidays are hard-coded for 2025.
+      module Calendar
+        HOLIDAYS = %w[2025-01-01 2025-07-04 2025-12-25].freeze
+      end
+expect:
+  state: researched
+  signed: true
+  files_absent: [plan.md]
+  sections:
+    spec.md: [Research, Contradictions, Could not settle]
+  contains:
+    spec.md: [lib/calendar.rb]
+  depth:
+    fast:
+      words: { file: spec.md, section: Research, min: 40, max: 180 }
+      count: { file: spec.md, section: Research, pattern: 'https?://', min: 1, max: 3 }
+      max_seconds: 300
+      max_tokens: 80000
+    medium:
+      words: { file: spec.md, section: Research, min: 120, max: 1200 }
+      count: { file: spec.md, section: Research, pattern: 'https?://', min: 2, max: 8 }
+      max_seconds: 600
+      max_tokens: 150000
+    deep:
+      words: { file: spec.md, section: Research, min: 250, max: 3000 }
+      count: { file: spec.md, section: Research, pattern: 'https?://', min: 5 }
+      max_seconds: 1200
+      max_tokens: 300000
