@@ -166,8 +166,12 @@ phases:              # per-phase overrides: research, specification, planning,
     model: gpt-5-codex
     effort: medium   # low | medium | high | xhigh | max
   review: { model: opus }
+implementation_suggestions:   # text or a list: language, libraries, an approach
+  - Ruby, with dry-cli for the command line
 ---
 ```
+
+`implementation_suggestions` is advice, not a requirement. Every agent is shown it as "suggestions from the spec's author", prefers it when it fits, and may take a better route as long as it writes why in the document it owns.
 
 | Lane    | Route                                                        | For                                              |
 | :------ | :----------------------------------------------------------- | :----------------------------------------------- |

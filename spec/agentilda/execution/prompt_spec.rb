@@ -45,6 +45,18 @@ RSpec.describe Agentilda::Execution::Prompt, :tree do
     expect(text).to include("  git push", "You may run these, which most agents may not:\n\n  gh pr review")
   end
 
+  context "when the spec suggests an implementation" do
+    let(:spec_body) { "---\nimplementation_suggestions:\n  - Ruby with dry-cli\n---\n# A Feature\n" }
+
+    it "shows the suggestions, labelled as advice" do
+      expect(text).to include("Implementation suggestions", "suggestions, not requirements", "- Ruby with dry-cli")
+    end
+  end
+
+  it "adds no suggestions section when the spec has none" do
+    expect(text).not_to include("Implementation suggestions")
+  end
+
   it "adds no operator section when nobody steered the run" do
     expect(text).not_to include("Operator instructions")
   end

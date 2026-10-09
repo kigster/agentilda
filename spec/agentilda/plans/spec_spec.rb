@@ -18,6 +18,19 @@ RSpec.describe Agentilda::Plans::Spec do
         .to eq("adapter" => "codex", "model" => "gpt-5-codex", "effort" => "medium")
     end
 
+    it "reads implementation suggestions given as a list" do
+      expect(parse("implementation_suggestions:\n  - Ruby with dry-cli\n  - Reuse the existing gems").suggestions)
+        .to eq(["Ruby with dry-cli", "Reuse the existing gems"])
+    end
+
+    it "reads implementation suggestions given as one string" do
+      expect(parse("implementation_suggestions: Rust, with clap").suggestions).to eq(["Rust, with clap"])
+    end
+
+    it "has no suggestions unless the author wrote some" do
+      expect(parse("lane: plan").suggestions).to eq([])
+    end
+
     it "returns no override for a phase the author did not name" do
       expect(parse("lane: plan").override_for("review")).to eq({})
     end
@@ -51,6 +64,15 @@ RSpec.describe Agentilda::Plans::Spec do
 
     it "a phase that is not a mapping" do
       expect(parse("phases:\n  build: codex").problems).to eq(["phases.build: must be a mapping"])
+    end
+
+    it "suggestions that are not text, and says so" do
+      expect(parse("implementation_suggestions: { language: ruby }").to_h.slice(:suggestions, :problems))
+        .to eq(suggestions: [], problems: ["implementation_suggestions: must be text or a list of text"])
+    end
+
+    it "blank suggestions are dropped" do
+      expect(parse("implementation_suggestions: ['', '  ', Ruby]").suggestions).to eq(["Ruby"])
     end
 
     it "frontmatter that is not YAML" do

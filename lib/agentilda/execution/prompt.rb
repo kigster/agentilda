@@ -65,7 +65,7 @@ module Agentilda
           Repository root: #{root}
 
           #{"The folder's name is not currently justified: #{subject.violation}" if subject.violation}
-          #{operator_instructions}#{ledger_section(agent, subject, round:, successor:)}#{budget_section}#{time_budget_section(agent)}#{control_section(control, agent, subject)}#{mailbox_section(agent, subject, partners)}
+          #{operator_instructions}#{suggestions_section}#{ledger_section(agent, subject, round:, successor:)}#{budget_section}#{time_budget_section(agent)}#{control_section(control, agent, subject)}#{mailbox_section(agent, subject, partners)}
           ## Boundary — enforced, not requested
 
           You may read anything, and write source, tests and the plan's own
@@ -300,6 +300,24 @@ module Agentilda
           If there is a RESUME note, continue from it and do not redo what it
           says is done; check the files it names rather than taking it on trust.
         SECTION
+      end
+
+      # What the spec's author would build it with, if they said. Labelled as
+      # a suggestion in so many words, because an agent handed a language and
+      # a library list as an order will follow it into a dead end rather than
+      # say the route is wrong; handed as advice, it can take a better one and
+      # write the reason in the document it owns. The signature note is
+      # read by the harness for keywords, so it is no place for prose.
+      #
+      # @return [String] empty when the spec suggests nothing
+      def suggestions_section
+        suggestions = Plans::Spec.for(subject).suggestions
+        return "" if suggestions.empty?
+
+        "\n## Implementation suggestions — from the spec's author\n\n" \
+          "These are suggestions, not requirements: a language, libraries, an approach the author " \
+          "had in mind. Prefer them when they fit. If you find a better route, take it and write why " \
+          "in the document you own, not in the signature note.\n\n#{suggestions.map { |item| "- #{item}" }.join("\n")}\n"
       end
 
       # The section `run --prompt` adds, labelled as coming from the person who

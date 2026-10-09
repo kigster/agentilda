@@ -11,6 +11,9 @@ module Agentilda
     #   phases:
     #     build:  { adapter: codex, model: gpt-5-codex, effort: medium }
     #     review: { model: opus }
+    #   implementation_suggestions:
+    #     - Ruby, with dry-cli for the command line
+    #     - Reuse the gems already in the Gemfile before adding new ones
     #   ---
     #
     # The body is the specification; this is how it should be worked. A value
@@ -27,10 +30,14 @@ module Agentilda
     # @!attribute [r] phases
     #   @return [Hash{String => Hash{String => String}}] per-phase
     #     `adapter`, `model` and `effort`
+    # @!attribute [r] suggestions
+    #   @return [Array<String>] the author's `implementation_suggestions`:
+    #     language, libraries, an approach. Offered to the agents, never
+    #     imposed on them.
     # @!attribute [r] problems
     #   @return [Array<String>] what was ignored, and why
-    Spec = Data.define(:lane, :frontend, :depth, :phases, :problems) do
-      def initialize(lane: :full, frontend: nil, depth: nil, phases: {}, problems: []) = super
+    Spec = Data.define(:lane, :frontend, :depth, :phases, :suggestions, :problems) do
+      def initialize(lane: :full, frontend: nil, depth: nil, phases: {}, suggestions: [], problems: []) = super
 
       # @param phase [String, Symbol, nil]
       # @return [Hash{String => String}] what the author set for that phase
@@ -55,6 +62,11 @@ module Agentilda
 
       # The keys a `phases:` entry may set.
       PHASE_KEYS = %w[adapter model effort].freeze
+
+      # The frontmatter key for what the author would build it with. Optional,
+      # and a suggestion: an agent that finds a better route takes it and says
+      # why, so nothing here is validated against what is installed.
+      SUGGESTIONS_KEY = "implementation_suggestions"
 
       FILENAME = "spec.md"
 
@@ -87,6 +99,7 @@ module Agentilda
             frontend: switch(meta, "frontend", problems),
             depth:    choice(meta, "depth", DEPTHS, nil, problems),
             phases:   phases(meta["phases"], problems),
+            suggestions: suggestions(meta[SUGGESTIONS_KEY], problems),
             problems:)
         end
 
@@ -110,6 +123,21 @@ module Agentilda
 
           problems << "#{key}: #{meta[key].inspect} is not true or false"
           nil
+        end
+
+        # A bare string is one suggestion; a list is several.
+        #
+        # @return [Array<String>]
+        def suggestions(value, problems)
+          return [] if value.nil?
+
+          items = value.is_a?(Array) ? value : [value]
+          unless items.all? { |item| item.is_a?(String) || item.is_a?(Numeric) }
+            problems << "#{SUGGESTIONS_KEY}: must be text or a list of text"
+            return []
+          end
+
+          items.map { |item| item.to_s.strip }.reject(&:empty?)
         end
 
         # @return [Hash]
