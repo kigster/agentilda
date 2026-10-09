@@ -168,10 +168,14 @@ phases:              # per-phase overrides: research, specification, planning,
   review: { model: opus }
 implementation_suggestions:   # text or a list: language, libraries, an approach
   - Ruby, with dry-cli for the command line
+implementation_requirements:  # text or a list: binding, exactly as written
+  - The database is PG-strict
 ---
 ```
 
 `implementation_suggestions` is advice, not a requirement. Every agent is shown it as "suggestions from the spec's author", prefers it when it fits, and may take a better route as long as it writes why in the document it owns.
+
+`implementation_requirements` is the opposite: every agent is told to do exactly what each item says. An agent that cannot meet one signs `Blocked` instead of substituting its own, and `hansolo-reviewer` rejects work that does not meet them. Agents start without your personal skills (`run --user-config` restores them), so write the rule itself, not just the name of a skill that holds it.
 
 | Lane    | Route                                                        | For                                              |
 | :------ | :----------------------------------------------------------- | :----------------------------------------------- |

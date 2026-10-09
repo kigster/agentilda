@@ -53,6 +53,25 @@ RSpec.describe Agentilda::Execution::Prompt, :tree do
     end
   end
 
+  context "when the spec requires an implementation" do
+    let(:spec_body) { "---\nimplementation_requirements:\n  - The database is PG-strict\n---\n# A Feature\n" }
+
+    it "states them as binding, with the way out" do
+      expect(text).to include("Implementation requirements",
+        "requirements, not suggestions",
+        "- The database is PG-strict",
+        "sign Blocked")
+    end
+
+    it "leaves out the suggestions section" do
+      expect(text).not_to include("Implementation suggestions")
+    end
+  end
+
+  it "adds no requirements section when the spec has none" do
+    expect(text).not_to include("Implementation requirements")
+  end
+
   it "adds no suggestions section when the spec has none" do
     expect(text).not_to include("Implementation suggestions")
   end

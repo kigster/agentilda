@@ -14,6 +14,8 @@ module Agentilda
     #   implementation_suggestions:
     #     - Ruby, with dry-cli for the command line
     #     - Reuse the gems already in the Gemfile before adding new ones
+    #   implementation_requirements:
+    #     - The database is PG-strict
     #   ---
     #
     # The body is the specification; this is how it should be worked. A value
@@ -34,10 +36,16 @@ module Agentilda
     #   @return [Array<String>] the author's `implementation_suggestions`:
     #     language, libraries, an approach. Offered to the agents, never
     #     imposed on them.
+    # @!attribute [r] requirements
+    #   @return [Array<String>] the author's `implementation_requirements`:
+    #     constraints the work must meet exactly as written.
     # @!attribute [r] problems
     #   @return [Array<String>] what was ignored, and why
-    Spec = Data.define(:lane, :frontend, :depth, :phases, :suggestions, :problems) do
-      def initialize(lane: :full, frontend: nil, depth: nil, phases: {}, suggestions: [], problems: []) = super
+    Spec = Data.define(:lane, :frontend, :depth, :phases, :suggestions, :requirements, :problems) do
+      def initialize(lane: :full, frontend: nil, depth: nil, phases: {}, suggestions: [], requirements: [],
+        problems: [])
+        super
+      end
 
       # @param phase [String, Symbol, nil]
       # @return [Hash{String => String}] what the author set for that phase
@@ -67,6 +75,12 @@ module Agentilda
       # and a suggestion: an agent that finds a better route takes it and says
       # why, so nothing here is validated against what is installed.
       SUGGESTIONS_KEY = "implementation_suggestions"
+
+      # The other side of {SUGGESTIONS_KEY}: constraints the agents must meet
+      # exactly as written (`The database is PG-strict`). They are not weighed
+      # against anything, so an agent that cannot meet one signs Blocked
+      # instead of substituting its own.
+      REQUIREMENTS_KEY = "implementation_requirements"
 
       FILENAME = "spec.md"
 
@@ -99,7 +113,8 @@ module Agentilda
             frontend: switch(meta, "frontend", problems),
             depth:    choice(meta, "depth", DEPTHS, nil, problems),
             phases:   phases(meta["phases"], problems),
-            suggestions: suggestions(meta[SUGGESTIONS_KEY], problems),
+            suggestions: notes(meta, SUGGESTIONS_KEY, problems),
+            requirements: notes(meta, REQUIREMENTS_KEY, problems),
             problems:)
         end
 
@@ -125,15 +140,16 @@ module Agentilda
           nil
         end
 
-        # A bare string is one suggestion; a list is several.
+        # A bare string is one item; a list is several.
         #
+        # @param key [String] {SUGGESTIONS_KEY} or {REQUIREMENTS_KEY}
         # @return [Array<String>]
-        def suggestions(value, problems)
-          return [] if value.nil?
+        def notes(meta, key, problems)
+          return [] if meta[key].nil?
 
-          items = value.is_a?(Array) ? value : [value]
+          items = meta[key].is_a?(Array) ? meta[key] : [meta[key]]
           unless items.all? { |item| item.is_a?(String) || item.is_a?(Numeric) }
-            problems << "#{SUGGESTIONS_KEY}: must be text or a list of text"
+            problems << "#{key}: must be text or a list of text"
             return []
           end
 

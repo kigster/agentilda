@@ -65,7 +65,7 @@ module Agentilda
           Repository root: #{root}
 
           #{"The folder's name is not currently justified: #{subject.violation}" if subject.violation}
-          #{operator_instructions}#{suggestions_section}#{ledger_section(agent, subject, round:, successor:)}#{budget_section}#{time_budget_section(agent)}#{control_section(control, agent, subject)}#{mailbox_section(agent, subject, partners)}
+          #{operator_instructions}#{requirements_section}#{suggestions_section}#{ledger_section(agent, subject, round:, successor:)}#{budget_section}#{time_budget_section(agent)}#{control_section(control, agent, subject)}#{mailbox_section(agent, subject, partners)}
           ## Boundary — enforced, not requested
 
           You may read anything, and write source, tests and the plan's own
@@ -300,6 +300,25 @@ module Agentilda
           If there is a RESUME note, continue from it and do not redo what it
           says is done; check the files it names rather than taking it on trust.
         SECTION
+      end
+
+      # What the spec's author requires, if they said. The opposite of
+      # {#suggestions_section}: an agent that weighs a requirement against its
+      # own taste will sometimes decide against it, so this states that there
+      # is nothing to weigh, and gives it the one honest way out, which is to
+      # stop and say so. A reviewer is told to hold the work to them.
+      #
+      # @return [String] empty when the spec requires nothing
+      def requirements_section
+        requirements = Plans::Spec.for(subject).requirements
+        return "" if requirements.empty?
+
+        "\n## Implementation requirements — from the spec's author\n\n" \
+          "These are requirements, not suggestions. Do exactly what each one says; do not substitute, " \
+          "weaken or reinterpret one, and do not decide you know better. If you cannot meet one, stop " \
+          "and sign Blocked with `--note technical`, and write which requirement and why in the " \
+          "document you own. A reviewer rejects work that does not meet them.\n\n" \
+          "#{requirements.map { |item| "- #{item}" }.join("\n")}\n"
       end
 
       # What the spec's author would build it with, if they said. Labelled as

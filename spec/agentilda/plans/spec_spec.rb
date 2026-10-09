@@ -27,6 +27,16 @@ RSpec.describe Agentilda::Plans::Spec do
       expect(parse("implementation_suggestions: Rust, with clap").suggestions).to eq(["Rust, with clap"])
     end
 
+    it "reads implementation requirements, apart from the suggestions" do
+      spec = parse("implementation_requirements:\n  - The database is PG-strict\nimplementation_suggestions: Ruby")
+      expect(spec.to_h.slice(:requirements, :suggestions))
+        .to eq(requirements: ["The database is PG-strict"], suggestions: ["Ruby"])
+    end
+
+    it "has no requirements unless the author wrote some" do
+      expect(parse("lane: plan").requirements).to eq([])
+    end
+
     it "has no suggestions unless the author wrote some" do
       expect(parse("lane: plan").suggestions).to eq([])
     end
@@ -69,6 +79,11 @@ RSpec.describe Agentilda::Plans::Spec do
     it "suggestions that are not text, and says so" do
       expect(parse("implementation_suggestions: { language: ruby }").to_h.slice(:suggestions, :problems))
         .to eq(suggestions: [], problems: ["implementation_suggestions: must be text or a list of text"])
+    end
+
+    it "requirements that are not text, and says so" do
+      expect(parse("implementation_requirements: { db: pg }").to_h.slice(:requirements, :problems))
+        .to eq(requirements: [], problems: ["implementation_requirements: must be text or a list of text"])
     end
 
     it "blank suggestions are dropped" do
