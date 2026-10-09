@@ -65,7 +65,7 @@ module Agentilda
           Repository root: #{root}
 
           #{"The folder's name is not currently justified: #{subject.violation}" if subject.violation}
-          #{operator_instructions}#{requirements_section}#{suggestions_section}#{ledger_section(agent, subject, round:, successor:)}#{budget_section}#{time_budget_section(agent)}#{control_section(control, agent, subject)}#{mailbox_section(agent, subject, partners)}
+          #{operator_instructions}#{requirements_section}#{completion_section}#{suggestions_section}#{ledger_section(agent, subject, round:, successor:)}#{budget_section}#{time_budget_section(agent)}#{control_section(control, agent, subject)}#{mailbox_section(agent, subject, partners)}
           ## Boundary — enforced, not requested
 
           You may read anything, and write source, tests and the plan's own
@@ -300,6 +300,28 @@ module Agentilda
           If there is a RESUME note, continue from it and do not redo what it
           says is done; check the files it names rather than taking it on trust.
         SECTION
+      end
+
+      # How the spec's author says the task is finished, and how to tell. The
+      # harness copies both into plan.md after the planner signs; saying so
+      # here keeps a planner from burying them in a paraphrase, and gives the
+      # builder and the reviewer the same two lists to hold the work to.
+      #
+      # @return [String] empty when the spec says neither
+      def completion_section
+        spec = Plans::Spec.for(subject)
+        return "" if spec.completed_when.empty? && spec.how_to_verify.empty?
+
+        lists = [["The task is finished when", spec.completed_when], ["How to verify it", spec.how_to_verify]]
+        body = lists.reject { |_, items| items.empty? }.map do |title, items|
+          "#{title}:\n\n#{items.map { |item| "- #{item}" }.join("\n")}\n"
+        end
+
+        "\n## Completion criteria — from the spec's author\n\n" \
+          "Do not sign Completed until the first list holds, and run each check in the second. " \
+          "If you write plan.md, copy both lists into it verbatim, under `## Task completed when` and " \
+          "`## How to verify`; the harness adds them if you do not. A reviewer rejects work that fails a check.\n\n" \
+          "#{body.join("\n")}"
       end
 
       # What the spec's author requires, if they said. The opposite of

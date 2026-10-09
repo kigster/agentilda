@@ -48,6 +48,12 @@ RSpec.describe Agentilda::Lifecycle::Lanes, :tree do
       expect([subject_plan.status.key, subject_plan.read("plan.md")]).to eq([:ready_for_planning, ""])
     end
 
+    it "carries the completion criteria into the plan it writes" do
+      plan_with("lane: quick\ntask-completed-when: it works\nhow-to-verify: run it")
+      described_class.advance(subject_plan, commit: true)
+      expect(subject_plan.read("plan.md")).to include("## Task", "## Task completed when\n\n- it works", "## How to verify\n\n- run it")
+    end
+
     it "keeps a plan.md the author already wrote" do
       plans do |t|
         t.plan "001.00", :new, "task", files: { "spec.md" => "---\nlane: quick\n---\n#{spec_body}", "plan.md" => "## Mine\n" }

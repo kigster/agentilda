@@ -60,7 +60,9 @@ module Agentilda
         return [from, to.key] unless commit
 
         path = File.join(subject.feature.path, "plan.md")
-        File.write(path, STUB.fetch(spec.lane)) unless File.exist?(path)
+        unless File.exist?(path)
+          File.write(path, [STUB.fetch(spec.lane).rstrip, Completion.markdown(spec)].reject(&:empty?).join("\n\n"))
+        end
         machine = subject.machine
         return nil unless machine.may?(to.key)
 

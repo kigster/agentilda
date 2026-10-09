@@ -33,6 +33,17 @@ RSpec.describe Agentilda::Plans::Spec do
         .to eq(requirements: ["The database is PG-strict"], suggestions: ["Ruby"])
     end
 
+    it "reads how the task is finished and how to verify it" do
+      spec = parse("task-completed-when:\n  - the editor opens\nhow-to-verify: bundle exec rspec")
+      expect(spec.to_h.slice(:completed_when, :how_to_verify))
+        .to eq(completed_when: ["the editor opens"], how_to_verify: ["bundle exec rspec"])
+    end
+
+    it "has neither completion list unless the author wrote them" do
+      expect(parse("lane: plan").to_h.slice(:completed_when, :how_to_verify))
+        .to eq(completed_when: [], how_to_verify: [])
+    end
+
     it "has no requirements unless the author wrote some" do
       expect(parse("lane: plan").requirements).to eq([])
     end
@@ -84,6 +95,11 @@ RSpec.describe Agentilda::Plans::Spec do
     it "requirements that are not text, and says so" do
       expect(parse("implementation_requirements: { db: pg }").to_h.slice(:requirements, :problems))
         .to eq(requirements: [], problems: ["implementation_requirements: must be text or a list of text"])
+    end
+
+    it "a completion list that is not text, and says so" do
+      expect(parse("how-to-verify: { run: it }").to_h.slice(:how_to_verify, :problems))
+        .to eq(how_to_verify: [], problems: ["how-to-verify: must be text or a list of text"])
     end
 
     it "blank suggestions are dropped" do

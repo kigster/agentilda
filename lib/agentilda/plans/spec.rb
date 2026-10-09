@@ -16,6 +16,10 @@ module Agentilda
     #     - Reuse the gems already in the Gemfile before adding new ones
     #   implementation_requirements:
     #     - The database is PG-strict
+    #   task-completed-when:
+    #     - `tilda create` opens an editor and writes no draft
+    #   how-to-verify:
+    #     - bundle exec rspec spec/agentilda/cli/create_spec.rb
     #   ---
     #
     # The body is the specification; this is how it should be worked. A value
@@ -39,11 +43,25 @@ module Agentilda
     # @!attribute [r] requirements
     #   @return [Array<String>] the author's `implementation_requirements`:
     #     constraints the work must meet exactly as written.
+    # @!attribute [r] completed_when
+    #   @return [Array<String>] the author's `task-completed-when`: what
+    #     must be true for the task to count as finished.
+    # @!attribute [r] how_to_verify
+    #   @return [Array<String>] the author's `how-to-verify`: the commands or
+    #     checks that show it is.
     # @!attribute [r] problems
     #   @return [Array<String>] what was ignored, and why
-    Spec = Data.define(:lane, :frontend, :depth, :phases, :suggestions, :requirements, :problems) do
+    Spec = Data.define(:lane,
+      :frontend,
+      :depth,
+      :phases,
+      :suggestions,
+      :requirements,
+      :completed_when,
+      :how_to_verify,
+      :problems) do
       def initialize(lane: :full, frontend: nil, depth: nil, phases: {}, suggestions: [], requirements: [],
-        problems: [])
+        completed_when: [], how_to_verify: [], problems: [])
         super
       end
 
@@ -82,6 +100,12 @@ module Agentilda
       # instead of substituting its own.
       REQUIREMENTS_KEY = "implementation_requirements"
 
+      # How the author says the task is finished, and how to tell. Hyphenated
+      # because that is how the author named them; they are copied into
+      # `plan.md` by {Agentilda::Lifecycle::Completion}.
+      COMPLETED_WHEN_KEY = "task-completed-when"
+      HOW_TO_VERIFY_KEY = "how-to-verify"
+
       FILENAME = "spec.md"
 
       class << self
@@ -115,6 +139,8 @@ module Agentilda
             phases:   phases(meta["phases"], problems),
             suggestions: notes(meta, SUGGESTIONS_KEY, problems),
             requirements: notes(meta, REQUIREMENTS_KEY, problems),
+            completed_when: notes(meta, COMPLETED_WHEN_KEY, problems),
+            how_to_verify: notes(meta, HOW_TO_VERIFY_KEY, problems),
             problems:)
         end
 
@@ -142,7 +168,7 @@ module Agentilda
 
         # A bare string is one item; a list is several.
         #
-        # @param key [String] {SUGGESTIONS_KEY} or {REQUIREMENTS_KEY}
+        # @param key [String] one of the keys above that holds free text
         # @return [Array<String>]
         def notes(meta, key, problems)
           return [] if meta[key].nil?

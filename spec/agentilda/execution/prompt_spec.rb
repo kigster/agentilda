@@ -68,6 +68,22 @@ RSpec.describe Agentilda::Execution::Prompt, :tree do
     end
   end
 
+  context "when the spec says how the task is finished" do
+    let(:spec_body) { "---\ntask-completed-when: the editor opens\nhow-to-verify: bundle exec rspec\n---\n# A Feature\n" }
+
+    it "gives the builder and the reviewer the same two lists" do
+      expect(text).to include("Completion criteria",
+        "- the editor opens",
+        "- bundle exec rspec",
+        "## Task completed when",
+        "## How to verify")
+    end
+  end
+
+  it "adds no completion section when the spec has none" do
+    expect(text).not_to include("Completion criteria")
+  end
+
   it "adds no requirements section when the spec has none" do
     expect(text).not_to include("Implementation requirements")
   end

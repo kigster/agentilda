@@ -170,12 +170,18 @@ implementation_suggestions:   # text or a list: language, libraries, an approach
   - Ruby, with dry-cli for the command line
 implementation_requirements:  # text or a list: binding, exactly as written
   - The database is PG-strict
+task-completed-when:          # what must be true for the task to be finished
+  - "`tilda create` opens an editor and writes no draft"
+how-to-verify:                # the commands or checks that show it
+  - bundle exec rspec spec/agentilda/cli/create_spec.rb
 ---
 ```
 
 `implementation_suggestions` is advice, not a requirement. Every agent is shown it as "suggestions from the spec's author", prefers it when it fits, and may take a better route as long as it writes why in the document it owns.
 
 `implementation_requirements` is the opposite: every agent is told to do exactly what each item says. An agent that cannot meet one signs `Blocked` instead of substituting its own, and `hansolo-reviewer` rejects work that does not meet them. Agents start without your personal skills (`run --user-config` restores them), so write the rule itself, not just the name of a skill that holds it.
+
+`task-completed-when` and `how-to-verify` are copied into `plan.md` under `## Task completed when` and `## How to verify`. Agents are asked to copy them verbatim; after a planner signs, the harness appends whichever section is missing and never touches one that is there. Every agent is told not to sign `Completed` until the first holds and to run each check in the second, and the reviewer rejects work that fails one.
 
 | Lane    | Route                                                        | For                                              |
 | :------ | :----------------------------------------------------------- | :----------------------------------------------- |
