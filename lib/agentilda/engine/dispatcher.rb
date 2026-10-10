@@ -571,6 +571,7 @@ module Agentilda
         ordinal = task.subject.feature.ordinal.to_s
         subject = fresh(task) or return base.with(ok: false, note: "plan folder vanished")
         remember(ordinal, agent.name, job.state, "Completed", task.round)
+        Lifecycle::Completion.copy(subject) if agent.ledger.include?("plan.md")
         verdict = verdict_of(entry)
         partner_running = @running.any? { |j| j.task.subject.feature.ordinal.to_s == ordinal }
         target = target_for(agent, verdict, partner_running)

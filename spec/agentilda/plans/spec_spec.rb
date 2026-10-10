@@ -18,6 +18,40 @@ RSpec.describe Agentilda::Plans::Spec do
         .to eq("adapter" => "codex", "model" => "gpt-5-codex", "effort" => "medium")
     end
 
+    it "reads implementation suggestions given as a list" do
+      expect(parse("implementation_suggestions:\n  - Ruby with dry-cli\n  - Reuse the existing gems").suggestions)
+        .to eq(["Ruby with dry-cli", "Reuse the existing gems"])
+    end
+
+    it "reads implementation suggestions given as one string" do
+      expect(parse("implementation_suggestions: Rust, with clap").suggestions).to eq(["Rust, with clap"])
+    end
+
+    it "reads implementation requirements, apart from the suggestions" do
+      spec = parse("implementation_requirements:\n  - The database is PG-strict\nimplementation_suggestions: Ruby")
+      expect(spec.to_h.slice(:requirements, :suggestions))
+        .to eq(requirements: ["The database is PG-strict"], suggestions: ["Ruby"])
+    end
+
+    it "reads how the task is finished and how to verify it" do
+      spec = parse("task-completed-when:\n  - the editor opens\nhow-to-verify: bundle exec rspec")
+      expect(spec.to_h.slice(:completed_when, :how_to_verify))
+        .to eq(completed_when: ["the editor opens"], how_to_verify: ["bundle exec rspec"])
+    end
+
+    it "has neither completion list unless the author wrote them" do
+      expect(parse("lane: plan").to_h.slice(:completed_when, :how_to_verify))
+        .to eq(completed_when: [], how_to_verify: [])
+    end
+
+    it "has no requirements unless the author wrote some" do
+      expect(parse("lane: plan").requirements).to eq([])
+    end
+
+    it "has no suggestions unless the author wrote some" do
+      expect(parse("lane: plan").suggestions).to eq([])
+    end
+
     it "returns no override for a phase the author did not name" do
       expect(parse("lane: plan").override_for("review")).to eq({})
     end
@@ -51,6 +85,25 @@ RSpec.describe Agentilda::Plans::Spec do
 
     it "a phase that is not a mapping" do
       expect(parse("phases:\n  build: codex").problems).to eq(["phases.build: must be a mapping"])
+    end
+
+    it "suggestions that are not text, and says so" do
+      expect(parse("implementation_suggestions: { language: ruby }").to_h.slice(:suggestions, :problems))
+        .to eq(suggestions: [], problems: ["implementation_suggestions: must be text or a list of text"])
+    end
+
+    it "requirements that are not text, and says so" do
+      expect(parse("implementation_requirements: { db: pg }").to_h.slice(:requirements, :problems))
+        .to eq(requirements: [], problems: ["implementation_requirements: must be text or a list of text"])
+    end
+
+    it "a completion list that is not text, and says so" do
+      expect(parse("how-to-verify: { run: it }").to_h.slice(:how_to_verify, :problems))
+        .to eq(how_to_verify: [], problems: ["how-to-verify: must be text or a list of text"])
+    end
+
+    it "blank suggestions are dropped" do
+      expect(parse("implementation_suggestions: ['', '  ', Ruby]").suggestions).to eq(["Ruby"])
     end
 
     it "frontmatter that is not YAML" do

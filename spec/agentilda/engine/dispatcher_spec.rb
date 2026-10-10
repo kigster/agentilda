@@ -64,6 +64,28 @@ RSpec.describe Agentilda::Engine::Dispatcher, :tree do
       end
     end
 
+    context "when the spec says how the task is finished" do
+      let!(:built) do
+        frontmatter = "---\ntask-completed-when: it works\nhow-to-verify: run it\n---\n"
+        plans do |t|
+          t.plan "020.00", :researched, "qualified-at", files: { "spec.md" => "#{frontmatter}#{spec_body}\n## Research\n\nFound.\n" }
+        end
+      end
+
+      it "copies both lists into the plan the planner wrote, once" do
+        executor = executor_with do |agent, subject, _round|
+          case agent.name
+          when "yoda-writer" then File.write(File.join(subject.feature.path, "plan.md"), "") && "Completed"
+          when "palpatine-planner" then File.write(File.join(subject.feature.path, "plan.md"), "# Plan\n\n## Unit 1\n") && "Completed"
+          end
+        end
+        runner_with(executor).call
+        text = File.read(File.join(path_of("020.00"), "plan.md"))
+        expect(text.scan("## Task completed when").size).to eq(1)
+        expect(text).to include("- it works", "## How to verify", "- run it")
+      end
+    end
+
     it "records each promotion on the attempt that earned it" do
       executor = executor_with do |agent, subject, _|
         File.write(File.join(subject.feature.path, "plan.md"), "") if agent.name == "yoda-writer"

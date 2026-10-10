@@ -11,6 +11,15 @@ module Agentilda
     #   phases:
     #     build:  { adapter: codex, model: gpt-5-codex, effort: medium }
     #     review: { model: opus }
+    #   implementation_suggestions:
+    #     - Ruby, with dry-cli for the command line
+    #     - Reuse the gems already in the Gemfile before adding new ones
+    #   implementation_requirements:
+    #     - The database is PG-strict
+    #   task-completed-when:
+    #     - `tilda create` opens an editor and writes no draft
+    #   how-to-verify:
+    #     - bundle exec rspec spec/agentilda/cli/create_spec.rb
     #   ---
     #
     # The body is the specification; this is how it should be worked. A value
@@ -27,10 +36,34 @@ module Agentilda
     # @!attribute [r] phases
     #   @return [Hash{String => Hash{String => String}}] per-phase
     #     `adapter`, `model` and `effort`
+    # @!attribute [r] suggestions
+    #   @return [Array<String>] the author's `implementation_suggestions`:
+    #     language, libraries, an approach. Offered to the agents, never
+    #     imposed on them.
+    # @!attribute [r] requirements
+    #   @return [Array<String>] the author's `implementation_requirements`:
+    #     constraints the work must meet exactly as written.
+    # @!attribute [r] completed_when
+    #   @return [Array<String>] the author's `task-completed-when`: what
+    #     must be true for the task to count as finished.
+    # @!attribute [r] how_to_verify
+    #   @return [Array<String>] the author's `how-to-verify`: the commands or
+    #     checks that show it is.
     # @!attribute [r] problems
     #   @return [Array<String>] what was ignored, and why
-    Spec = Data.define(:lane, :frontend, :depth, :phases, :problems) do
-      def initialize(lane: :full, frontend: nil, depth: nil, phases: {}, problems: []) = super
+    Spec = Data.define(:lane,
+      :frontend,
+      :depth,
+      :phases,
+      :suggestions,
+      :requirements,
+      :completed_when,
+      :how_to_verify,
+      :problems) do
+      def initialize(lane: :full, frontend: nil, depth: nil, phases: {}, suggestions: [], requirements: [],
+        completed_when: [], how_to_verify: [], problems: [])
+        super
+      end
 
       # @param phase [String, Symbol, nil]
       # @return [Hash{String => String}] what the author set for that phase
@@ -55,6 +88,23 @@ module Agentilda
 
       # The keys a `phases:` entry may set.
       PHASE_KEYS = %w[adapter model effort].freeze
+
+      # The frontmatter key for what the author would build it with. Optional,
+      # and a suggestion: an agent that finds a better route takes it and says
+      # why, so nothing here is validated against what is installed.
+      SUGGESTIONS_KEY = "implementation_suggestions"
+
+      # The other side of {SUGGESTIONS_KEY}: constraints the agents must meet
+      # exactly as written (`The database is PG-strict`). They are not weighed
+      # against anything, so an agent that cannot meet one signs Blocked
+      # instead of substituting its own.
+      REQUIREMENTS_KEY = "implementation_requirements"
+
+      # How the author says the task is finished, and how to tell. Hyphenated
+      # because that is how the author named them; they are copied into
+      # `plan.md` by {Agentilda::Lifecycle::Completion}.
+      COMPLETED_WHEN_KEY = "task-completed-when"
+      HOW_TO_VERIFY_KEY = "how-to-verify"
 
       FILENAME = "spec.md"
 
@@ -87,6 +137,10 @@ module Agentilda
             frontend: switch(meta, "frontend", problems),
             depth:    choice(meta, "depth", DEPTHS, nil, problems),
             phases:   phases(meta["phases"], problems),
+            suggestions: notes(meta, SUGGESTIONS_KEY, problems),
+            requirements: notes(meta, REQUIREMENTS_KEY, problems),
+            completed_when: notes(meta, COMPLETED_WHEN_KEY, problems),
+            how_to_verify: notes(meta, HOW_TO_VERIFY_KEY, problems),
             problems:)
         end
 
@@ -110,6 +164,22 @@ module Agentilda
 
           problems << "#{key}: #{meta[key].inspect} is not true or false"
           nil
+        end
+
+        # A bare string is one item; a list is several.
+        #
+        # @param key [String] one of the keys above that holds free text
+        # @return [Array<String>]
+        def notes(meta, key, problems)
+          return [] if meta[key].nil?
+
+          items = meta[key].is_a?(Array) ? meta[key] : [meta[key]]
+          unless items.all? { |item| item.is_a?(String) || item.is_a?(Numeric) }
+            problems << "#{key}: must be text or a list of text"
+            return []
+          end
+
+          items.map { |item| item.to_s.strip }.reject(&:empty?)
         end
 
         # @return [Hash]

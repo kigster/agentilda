@@ -65,7 +65,7 @@ module Agentilda
           Repository root: #{root}
 
           #{"The folder's name is not currently justified: #{subject.violation}" if subject.violation}
-          #{operator_instructions}#{ledger_section(agent, subject, round:, successor:)}#{budget_section}#{time_budget_section(agent)}#{control_section(control, agent, subject)}#{mailbox_section(agent, subject, partners)}
+          #{operator_instructions}#{requirements_section}#{completion_section}#{suggestions_section}#{ledger_section(agent, subject, round:, successor:)}#{budget_section}#{time_budget_section(agent)}#{control_section(control, agent, subject)}#{mailbox_section(agent, subject, partners)}
           ## Boundary — enforced, not requested
 
           You may read anything, and write source, tests and the plan's own
@@ -300,6 +300,65 @@ module Agentilda
           If there is a RESUME note, continue from it and do not redo what it
           says is done; check the files it names rather than taking it on trust.
         SECTION
+      end
+
+      # How the spec's author says the task is finished, and how to tell. The
+      # harness copies both into plan.md after the planner signs; saying so
+      # here keeps a planner from burying them in a paraphrase, and gives the
+      # builder and the reviewer the same two lists to hold the work to.
+      #
+      # @return [String] empty when the spec says neither
+      def completion_section
+        spec = Plans::Spec.for(subject)
+        return "" if spec.completed_when.empty? && spec.how_to_verify.empty?
+
+        lists = [["The task is finished when", spec.completed_when], ["How to verify it", spec.how_to_verify]]
+        body = lists.reject { |_, items| items.empty? }.map do |title, items|
+          "#{title}:\n\n#{items.map { |item| "- #{item}" }.join("\n")}\n"
+        end
+
+        "\n## Completion criteria — from the spec's author\n\n" \
+          "Do not sign Completed until the first list holds, and run each check in the second. " \
+          "If you write plan.md, copy both lists into it verbatim, under `## Task completed when` and " \
+          "`## How to verify`; the harness adds them if you do not. A reviewer rejects work that fails a check.\n\n" \
+          "#{body.join("\n")}"
+      end
+
+      # What the spec's author requires, if they said. The opposite of
+      # {#suggestions_section}: an agent that weighs a requirement against its
+      # own taste will sometimes decide against it, so this states that there
+      # is nothing to weigh, and gives it the one honest way out, which is to
+      # stop and say so. A reviewer is told to hold the work to them.
+      #
+      # @return [String] empty when the spec requires nothing
+      def requirements_section
+        requirements = Plans::Spec.for(subject).requirements
+        return "" if requirements.empty?
+
+        "\n## Implementation requirements — from the spec's author\n\n" \
+          "These are requirements, not suggestions. Do exactly what each one says; do not substitute, " \
+          "weaken or reinterpret one, and do not decide you know better. If you cannot meet one, stop " \
+          "and sign Blocked with `--note technical`, and write which requirement and why in the " \
+          "document you own. A reviewer rejects work that does not meet them.\n\n" \
+          "#{requirements.map { |item| "- #{item}" }.join("\n")}\n"
+      end
+
+      # What the spec's author would build it with, if they said. Labelled as
+      # a suggestion in so many words, because an agent handed a language and
+      # a library list as an order will follow it into a dead end rather than
+      # say the route is wrong; handed as advice, it can take a better one and
+      # write the reason in the document it owns. The signature note is
+      # read by the harness for keywords, so it is no place for prose.
+      #
+      # @return [String] empty when the spec suggests nothing
+      def suggestions_section
+        suggestions = Plans::Spec.for(subject).suggestions
+        return "" if suggestions.empty?
+
+        "\n## Implementation suggestions — from the spec's author\n\n" \
+          "These are suggestions, not requirements: a language, libraries, an approach the author " \
+          "had in mind. Prefer them when they fit. If you find a better route, take it and write why " \
+          "in the document you own, not in the signature note.\n\n#{suggestions.map { |item| "- #{item}" }.join("\n")}\n"
       end
 
       # The section `run --prompt` adds, labelled as coming from the person who

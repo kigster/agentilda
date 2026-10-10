@@ -45,6 +45,53 @@ RSpec.describe Agentilda::Execution::Prompt, :tree do
     expect(text).to include("  git push", "You may run these, which most agents may not:\n\n  gh pr review")
   end
 
+  context "when the spec suggests an implementation" do
+    let(:spec_body) { "---\nimplementation_suggestions:\n  - Ruby with dry-cli\n---\n# A Feature\n" }
+
+    it "shows the suggestions, labelled as advice" do
+      expect(text).to include("Implementation suggestions", "suggestions, not requirements", "- Ruby with dry-cli")
+    end
+  end
+
+  context "when the spec requires an implementation" do
+    let(:spec_body) { "---\nimplementation_requirements:\n  - The database is PG-strict\n---\n# A Feature\n" }
+
+    it "states them as binding, with the way out" do
+      expect(text).to include("Implementation requirements",
+        "requirements, not suggestions",
+        "- The database is PG-strict",
+        "sign Blocked")
+    end
+
+    it "leaves out the suggestions section" do
+      expect(text).not_to include("Implementation suggestions")
+    end
+  end
+
+  context "when the spec says how the task is finished" do
+    let(:spec_body) { "---\ntask-completed-when: the editor opens\nhow-to-verify: bundle exec rspec\n---\n# A Feature\n" }
+
+    it "gives the builder and the reviewer the same two lists" do
+      expect(text).to include("Completion criteria",
+        "- the editor opens",
+        "- bundle exec rspec",
+        "## Task completed when",
+        "## How to verify")
+    end
+  end
+
+  it "adds no completion section when the spec has none" do
+    expect(text).not_to include("Completion criteria")
+  end
+
+  it "adds no requirements section when the spec has none" do
+    expect(text).not_to include("Implementation requirements")
+  end
+
+  it "adds no suggestions section when the spec has none" do
+    expect(text).not_to include("Implementation suggestions")
+  end
+
   it "adds no operator section when nobody steered the run" do
     expect(text).not_to include("Operator instructions")
   end

@@ -93,6 +93,7 @@ lib/agentilda/
     adoption.rb          gives an orphan pull request a retroactive plan of its own
     unblocker.rb         drains answered questions out of blocked.md
     lanes.rb             moves plan- and quick-lane plans past the phases they skip
+    completion.rb        copies the spec's task-completed-when and how-to-verify into plan.md
   agents/                Agentilda::Agents — agents/*.md loaded (Registry), one definition (Agent), the report (Roster),
                          Profile (adapter, model, effort for one plan), Routing (lanes, toggles, needs)
   adapters/              Agentilda::Adapters — claude, codex, pi: argv and transcript per CLI; Stream reads generic JSONL
