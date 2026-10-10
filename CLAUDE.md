@@ -82,21 +82,27 @@ lib/agentilda/
     feature.rb           one decoded folder name, plus titleize and its acronym tables
     tree.rb, subject.rb  a .plans directory, decoded and ordered; one folder as the machine sees it
     pull_request(s).rb   rows parsed out of pull-requests.md
-    ledger.rb            the dated notes agents sign documents with
-    mailbox.rb           mailbox.md in a plan folder: how a pair talks, append-only and numbered
+    ledger.rb            the dated notes agents sign with, read from markdown and from state.json
+    plan_state.rb        state.json in each plan folder: stages, signatures, messages; schemas/plan-state.schema.json
+    mailbox.rb           how a pair talks, append-only and numbered, kept in state.json
+    spec.rb              spec.md frontmatter: lane, frontend, depth, per-phase adapter/model/effort
     index.rb, dev_work.rb  INDEX.md; the dev/none no-plan prefixes
   lifecycle/             Agentilda::Lifecycle — operations that create, rename or drain plans
     creator.rb, brief.rb minting a folder and scaffolding its opening spec.md
     resync.rb            dirs (folder name vs contents) and prs (PR title prefixes)
     adoption.rb          gives an orphan pull request a retroactive plan of its own
     unblocker.rb         drains answered questions out of blocked.md
-  agents/                Agentilda::Agents — agents/*.md loaded (Registry), one definition (Agent), the report (Roster)
+    lanes.rb             moves plan- and quick-lane plans past the phases they skip
+    completion.rb        copies the spec's task-completed-when and how-to-verify into plan.md
+  agents/                Agentilda::Agents — agents/*.md loaded (Registry), one definition (Agent), the report (Roster),
+                         Profile (adapter, model, effort for one plan), Routing (lanes, toggles, needs)
+  adapters/              Agentilda::Adapters — claude, codex, pi: argv and transcript per CLI; Stream reads generic JSONL
   engine/                Agentilda::Engine — the round loop
     runner.rb            run configuration, until a fixed point
     dispatcher.rb        the tick loop: assign, poll, settle, rename
     state_file.rb        restart state; board.rb, tally.rb, progress_log.rb what the run shows and costs
   execution/             Agentilda::Execution — one agent invocation
-    executor.rb          one `claude -p` invocation, and the autonomy boundary
+    executor.rb          one agent invocation through its adapter, and the autonomy boundary
     child.rb, clock.rb, control.rb   the process, its advisory timeout, its control file
     transcript.rb        parses --output-format stream-json into a spinner phrase
   vcs/                   Agentilda::Vcs — worktree.rb, publisher.rb (push, open the PR), github.rb (the gh seam)
@@ -104,6 +110,8 @@ lib/agentilda/
                          documentation.rb (`agentilda docs`), diagram.rb (`agentilda states`), reporter.rb, viewer.rb
   support/               collapsed by Zeitwerk, so these stay Agentilda::UI, ::Config, ::Markdown, ::Frontmatter
   linear/                one-way export of .plans to Linear projects and issues
+  evals/                 Agentilda::Evals — per-agent cases (evals/cases/<agent>/<id>.yml), deterministic
+                         checks per depth, offline scoring of recordings, --live runs in a temp repo
   cli.rb                 the dry-cli registry, and the dry-cli-help `help` block that titles it
   cli/base.rb            shared flags, tree_for, refuse, the dry-run footer
   cli/<command>/         one file per command (create/create.rb, run/run.rb, …),

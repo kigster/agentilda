@@ -1,5 +1,7 @@
 # frozen_string_literal: true
 
+require "socket"
+
 module Agentilda
   module Engine
     # The loop. One tick a second: reap what finished and settle it against
@@ -161,7 +163,7 @@ module Agentilda
           role: task.agent.role,
           round: task.round,
           rounds: rounds_for(task.agent),
-          model: model_for(task.agent),
+          model: model_for(task.agent, task.subject),
           remaining: job.handle.remaining,
           phase: job.handle.phase,
           up: job.up.to_i,
@@ -190,10 +192,17 @@ module Agentilda
       def rounds_for(agent) = [agent.rounds, @rounds_cap].compact.min
 
       # @param agent [Agentilda::Agents::Agent]
+      # @param subject [Agentilda::Plans::Subject, nil] whose spec.md may override it
       # @return [String]
-      def model_for(agent)
+      def model_for(agent, subject = nil)
         executor = @runner.executor
-        (executor.respond_to?(:model) && executor.model) || agent.model || "default"
+        unless subject && executor.respond_to?(:profile_for)
+          return (executor.respond_to?(:model) && executor.model) || agent.model || "default"
+        end
+
+        # Asked on every frame of the board, so spec.md is read once per plan
+        # and agent rather than once per frame.
+        (@models ||= {})[[subject.feature.ordinal.to_s, agent.name]] ||= executor.profile_for(agent, subject).label
       end
 
       # ---- starting ---------------------------------------------------------
@@ -201,19 +210,45 @@ module Agentilda
       # Started stages a dead run left behind get the harness's own line and a
       # place in history, so eligibility treats them as an Interrupted round.
       #
+      # Two records can say a stage was stranded: the run's own state file,
+      # and the plan's `state.json`. The second is what survives a run whose
+      # state file was lost, or a plan carried to another checkout. A stage
+      # either names is resumed once.
+      #
       # @return [void]
       def resume_stranded
-        return unless @state
-
-        @state.load
-        @state.stranded.each do |ordinal, stage|
-          subject = @runner.tree.reload.find(Plans::Ordinal.parse(ordinal)) or next
-          agent = @runner.agents.find(stage["agent"]) or next
-          write_interrupted(subject, agent, stage["round"], "harness died")
-          remember(ordinal, agent.name, subject.status.key, "Interrupted", stage["round"])
-          @state.record(ordinal, agent: agent.name, round: stage["round"], status: "Interrupted", exit: "harness died")
+        resumed = []
+        if @state
+          @state.load
+          @state.stranded.each do |ordinal, stage|
+            subject = @runner.tree.reload.find(Plans::Ordinal.parse(ordinal)) or next
+            resumed << interrupt_stranded(subject, stage["agent"], stage["round"])
+          end
         end
-        @state.begin_run!(root: @runner.root)
+        unless @runner.dry_run?
+          @runner.in_scope.each do |subject|
+            Plans::PlanState.for(subject.feature.path).stranded.each do |stage|
+              next if resumed.include?([subject.feature.ordinal.to_s, stage["agent"], stage["round"]])
+
+              resumed << interrupt_stranded(subject, stage["agent"], stage["round"])
+            end
+          end
+        end
+        @state&.begin_run!(root: @runner.root)
+      end
+
+      # @param subject [Agentilda::Plans::Subject]
+      # @param name [String] the agent
+      # @param round [Integer]
+      # @return [Array(String, String, Integer), nil] what was resumed
+      def interrupt_stranded(subject, name, round)
+        agent = @runner.agents.find(name) or return nil
+        ordinal = subject.feature.ordinal.to_s
+        write_interrupted(subject, agent, round, "harness died")
+        remember(ordinal, agent.name, subject.status.key, "Interrupted", round)
+        @state&.record(ordinal, agent: agent.name, round:, status: "Interrupted", exit: "harness died")
+        stage!(subject, agent, round, status: "Interrupted", note: "harness died", finished_at: Time.now.iso8601)
+        [ordinal, agent.name, round]
       end
 
       # @return [void]
@@ -232,11 +267,11 @@ module Agentilda
         @runner.in_scope.each do |subject|
           # After {#reconcile} this is the folder's name. On a dry run, which
           # renames nothing, it is what the name would have become.
-          state = Lifecycle::Resync::Dirs.target(subject)
+          state = Lifecycle::Lanes.target(subject) || Lifecycle::Resync::Dirs.target(subject)
           next if Plans::StateMachine::SETTLED.include?(state.key)
           next if @finished_plans.include?(subject.feature.ordinal.to_s)
 
-          candidates = @runner.agents.for_status(state)
+          candidates = Agents::Routing.filter(@runner.agents.for_status(state), subject)
           preferred = @preferred[subject.feature.ordinal.to_s]
           candidates = candidates.sort_by { |a| a.name == preferred ? 0 : 1 } if preferred
           agent = candidates.find { |a| eligible?(a, subject) }
@@ -258,6 +293,22 @@ module Agentilda
       def reconcile
         busy = @running.map { |j| j.task.subject.feature.ordinal.to_s }
         Lifecycle::Resync::Dirs.new(tree: @runner.tree.reload, except: busy).call(commit: !@runner.dry_run?)
+        fast_forward(busy) unless @runner.dry_run?
+      end
+
+      # Plans whose lane skips research, rewriting or planning are moved past
+      # those phases before anyone is assigned, so the first agent they meet
+      # is the one their lane starts with.
+      #
+      # @param busy [Array<String>] ordinals an agent is working right now
+      # @return [void]
+      def fast_forward(busy)
+        @runner.in_scope.each do |subject|
+          next if busy.include?(subject.feature.ordinal.to_s)
+
+          moved = Lifecycle::Lanes.advance(subject, commit: true) or next
+          UI.log("lane: #{moved.first} -> #{moved.last}", plan: subject.feature.ordinal.to_s)
+        end
       end
 
       # @param agent [Agentilda::Agents::Agent]
@@ -294,17 +345,30 @@ module Agentilda
           down: 0,
           subagents: 0,
           frame: 0)
-        successor = @runner.agents.for_status(Plans::STATUS_BY_KEY.fetch(agent.advances_to)).first&.name if agent.advances_to && Plans::STATUS_BY_KEY.key?(agent.advances_to)
+        if agent.advances_to && Plans::STATUS_BY_KEY.key?(agent.advances_to)
+          successor = Agents::Routing.filter(@runner.agents.for_status(Plans::STATUS_BY_KEY.fetch(agent.advances_to)),
+            subject).first&.name
+        end
         # Each member of a pair is told who the others are, so the executor
-        # can name them beside the plan's mailbox.
-        partners = @runner.agents.team_for(Lifecycle::Resync::Dirs.target(subject)) - [agent]
+        # can name them beside the plan's mailbox. A partner routing would
+        # never start is not a partner.
+        team = @runner.agents.team_for(Lifecycle::Resync::Dirs.target(subject))
+        partners = Agents::Routing.filter(team, subject) - [agent]
         remember(ordinal, agent.name, job.state, "Started", round)
+        stage!(subject,
+          agent,
+          round,
+          status:     "Started",
+          from:       from.to_s,
+          started_at: Time.now.iso8601,
+          run:        { pid: Process.pid, host: Socket.gethostname },
+          **profile_fields(agent, subject))
         @state&.record(ordinal,
           agent:      agent.name,
           round:,
           status:     "Started",
           state:      from.to_s,
-          model:      model_for(agent),
+          model:      model_for(agent, subject),
           file:       agent.ledger.first,
           started_at: Time.now.iso8601)
         UI.log("started", **task.log_fields)
@@ -414,6 +478,18 @@ module Agentilda
                   end
         attempt = attempt.with(note: "#{attempt.note}; #{problems.join(", ")}") unless problems.empty?
         attempt = attempt.with(to: fresh(task)&.status&.key || attempt.to)
+        if (settled = fresh(task))
+          stage!(settled,
+            agent,
+            task.round,
+            status:      attempt.status || (attempt.ok ? "Completed" : "Interrupted"),
+            to:          attempt.to.to_s,
+            finished_at: Time.now.iso8601,
+            up:          attempt.up.to_i,
+            down:        attempt.down.to_i,
+            seconds:     attempt.seconds.to_f.round(1),
+            note:        attempt.note.to_s)
+        end
         @state&.record(ordinal,
           agent:    agent.name,
           round:    task.round,
@@ -495,6 +571,7 @@ module Agentilda
         ordinal = task.subject.feature.ordinal.to_s
         subject = fresh(task) or return base.with(ok: false, note: "plan folder vanished")
         remember(ordinal, agent.name, job.state, "Completed", task.round)
+        Lifecycle::Completion.copy(subject) if agent.ledger.include?("plan.md")
         verdict = verdict_of(entry)
         partner_running = @running.any? { |j| j.task.subject.feature.ordinal.to_s == ordinal }
         target = target_for(agent, verdict, partner_running)
@@ -611,8 +688,33 @@ module Agentilda
           seconds: spend.call(:seconds),
           round: task.round,
           file: job.file || task.agent.ledger.first.to_s,
-          model: model_for(task.agent),
+          model: model_for(task.agent, task.subject),
           status: job.status)
+      end
+
+      # One round in the plan's own `state.json`. A dry run writes nothing, and
+      # a harness that cannot write the file reports it and carries on: the
+      # folder name and the ledger still say what happened.
+      #
+      # @param subject [Agentilda::Plans::Subject]
+      # @param agent [Agentilda::Agents::Agent]
+      # @param round [Integer]
+      # @return [void]
+      def stage!(subject, agent, round, **fields)
+        return if @runner.dry_run?
+
+        Plans::PlanState.for(subject.feature.path).stage!(agent: agent.name, round:, **fields)
+      rescue SystemCallError, Agentilda::Error => e
+        UI.log("state.json not written: #{e.message}", plan: subject.feature.ordinal.to_s)
+      end
+
+      # @return [Hash] adapter, model and effort, when the executor can say
+      def profile_fields(agent, subject)
+        executor = @runner.executor
+        return {} unless executor.respond_to?(:profile_for)
+
+        profile = executor.profile_for(agent, subject)
+        { adapter: profile.adapter.name, model: profile.model, effort: profile.effort }
       end
 
       # @return [Agentilda::Plans::Subject, nil] the plan read fresh from the main tree

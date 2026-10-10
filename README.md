@@ -134,8 +134,62 @@ A plan can also leave the main path. It stops at ⭕️ Technical Block or 🅱�
 | `rey-frontend`      | ⭐️, 🟡, 🎨, 🔴 | 🟢                  | `plan-frontend.md`, `pull-requests.md` | Builds the interface against Luke's API and proves the two halves work together          |
 | `hansolo-reviewer`  | 🟢, 👀         | 👀 approved, 🔴, 💩 | `pull-requests.md`                     | Reviews the diff against the plan; rejects at most twice; never merges                   |
 | `lando-broker`      | ⭕️, 🅱️         | ⭐️                  | `plan.md`                              | Folds your answers from `blocked.md` back into the spec and plan                         |
+| `r2d2-mechanic`     | ⭐️, 🟡, 🔴     | 🟢                  | `plan.md`, `pull-requests.md`          | Quick lane only: does one short mechanical task straight from `spec.md`                  |
 
-Luke and Rey work at the same time, in the same worktree, toward one pull request. They talk through `mailbox.md` in the plan folder, using `tilda mail send` and `tilda mail read`.
+Luke and Rey work at the same time, in the same worktree, toward one pull request. They talk through `tilda mail send` and `tilda mail read`. Rey only starts when `plan-frontend.md` has work units, so a back-end-only plan costs one builder, not two.
+
+| Agent               | Model / effort | Why                                    |
+| :------------------ | :------------- | :------------------------------------- |
+| `leah-researcher`   | haiku / medium | lookups, fanned out                    |
+| `yoda-writer`       | sonnet / medium| prose                                  |
+| `palpatine-planner` | opus / high    | the one place depth pays               |
+| `luke-backend`      | opus / high    | builds; Opus is the ceiling            |
+| `rey-frontend`      | sonnet / medium| narrower work                          |
+| `hansolo-reviewer`  | sonnet / high  | review                                 |
+| `lando-broker`      | haiku / low    | clerical                               |
+| `r2d2-mechanic`     | haiku / medium | short mechanical tasks                 |
+
+No agent runs above Opus: the Claude adapter clamps Fable and anything costlier to Opus. Agents start without your personal plugins, skills, hooks and MCP servers, which on a typical setup cuts a quarter of every turn's context and half the start-up time. `tilda run --user-config` lets them back in.
+
+### Lanes, and what spec.md can ask for
+
+The frontmatter of `spec.md` steers how the plan is worked. Every key is optional:
+
+```yaml
+---
+lane: quick          # full (default) | plan | quick
+frontend: false      # true forces rey-frontend; false keeps it out
+depth: fast          # fast | medium | deep: the default effort for every phase
+phases:              # per-phase overrides: research, specification, planning,
+  build:             # build, frontend, review, unblock
+    adapter: codex   # claude (default) | codex | pi
+    model: gpt-5-codex
+    effort: medium   # low | medium | high | xhigh | max
+  review: { model: opus }
+implementation_suggestions:   # text or a list: language, libraries, an approach
+  - Ruby, with dry-cli for the command line
+implementation_requirements:  # text or a list: binding, exactly as written
+  - The database is PG-strict
+task-completed-when:          # what must be true for the task to be finished
+  - "`tilda create` opens an editor and writes no draft"
+how-to-verify:                # the commands or checks that show it
+  - bundle exec rspec spec/agentilda/cli/create_spec.rb
+---
+```
+
+`implementation_suggestions` is advice, not a requirement. Every agent is shown it as "suggestions from the spec's author", prefers it when it fits, and may take a better route as long as it writes why in the document it owns.
+
+`implementation_requirements` is the opposite: every agent is told to do exactly what each item says. An agent that cannot meet one signs `Blocked` instead of substituting its own, and `hansolo-reviewer` rejects work that does not meet them. Agents start without your personal skills (`run --user-config` restores them), so write the rule itself, not just the name of a skill that holds it.
+
+`task-completed-when` and `how-to-verify` are copied into `plan.md` under `## Task completed when` and `## How to verify`. Agents are asked to copy them verbatim; after a planner signs, the harness appends whichever section is missing and never touches one that is there. Every agent is told not to sign `Completed` until the first holds and to run each check in the second, and the reviewer rejects work that fails one.
+
+| Lane    | Route                                                        | For                                              |
+| :------ | :----------------------------------------------------------- | :----------------------------------------------- |
+| `full`  | leah → yoda → palpatine → luke (+ rey) → han                 | features you want researched and specified        |
+| `plan`  | palpatine → luke (+ rey) → han                               | a spec you already trust; skip research and rewrite |
+| `quick` | r2d2-mechanic → han                                          | "split the big migration into smaller ones"       |
+
+`tilda create --lane quick split big migration` writes the frontmatter for you. Precedence for model and effort, highest first: `run --model`, then `phases.<phase>`, then `depth`, then the agent's own definition.
 
 Run `tilda agents list` for the same table, or `tilda describe <agent>` to read one agent's prompt.
 
@@ -154,6 +208,7 @@ Partial answers are fine. The plan stays blocked until the last question is answ
 
 ```bash
 tilda create tax rule dsl              # a new plan: 003.00-⚪️ → tax-rule-dsl
+tilda create --lane quick split big migration  # one agent, straight to a pull request
 tilda create --from notes/dsl.md       # a new plan named by the file's frontmatter title
 tilda create --after 002 k1 sync       # a retroactive plan: 002.01-🕰️ → k1-sync
 tilda list-plans                       # every plan, its state and its pull requests
@@ -181,6 +236,7 @@ tilda run --commit --plan 003,005.01       # only these plans
 tilda run --commit --agent yoda-writer --prompt "Rework the risks section first"
 tilda run --commit --skip hansolo-reviewer # everyone but the reviewer; its plans wait
 tilda run --commit --model opus            # one model for every agent
+tilda run --commit --user-config           # agents load your personal plugins and skills too
 tilda run --commit --timeout 600           # at most ten minutes per agent
 tilda run --commit --scroll-height 5       # each agent's last five statuses under its row
 tilda run --commit --agent luke-backend --prompt steer.md  # a short --prompt naming a file is read
@@ -249,15 +305,15 @@ Ctrl-C once asks each running agent to write a `RESUME:` note into its plan's `m
 
 ### How agents hand off
 
-An agent never renames its plan folder. Instead, it signs the document it owns, and the harness moves the folder based on the signature:
+An agent never renames its plan folder. Instead, it signs the plan's `state.json`, and the harness moves the folder based on the signature:
 
-```text
-> [!NOTE]
->
-> [2026-09-04 11:29:20 AM PDT] [ agent: leah-researcher   status: Started, round 1 ]
-> [2026-09-04 11:44:03 AM PDT] [ agent: leah-researcher   status: Completed, round 1 ]
-> [2026-09-04 11:44:04 AM PDT] [ next: yoda-writer ]
+```bash
+agentilda state sign --plan 003 --agent leah-researcher --round 1 --status Started
+agentilda state sign --plan 003 --agent leah-researcher --round 1 --status Completed --next yoda-writer
+agentilda state show --plan 003 | jq '.stages[] | {agent, round, status, model, seconds}'
 ```
+
+`state.json` lives in every plan folder and is committed with it. It holds the harness's record of each round (adapter, model, effort, tokens, seconds), the agents' signatures, and the messages between them (`tilda mail`). Its shape is `schemas/plan-state.schema.json`. Writes go through a lock, so two agents on one plan cannot overwrite each other. Signatures written the old way, as `> [!NOTE]` lines in the markdown, are still read.
 
 | Status                            | What the harness does                                               |
 | :-------------------------------- | :------------------------------------------------------------------ |
@@ -265,7 +321,7 @@ An agent never renames its plan folder. Instead, it signs the document it owns, 
 | `Blocked`                         | parks the folder at ⭕️, or at 🅱️ when the note says `product`       |
 | `Almost completed`, `Interrupted` | gives the agent another round, up to its limit                      |
 
-Suppose an agent stops without signing, because it crashed, timed out or was killed. The harness signs `Interrupted` for it. If the work is on disk anyway, the harness also signs `Completed` for it. The run's own state, such as process ids and token counts, lives in `.plans/agentilda-state.json`, gitignored. A later run picks up where a dead one stopped.
+Suppose an agent stops without signing, because it crashed, timed out or was killed. The harness signs `Interrupted` for it. If the work is on disk anyway, the harness also signs `Completed` for it. A round left `Started` by a harness that has since died is found in `state.json` (and in the run's own gitignored `.plans/agentilda-state.json`), marked `Interrupted`, and picked up by the next run.
 
 ## GitHub and Linear
 

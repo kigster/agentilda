@@ -150,7 +150,13 @@ RSpec.describe Agentilda::Lifecycle::Creator, :tree do
     it "writes no pull-requests.md when there are no pull requests to record" do
       plain = described_class.new(dir: plans_root).create(words: %w[ordinary work]).value!
 
-      expect(Dir.children(plain)).to be_empty
+      expect(Dir.children(plain)).to eq(["state.json"])
+    end
+
+    it "starts the plan's state.json with the state it opened in" do
+      plain = described_class.new(dir: plans_root).create(words: %w[ordinary work]).value!
+
+      expect(Agentilda::Plans::PlanState.for(plain).state).to eq("new")
     end
   end
 end

@@ -1,0 +1,100 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/kigster/agentilda/blob/main/schemas/plan-state.schema.json",
+  "title": "Agentilda plan state",
+  "description": "state.json in a .plans folder: the harness's stages, the agents' signatures, and the messages between agents. Written only through agentilda, never by hand.",
+  "type": "object",
+  "required": ["version", "plan", "stages", "signatures", "messages"],
+  "additionalProperties": false,
+  "properties": {
+    "$schema": { "type": "string" },
+    "version": { "type": "integer", "minimum": 1 },
+    "plan": {
+      "type": "object",
+      "required": ["ordinal", "slug"],
+      "additionalProperties": false,
+      "properties": {
+        "ordinal": { "type": ["string", "null"], "pattern": "^\\d{3}\\.\\d{2}$" },
+        "slug": { "type": "string" }
+      }
+    },
+    "state": {
+      "description": "The last state the harness moved the folder to. The folder name is authoritative.",
+      "type": ["string", "null"]
+    },
+    "updated_at": { "type": ["string", "null"], "format": "date-time" },
+    "stages": {
+      "description": "One record per agent per round, written by the harness.",
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["agent", "round", "status"],
+        "additionalProperties": false,
+        "properties": {
+          "agent": { "$ref": "#/$defs/agent" },
+          "round": { "type": "integer", "minimum": 1 },
+          "status": { "$ref": "#/$defs/status" },
+          "from": { "type": "string" },
+          "to": { "type": "string" },
+          "started_at": { "type": "string", "format": "date-time" },
+          "finished_at": { "type": "string", "format": "date-time" },
+          "adapter": { "enum": ["claude", "codex", "pi"] },
+          "model": { "type": ["string", "null"] },
+          "effort": { "$ref": "#/$defs/effort" },
+          "up": { "type": "integer", "minimum": 0 },
+          "down": { "type": "integer", "minimum": 0 },
+          "seconds": { "type": "number", "minimum": 0 },
+          "note": { "type": "string" },
+          "run": {
+            "description": "The harness process that dispatched it, so a restart can tell a crash from a live run.",
+            "type": "object",
+            "required": ["pid", "host"],
+            "additionalProperties": false,
+            "properties": {
+              "pid": { "type": "integer" },
+              "host": { "type": "string" }
+            }
+          }
+        }
+      }
+    },
+    "signatures": {
+      "description": "Ledger lines, written by agents through `agentilda state sign`.",
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["at", "agent", "status", "round"],
+        "additionalProperties": false,
+        "properties": {
+          "at": { "type": "string", "format": "date-time" },
+          "agent": { "$ref": "#/$defs/agent" },
+          "status": { "$ref": "#/$defs/status" },
+          "round": { "type": "integer", "minimum": 1 },
+          "note": { "type": "string" },
+          "next": { "$ref": "#/$defs/agent" }
+        }
+      }
+    },
+    "messages": {
+      "description": "What agents on this plan said to each other, through `agentilda mail send`.",
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["number", "at", "from", "to", "body"],
+        "additionalProperties": false,
+        "properties": {
+          "number": { "type": "integer", "minimum": 1 },
+          "at": { "type": "string", "format": "date-time" },
+          "from": { "$ref": "#/$defs/agent" },
+          "to": { "$ref": "#/$defs/agent" },
+          "body": { "type": "string", "minLength": 1 }
+        }
+      }
+    }
+  },
+  "$defs": {
+    "agent": { "type": "string", "pattern": "^[\\w-]+$" },
+    "status": { "enum": ["Started", "Completed", "Almost completed", "Interrupted", "Blocked"] },
+    "effort": { "enum": ["low", "medium", "high", "xhigh", "max", null] }
+  }
+}
