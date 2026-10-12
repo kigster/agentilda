@@ -117,6 +117,7 @@ module Agentilda
         return Failure("already exists: #{File.basename(target)}") if File.exist?(target)
 
         FileUtils.mkdir_p(target)
+        Plans::PlanState.for(target).state!(status.key)
         @existing = nil
         Success(target)
       end

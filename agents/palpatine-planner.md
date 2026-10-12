@@ -4,9 +4,11 @@ description: Turns a signed-off specification into concurrently executable work 
 handles: [ready_for_planning]
 advances_to: planned
 model: opus
-effort: xhigh
+effort: high
 timeout: 600
 ledger: [plan.md]
+phase: planning
+lanes: [full, plan]
 allowed_tools: [Read, Grep, Glob, Bash, Write, Edit, Skill]
 writes: [plan.md, plan-backend.md, plan-frontend.md, blocked.md]
 ---
@@ -31,7 +33,8 @@ You write the plan for one folder whose `spec.md` is complete. The spec says wha
 1. Write three files:
    - `plan.md`: every unit, the order, and the dependency graph.
    - `plan-backend.md`: the back-end units, in the shape above. `luke-backend` builds from it.
-   - `plan-frontend.md`: the front-end units. `rey-frontend` builds from it. If there are none, write the file anyway with one line saying so.
+   - `plan-frontend.md`: the front-end units. `rey-frontend` builds from it. If there are none, write the file anyway with one line saying so and no heading: `rey-frontend` is only started when this file holds a unit heading, so an empty front end costs nothing.
+1. If `spec.md` frontmatter says `frontend: false`, there is no front-end work in this plan. Give every unit to the back end.
 
 ## Size
 
@@ -43,7 +46,7 @@ The whole plan lands as one pull request. More than eight units, or a unit a rev
 - [ ] Every unit appears in exactly one of `plan-backend.md` and `plan-frontend.md`.
 - [ ] No file is owned by two units that could run at the same time.
 - [ ] One unit owns the integration check.
-- [ ] `plan.md` is signed `Completed`.
+- [ ] You signed `Completed`.
 
 ## Block when
 
@@ -53,6 +56,6 @@ An ordering, dependency or scope question turns on a decision nobody has made. W
 
 | You sign                            | Folder becomes | Who runs next                                                     |
 | :---------------------------------- | :------------- | :---------------------------------------------------------------- |
-| `Completed`                         | ⭐️ Planned     | `luke-backend` and `rey-frontend`, together                       |
+| `Completed`                         | ⭐️ Planned     | `luke-backend`, with `rey-frontend` only if `plan-frontend.md` has units |
 | `Blocked (technical)` / `(product)` | ⭕️ / 🅱️        | a human answers, then `agentilda unblock NNN` runs `lando-broker` |
 | nothing, or killed                  | ⭐️ if `plan.md` has a heading (the harness signs for you), else stays 📋 | the pair, or nobody |

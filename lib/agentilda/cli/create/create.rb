@@ -40,6 +40,15 @@ module Agentilda
         default: true,
         desc:
           "For a new feature (no --prs), attempt spec.md's four headings from project context via `claude`. --no-draft leaves them bare"
+      option :lane,
+        aliases: ["-l"],
+        values:  Plans::Spec::LANES.map(&:to_s),
+        desc:
+          "Route the plan: full (research, spec, plan, build), plan (skip research and rewriting), " \
+          "quick (one agent does a short mechanical task). Written into spec.md's frontmatter"
+      option :depth,
+        values: Plans::Spec::DEPTHS.map(&:to_s),
+        desc:   "How hard every phase should think: fast, medium or deep. Written into spec.md's frontmatter"
       option :open,
         type: :boolean,
         default: true,
@@ -54,7 +63,8 @@ module Agentilda
         "--after 018 --prs 12,15 verify      # …and write spec.md from what those PRs did",
         "--after 018 --pr https://…/pull/12 verify # verify the pull request by number or URL",
         "--status ready billing sync         # opens at ⭐️ instead of ⚪️",
-        "--from notes/tax-dsl.md             # title and opening prose from the file's frontmatter and body"
+        "--from notes/tax-dsl.md             # title and opening prose from the file's frontmatter and body",
+        "--lane quick split big migration    # r2d2-mechanic does it and opens the PR; no research, spec or plan"
       ]
 
       # @param words [Array<String>]
@@ -243,6 +253,7 @@ module Agentilda
           warn_about_draft(note) unless ok
         end
 
+        stamp(brief.spec_path, options)
         open_spec(brief.spec_path) if options.fetch(:open, true)
         path
       end
@@ -266,6 +277,20 @@ module Agentilda
             file:   ->(_) { "spec.md" },
             root:) { |_, line| block.call(line) }.first
         end
+      end
+
+      # Writes `--lane` and `--depth` into spec.md's frontmatter, after the
+      # draft, so a drafting agent that rewrites the file cannot drop them.
+      #
+      # @param spec_path [String]
+      # @param options [Hash]
+      # @return [void]
+      def stamp(spec_path, options)
+        settings = { "lane" => options[:lane], "depth" => options[:depth] }.compact
+        return if settings.empty? || !File.file?(spec_path)
+
+        meta, body = Frontmatter.split(File.read(spec_path, encoding: "UTF-8"))
+        File.write(spec_path, "#{YAML.dump(meta.merge(settings))}---\n#{body}")
       end
 
       # @param spec_path [String]

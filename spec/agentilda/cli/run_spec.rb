@@ -53,7 +53,7 @@ RSpec.describe Agentilda::CLI::Run, :tree do
   # 🟡, so the first round's resync advances it before any agent has run,
   # and every "nothing happened" assertion below would be false.
   def building_plan(ordinal = "001.00", slug = "tax-rule-dsl")
-    plans { |t| t.plan(ordinal, :building, slug, files: { "spec.md" => spec_body, "plan.md" => "# Plan" }) }
+    plans { |t| t.plan(ordinal, :building, slug, files: { "spec.md" => spec_body, "plan.md" => "# Plan", "plan-frontend.md" => "## F1" }) }
   end
 
   # The `--commit` seam. The block sees the subject and the agent before

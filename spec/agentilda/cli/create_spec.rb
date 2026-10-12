@@ -44,6 +44,26 @@ RSpec.describe Agentilda::CLI::Create, :tree do
     opened
   end
 
+  describe "choosing a lane" do
+    let(:spec_md) do
+      out, = run("split", "big", "migration", lane: "quick", depth: "fast", draft: false, open: false)
+      File.read(File.join(out.strip, "spec.md"))
+    end
+
+    it "writes the lane and depth into spec.md's frontmatter" do
+      expect(Agentilda::Plans::Spec.parse(spec_md).to_h.slice(:lane, :depth)).to eq(lane: :quick, depth: :fast)
+    end
+
+    it "keeps the scaffold below the frontmatter" do
+      expect(spec_md).to include("# Split Big Migration")
+    end
+
+    it "writes no frontmatter when no lane or depth was given" do
+      out, = run("plain", "plan", draft: false, open: false)
+      expect(File.read(File.join(out.strip, "spec.md"))).not_to start_with("---")
+    end
+  end
+
   describe "a brand-new feature, nothing shelled out" do
     it "prints the folder path on STDOUT, where a script can read it" do
       out, = run("tax", "rule", "dsl", draft: false, open: false)

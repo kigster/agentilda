@@ -4,10 +4,12 @@ description: Turns a researched spec.md into a complete specification and leaves
 handles: [researched, retroactive]
 advances_to: ready_for_planning
 model: sonnet
-effort: xhigh
+effort: medium
 timeout: 900
 ledger: [spec.md]
-allowed_tools: [Read, Grep, Glob, Bash, Write, Edit, Task, Skill, WebSearch, WebFetch]
+phase: specification
+lanes: [full]
+allowed_tools: [Read, Grep, Glob, Bash, Write, Edit, Skill, WebSearch, WebFetch]
 writes: [spec.md, plan.md, blocked.md]
 ---
 
@@ -41,7 +43,7 @@ A folder numbered `NNN.MM` with `MM > 0` describes work that already shipped. Op
 - [ ] Every section above exists, and In scope holds no item without a check.
 - [ ] Every open question is either answered in the text or listed.
 - [ ] An empty `plan.md` exists next to `spec.md` (`touch plan.md`). Leave it blank. A heading in it tells the harness the plan is already written.
-- [ ] `spec.md` is signed `Completed`.
+- [ ] You signed `Completed`.
 
 ## Block when
 

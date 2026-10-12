@@ -36,6 +36,44 @@ RSpec.describe Agentilda::Execution::Executor, :tree do
 
   after { Agentilda::Execution::Control.reset! }
 
+  describe "choosing the coding agent" do
+    let(:writer) { agent.with(phase: "specification") }
+    let(:spec_md) { "---\nphases:\n  specification: { adapter: codex, effort: medium }\n---\n#{spec_body}" }
+    let!(:built) do
+      plans { |t| t.plan "000.00", :new, "a-feature", files: { "spec.md" => spec_md } }
+    end
+    let(:argv) { executor.invocation(writer, subject_plan) }
+
+    it "hands the plan to the adapter its spec.md names for the agent's phase" do
+      expect(argv.first(2)).to eq(%w[codex exec])
+    end
+
+    it "translates the effort into that CLI's flag" do
+      expect(argv).to include('model_reasoning_effort="medium"')
+    end
+
+    it "does not tell the agent a CLI enforces what it cannot" do
+      expect([argv.last.include?("cannot withhold them"), argv.last.include?("not merely discouraged")]).to eq([true, false])
+    end
+
+    it "names the profile the board shows" do
+      expect(executor.profile_for(writer, subject_plan).label).to eq("codex:default")
+    end
+  end
+
+  describe "starting agents lean" do
+    let(:argv) { executor.invocation(agent, subject_plan) }
+
+    it "keeps personal plugins, skills and MCP servers out by default" do
+      expect(argv).to include("--strict-mcp-config", "--disable-slash-commands")
+    end
+
+    it "lets them in for a run started with --user-config" do
+      expect(described_class.new(root:, spawn:, lean: false).invocation(agent, subject_plan))
+        .not_to include("--disable-slash-commands")
+    end
+  end
+
   describe "#invocation" do
     let(:argv) { executor.invocation(agent, subject_plan) }
 
@@ -105,18 +143,18 @@ RSpec.describe Agentilda::Execution::Executor, :tree do
       expect(paired).to include(
         "## Mailbox",
         "Your partner on this plan is `rey-frontend`",
-        File.join(subject_plan.feature.path, "mailbox.md"),
+        "kept in the\nplan's `state.json`",
         "agentilda mail read --dir \"#{plans_root}\" --plan 000.00 --for luke-backend",
         "agentilda mail send --dir \"#{plans_root}\" --plan 000.00 --from luke-backend --to rey-frontend"
       )
     end
 
-    # `alo` signs a lock with the process fingerprint, which every sub-agent
+    # `alock` signs a lock with the process fingerprint, which every sub-agent
     # of one `claude` shares, so the prompt names the holder explicitly.
-    it "tells the agent to claim files with alo, under its own name" do
+    it "tells the agent to claim files with alock, under its own name" do
       prompt = executor.invocation(agents.find("luke-backend"), subject_plan)[2]
 
-      expect(prompt).to include("AGENT_ID=luke-backend alo acquire", "AGENT_ID=luke-backend alo release-all")
+      expect(prompt).to include("AGENT_ID=luke-backend alock acquire", "AGENT_ID=luke-backend alock release-all")
       expect(prompt).not_to include("agent-lock.sh")
     end
 
@@ -163,11 +201,11 @@ RSpec.describe Agentilda::Execution::Executor, :tree do
     end
 
     it "passes the agent's effort when it declares one" do
-      expect(executor.invocation(agent, subject_plan).each_cons(2).to_a).to include(["--effort", "xhigh"])
+      expect(executor.invocation(agent, subject_plan).each_cons(2).to_a).to include(["--effort", "medium"])
     end
 
     it "passes no effort for an agent that declares none" do
-      argv = executor.invocation(agents.find("lando-broker"), subject_plan)
+      argv = executor.invocation(agent.with(effort: nil), subject_plan)
       expect(argv).not_to include("--effort")
     end
   end
@@ -175,17 +213,23 @@ RSpec.describe Agentilda::Execution::Executor, :tree do
   describe "the ledger section" do
     let(:prompt) { executor.invocation(agent, subject_plan, round: 2, successor: "palpatine-planner")[2] }
 
-    it "tells the agent the exact lines to write, with its own name, round and successor" do
+    let(:sign) do
+      "agentilda state sign --dir \"#{plans_root}\" --plan 000.00 --agent yoda-writer --round 2"
+    end
+
+    it "tells the agent the exact commands to sign with, under its own name, round and successor" do
       aggregate_failures do
-        expect(prompt).to include("agent: yoda-writer   status: Started, round 2 ]")
-        expect(prompt).to include("agent: yoda-writer   status: Completed, round 2 ]")
-        expect(prompt).to include("[ next: palpatine-planner ]")
-        expect(prompt).to include("spec.md")
+        expect(prompt).to include("#{sign} --status Started")
+        expect(prompt).to include("#{sign} --status Completed --next palpatine-planner")
       end
     end
 
-    it "names the date command that produces the timestamp" do
-      expect(prompt).to include('date "+%Y-%m-%d %I:%M:%S %p %Z"')
+    it "says how a parenthesised note in the agent's instructions maps onto the command" do
+      expect(prompt).to include("--note technical")
+    end
+
+    it "tells the agent never to edit state.json by hand" do
+      expect(prompt).to include("Never\nedit `state.json` by hand")
     end
 
     it "explains the warnings the control file will carry" do
@@ -379,7 +423,7 @@ RSpec.describe Agentilda::Execution::Executor, :tree do
         event: { type: "message_delta", usage: { input_tokens: 2, cache_creation_input_tokens: 100,
                                                cache_read_input_tokens: 900, output_tokens: 40 } })
 
-      expect(streaming.call(agent, subject_plan)).to have_attributes(up: 1002, down: 40)
+      expect(streaming.call(agent, subject_plan)).to have_attributes(up: 1002, down: 40, cached: 900, fresh: 142)
     end
 
     # The prompt states the budget so the agent can finish inside it; this is
@@ -408,6 +452,24 @@ RSpec.describe Agentilda::Execution::Executor, :tree do
         stream << event(type: "result", is_error: false, result: "done")
 
         expect(metered.call(agent, subject_plan).ok).to be(true)
+      end
+
+      # Every turn re-reads the whole context from cache. Counted, those reads
+      # end a live eval after ten turns of a 30k-token context.
+      context "when only fresh tokens count" do
+        subject(:metered) { described_class.new(root:, spawn:, trace_dir: @traces, max_tokens: 100, fresh_budget: true) }
+
+        it "lets cache reads past the budget" do
+          stream << event(type: "stream_event",
+            event: { type: "message_delta", usage: { input_tokens: 10, cache_read_input_tokens: 5000, output_tokens: 40 } })
+          stream << event(type: "result", is_error: false, result: "done")
+
+          expect(metered.call(agent, subject_plan)).to have_attributes(ok: true, fresh: 50)
+        end
+
+        it "says so in the prompt" do
+          expect(metered.invocation(agent, subject_plan)[2]).to include("cache reads are free")
+        end
       end
     end
 
@@ -578,8 +640,9 @@ RSpec.describe Agentilda::Execution::Executor, :tree do
     end
 
     it "tells an agent that can fan out to spend its budget concurrently" do
-      expect(agent.allowed_tools).to include("Task")
-      expect(prompt_for(agent)).to include("one wave of concurrent sub-agents")
+      researcher = agents.find("leah-researcher")
+      expect(researcher.allowed_tools).to include("Task")
+      expect(prompt_for(researcher)).to include("one wave of concurrent sub-agents")
     end
 
     it "says nothing about concurrency to an agent without Task" do

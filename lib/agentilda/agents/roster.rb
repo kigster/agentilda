@@ -16,7 +16,7 @@ module Agentilda
     # a copy that drifts from the frontmatter the loop actually routes on.
     class Roster
       # Columns, so the header and the rows cannot drift apart.
-      HEADINGS = ["Agent", "Handles", "Advances to", "Model"].freeze
+      HEADINGS = ["Agent", "Handles", "Advances to", "Runs on", "Lanes"].freeze
 
       # What an agent with no `advances_to` is, in the one word that explains why
       # `run` never offers it work.
@@ -85,7 +85,18 @@ module Agentilda
         [UI.paint(agent.name, :bright_cyan),
          handles(agent),
          UI.paint(advances(agent), agent.read_only? ? :bright_black : :green),
-         UI.paint(agent.model.to_s, :bright_black)]
+         UI.paint(runs_on(agent), :bright_black),
+         UI.paint(agent.lanes.empty? ? "all" : agent.lanes.join(", "), :bright_black)]
+      end
+
+      # The agent's own settings, before any spec.md overrides them: the
+      # model, the effort, and the adapter when it is not the default.
+      #
+      # @param agent [Agentilda::Agents::Agent]
+      # @return [String] e.g. `opus/high`, `codex:gpt-5-codex/medium`
+      def runs_on(agent)
+        model = Agents::Profile.resolve(agent).label
+        agent.effort ? "#{model}/#{agent.effort}" : model
       end
     end
   end

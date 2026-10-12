@@ -177,9 +177,12 @@ module Agentilda
       #
       # @return [Array<String>]
       def invocation
+        # Lean for the same reason every agent is: the draft has fifty
+        # seconds, and the operator's plugins would spend some of them loading.
         ["claude",
          "-p", prompt, "--add-dir", root,
          "--model", BRIEF_MODEL,
+         *Adapters::Claude::LEAN,
          "--allowedTools", ALLOWED_TOOLS.join(","),
          "--disallowedTools", DENIED_TOOLS.join(",")]
       end

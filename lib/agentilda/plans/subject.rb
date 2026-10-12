@@ -125,6 +125,8 @@ module Agentilda
         @reads = {}
         @pull_requests = nil
         @feature = Feature.parse(target) or raise Error, "#{File.basename(target)} is not a plan folder"
+        PlanState.for(target).state!(status.key)
+        @feature
       end
     end
   end

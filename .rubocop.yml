@@ -11,6 +11,8 @@ AllCops:
   Exclude:
     - "bin/**/*"
     - "vendor/bundle/**/*"
+    # Recorded agent output: data the scorers read, deliberately imperfect in fail/.
+    - "evals/cases/**/*"
 
 Style/StringLiterals:
   EnforcedStyle: double_quotes

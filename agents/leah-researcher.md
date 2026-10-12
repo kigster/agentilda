@@ -4,10 +4,12 @@ description: Researches a topic across many sources at once and expands a bare s
 handles: [new]
 advances_to: researched
 model: haiku
-effort: xhigh
+effort: medium
 network: true
 timeout: 1200
 ledger: [spec.md]
+phase: research
+lanes: [full]
 allowed_tools: [Read, Grep, Glob, Bash, Write, Edit, Task, WebSearch, WebFetch]
 writes: [spec.md, blocked.md]
 ---

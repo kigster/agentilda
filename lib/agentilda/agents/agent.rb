@@ -40,6 +40,18 @@ module Agentilda
     # @!attribute [r] holds_at
     #   @return [Symbol, nil] the state the plan takes when this agent completes
     #     while its partner on the same plan is still running
+    # @!attribute [r] adapter
+    #   @return [String] which coding agent runs it: `claude`, `codex` or `pi`
+    # @!attribute [r] phase
+    #   @return [String, nil] the word a spec's `phases:` map uses to reach it
+    # @!attribute [r] lanes
+    #   @return [Array<Symbol>] the lanes it works in; empty means every lane
+    # @!attribute [r] needs
+    #   @return [Array<String>] plan files that must hold at least one work-unit
+    #     heading before it is dispatched
+    # @!attribute [r] toggle
+    #   @return [String, nil] a spec.md frontmatter key that switches it off
+    #     when false and on when true
     Agent = Data.define(:name,
       :description,
       :handles,
@@ -55,8 +67,16 @@ module Agentilda
       :rounds,
       :effort,
       :starts_as,
-      :holds_at) do
-      def initialize(ledger: [], rounds: 1, effort: nil, starts_as: nil, holds_at: nil, **rest) = super
+      :holds_at,
+      :adapter,
+      :phase,
+      :lanes,
+      :needs,
+      :toggle) do
+      def initialize(ledger: [], rounds: 1, effort: nil, starts_as: nil, holds_at: nil, adapter: Adapters::DEFAULT,
+        phase: nil, lanes: [], needs: [], toggle: nil, **rest)
+        super
+      end
 
       # @return [Boolean] whether this agent changes anything on disk
       def read_only? = advances_to.nil?
@@ -64,6 +84,10 @@ module Agentilda
       # @param status [Agentilda::Plans::Status]
       # @return [Boolean]
       def handles?(status) = handles.include?(status.key)
+
+      # @param lane [Symbol]
+      # @return [Boolean]
+      def serves?(lane) = lanes.empty? || lanes.include?(lane.to_sym)
 
       # The word after the hyphen: `researcher`, `backend`. What the screen's
       # agent column shows, the name being too long for it.

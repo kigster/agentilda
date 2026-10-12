@@ -12,11 +12,17 @@ module Agentilda
     # time. It worked once, by luck. With ten plans running there would have
     # been ten `agentilda-xx` entries and nothing to tell them apart.
     #
-    # So the mailbox is a file in the plan folder, append-only, one numbered
-    # entry per message, readable by `agentilda mail read` during the round and
-    # by a person after it. The harness names the file and the partner in each
-    # agent's prompt, so nobody guesses.
+    # So the mailbox lives in the plan folder, append-only, one numbered entry
+    # per message, readable by `agentilda mail read` during the round and by a
+    # person after it. The harness names the partner in each agent's prompt,
+    # so nobody guesses.
+    #
+    # Messages are kept in the plan's `state.json` ({PlanState}), next to the
+    # stages and signatures a restart reads. Plans from before that kept them
+    # in `mailbox.md`; those are still read, and numbering carries on from
+    # them, but nothing writes there any more.
     class Mailbox
+      # Where messages used to be written, and are still read from.
       FILENAME = "mailbox.md"
 
       # Between the fields of a heading. Neither a name nor a timestamp
@@ -53,19 +59,20 @@ module Agentilda
       # @return [String] the plan folder
       attr_reader :dir
 
-      # @return [String]
-      def path = File.join(dir, FILENAME)
+      # @return [String] where new messages are written
+      def path = state.path
 
-      # @return [Boolean]
-      def exist? = File.file?(path)
+      # @return [String] where messages from before `state.json` are read
+      def legacy_path = File.join(dir, FILENAME)
+
+      # @return [Boolean] whether any message has been written
+      def exist? = !messages.empty?
 
       # Every message, in the order it was written.
       #
       # @return [Array<Agentilda::Plans::Mailbox::Message>]
       def messages
-        return [] unless exist?
-
-        parse(File.read(path, encoding: "UTF-8"))
+        (legacy + state.messages.map { |m| from_state(m) }).sort_by(&:number)
       end
 
       # What is waiting for one agent.
@@ -80,9 +87,8 @@ module Agentilda
 
       # Append one message and give it the next number.
       #
-      # The append takes a lock on the file. Two agents finishing a unit in the
-      # same second would otherwise read the same last number and both write
-      # the one after it.
+      # {PlanState} takes a lock around the read and the write, so two agents
+      # finishing a unit in the same second cannot both take the same number.
       #
       # @param from [String]
       # @param to [String]
@@ -91,25 +97,37 @@ module Agentilda
       # @return [Agentilda::Plans::Mailbox::Message] as written
       # @raise [Agentilda::Error] on an empty body, which would be a heading
       #   with nothing under it for the reader to act on, or on a sender or
-      #   recipient that is blank or holds whitespace: {HEADING} could not
-      #   parse such an entry back, so it would be written and never read
+      #   recipient that is blank or holds whitespace
       def append(from:, to:, body:, at: Time.now)
         text = body.to_s.strip
         raise Error, "a message needs a body" if text.empty?
         raise Error, "a message needs --from and --to, each one agent name" unless name?(from) && name?(to)
 
-        File.open(path, File::RDWR | File::CREAT | File::APPEND, 0o644) do |f|
-          f.flock(File::LOCK_EX)
-          f.rewind
-          existing = f.read
-          number = (parse(existing).last&.number || 0) + 1
-          message = Message.new(number:, at: at.strftime(TIME_FORMAT), from:, to:, body: text)
-          f.write(existing.empty? ? "# Mailbox\n\n#{message}" : "\n#{message}")
-          message
-        end
+        from_state(state.message!(from:, to:, body: text, at:, after: legacy.map(&:number).max.to_i))
       end
 
       private
+
+      # @return [Agentilda::Plans::PlanState]
+      def state = PlanState.for(dir)
+
+      # @return [Array<Agentilda::Plans::Mailbox::Message>] what mailbox.md holds
+      def legacy
+        return [] unless File.file?(legacy_path)
+
+        parse(File.read(legacy_path, encoding: "UTF-8"))
+      end
+
+      # @param message [Hash] as {PlanState} stores it
+      # @return [Agentilda::Plans::Mailbox::Message]
+      def from_state(message)
+        at = begin
+          Time.iso8601(message["at"].to_s).strftime(TIME_FORMAT)
+        rescue ArgumentError
+          message["at"].to_s
+        end
+        Message.new(number: message["number"], at:, from: message["from"], to: message["to"], body: message["body"])
+      end
 
       # @param value [Object]
       # @return [Boolean] one token, as {HEADING} expects a name to be

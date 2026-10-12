@@ -6,7 +6,9 @@ require "tmpdir"
 
 module Agentilda
   module Execution
-    # Runs one agent against one plan by shelling out to the `claude` CLI.
+    # Runs one agent against one plan by shelling out to a coding agent CLI:
+    # `claude` unless the agent's definition or the plan's spec.md names
+    # another {Agentilda::Adapters adapter}.
     #
     # The autonomy boundary is "docs plus code, but nothing leaves the machine",
     # and it is enforced twice over:
@@ -45,9 +47,14 @@ module Agentilda
       #     cap, :quit when the grace period after q ran out, nil otherwise
       # @!attribute [r] pid
       #   @return [Integer, nil]
+      # @!attribute [r] cached
+      #   @return [Integer] of {#up}, read back from the prompt cache
       # @return [Data]
-      Result = Data.define(:ok, :note, :up, :down, :subagents, :delegated, :seconds, :killed, :pid) do
-        def initialize(killed: nil, pid: nil, **rest) = super
+      Result = Data.define(:ok, :note, :up, :down, :subagents, :delegated, :seconds, :killed, :pid, :cached) do
+        def initialize(killed: nil, pid: nil, cached: 0, **rest) = super
+
+        # @return [Integer] new input, cache writes and output
+        def fresh = up - cached + down
 
         # @return [Array(Boolean, String)]
         def to_ary = [ok, note]
@@ -195,12 +202,17 @@ module Agentilda
       #   output, sub-agents included. The prompt states it so the agent can
       #   plan to finish inside it, and the meter enforces it so the statement
       #   is true. nil is unmetered.
+      # @param fresh_budget [Boolean] count only new tokens against
+      #   +max_tokens+, leaving out cache reads; what `eval --live` uses
       # @param interactive [Boolean] whether someone is at the keyboard, which
       #   the keyboard help reads. Every invocation gets a control file either
       #   way, because the clock writes its own warnings into it regardless of
       #   whether anyone is watching.
+      # @param lean [Boolean] start agents without the operator's personal
+      #   plugins, skills, hooks and MCP servers; `run --user-config` turns it off
       def initialize(root:, spawn: Child.method(:spawn), timeout: nil, dry_run: false,
-        trace_dir: TRACE_DIR, instructions: nil, model: nil, max_tokens: nil, interactive: false)
+        trace_dir: TRACE_DIR, instructions: nil, model: nil, max_tokens: nil, interactive: false, lean: true,
+        fresh_budget: false)
         @root = File.expand_path(root)
         @spawn = spawn
         @timeout = timeout
@@ -210,10 +222,25 @@ module Agentilda
         @model = model
         @max_tokens = max_tokens
         @interactive = interactive
+        @lean = lean
+        @fresh_budget = fresh_budget
       end
 
       # @return [String]
       attr_reader :root
+
+      # @return [String, nil] what `run --model` typed
+      attr_reader :model
+
+      # Which CLI, model and effort this agent gets on this plan.
+      #
+      # @param agent [Agentilda::Agents::Agent]
+      # @param subject [Agentilda::Plans::Subject, nil]
+      # @return [Agentilda::Agents::Profile]
+      def profile_for(agent, subject = nil)
+        spec = subject ? Plans::Spec.for(subject) : nil
+        Agents::Profile.resolve(agent, spec:, model: @model)
+      end
 
       # The clock this agent runs against: the tighter of its own frontmatter
       # and `--timeout`. A flag that could only loosen was useless the day
@@ -252,7 +279,8 @@ module Agentilda
         handle ||= Handle.new
         before = head(root)
         trace = trace_path(agent, subject)
-        transcript = Transcript.new(trace:, &on_progress)
+        profile = profile_for(agent, subject)
+        transcript = profile.adapter.transcript(trace:, &on_progress)
         control = Control.register(@trace_dir, "#{subject.feature.ordinal}-#{agent.name}")
         handle.control = control
         argv = invocation(agent, subject, root:, control:, round:, successor:, partners:)
@@ -284,10 +312,16 @@ module Agentilda
             note:   "#{killed_note(handle.killed, clock)}, last seen #{transcript.activity || "starting up"} - trace: #{trace}")
         end
         unless status.success?
-          return failure(transcript, started, "claude exited #{status.exitstatus}: #{said(transcript)} - trace: #{trace}", pid: child.pid)
+          return failure(transcript,
+            started,
+            "#{profile.adapter.executable} exited #{status.exitstatus}: #{said(transcript)} - trace: #{trace}",
+            pid: child.pid)
         end
         if transcript.failed?
-          return failure(transcript, started, "claude reported: #{transcript.error} - trace: #{trace}", pid: child.pid)
+          return failure(transcript,
+            started,
+            "#{profile.adapter.executable} reported: #{transcript.error} - trace: #{trace}",
+            pid: child.pid)
         end
 
         violation = boundary_violation(before, root)
@@ -318,7 +352,8 @@ module Agentilda
           delegated: transcript.delegated,
           seconds: UI.monotonic - started,
           killed:,
-          pid:)
+          pid:,
+          cached: transcript.cached)
       end
 
       # @param transcript [Agentilda::Execution::Transcript]
@@ -352,19 +387,20 @@ module Agentilda
       # @param partners [Array<Agentilda::Agents::Agent>]
       # @return [Array<String>]
       def invocation(agent, subject, root: @root, control: nil, round: 1, successor: nil, partners: [])
-        # `--include-partial-messages` is what the token meter runs on. Without
-        # it the stream reports a settled input count and a placeholder output
-        # count — 2 for a four-thousand-token answer — and a spinner counting
-        # what came back would read zero all run. See {Transcript#meter}.
-        argv = ["claude", "-p", prompt_for(agent, subject, root, control:, round:, successor:, partners:), "--add-dir", root,
-                "--output-format", "stream-json", "--verbose", "--include-partial-messages", "--brief"]
-        denied = denied_for(agent)
-        argv += ["--disallowedTools", denied.join(",")] unless denied.empty?
-        argv += ["--allowedTools", agent.allowed_tools.join(",")] unless agent.allowed_tools.empty?
-        model = @model || agent.model
-        argv += ["--model", model] if model
-        argv += ["--effort", agent.effort] if agent.effort
-        argv
+        profile = profile_for(agent, subject)
+        profile.adapter.argv(
+          Adapters::Invocation.new(
+            prompt:          prompt_for(agent, subject, root, control:, round:, successor:, partners:, profile:),
+            root:,
+            model:           profile.model,
+            effort:          profile.effort,
+            allowed_tools:   agent.allowed_tools,
+            denied_tools:    denied_for(agent),
+            denied_commands: denied_commands(agent),
+            network:         agent.network,
+            lean:            @lean
+          )
+        )
       end
 
       # What this particular agent may not touch: the network tools unless it
@@ -413,84 +449,22 @@ module Agentilda
       # @param successor [String, nil]
       # @param partners [Array<Agentilda::Agents::Agent>]
       # @return [String]
-      def prompt_for(agent, subject, root = @root, control: nil, round: 1, successor: nil, partners: [])
-        <<~PROMPT
-          #{agent.prompt}
-
-          ---
-
-          ## This invocation
-
-          Plan folder    : #{subject.feature.path}
-          Plan number    : #{subject.feature.ordinal}
-          Current state  : #{subject.status.emoji} #{subject.status.label}
-          Repository root: #{root}
-
-          #{"The folder's name is not currently justified: #{subject.violation}" if subject.violation}
-          #{operator_instructions}#{ledger_section(agent, round:, successor:)}#{budget_section}#{time_budget_section(agent)}#{control_section(control, agent, subject)}#{mailbox_section(agent, subject, partners)}
-          ## Boundary — enforced, not requested
-
-          You may read anything, and write source, tests and the plan's own
-          markdown.
-
-          These are withheld from you, not merely discouraged — `claude` is
-          invoked with them disallowed:
-
-          #{denied_commands(agent).map { |c| "  #{c}" }.join("\n")}
-          #{granted(agent)}
-          The harness checks afterwards that HEAD has not moved, and a round that
-          moved it is reported as a failure and rolled into the report. A prompt
-          is a request; a check is a guarantee.
-
-          Claim each directory or file before you write it, and release it when
-          that write is done. Name yourself on every call, since `alo` would
-          otherwise sign with a fingerprint your sub-agents share; give each
-          sub-agent its own suffix, e.g. `AGENT_ID=#{agent.name}-schema`:
-
-              AGENT_ID=#{agent.name} alo acquire <path> "<why>"
-              AGENT_ID=#{agent.name} alo release <path>
-
-          A refused `acquire` means another agent holds it: work on something
-          else, never write it anyway. Before your closing ledger line, run
-          `AGENT_ID=#{agent.name} alo release-all`.
-        PROMPT
-      end
-
-      # The one paragraph every agent gets, identically, about the ledger. It
-      # lives here rather than in seven definition files so the wording cannot
-      # drift between agents, and so the names, the round and the successor are
-      # the harness's facts rather than the agent's guesses.
-      #
-      # @param agent [Agentilda::Agents::Agent]
-      # @param round [Integer]
-      # @param successor [String, nil]
-      # @return [String]
-      def ledger_section(agent, round:, successor:)
-        documents = agent.ledger.map { |f| "`#{f}`" }.join(", then ")
-        handoff = successor ? "\n    > [<now>] [ next: #{successor} ]" : ""
-        <<~SECTION
-
-          ## The ledger - write this at the start and at the end
-
-          You sign the document you are working in: #{documents}. Get `<now>` from
-          `date "+%Y-%m-%d %I:%M:%S %p %Z"`. Before you do any work, append:
-
-              > [!NOTE]
-              >
-              > [<now>] [ agent: #{agent.name}   status: Started, round #{round} ]
-
-          When you finish, append:
-
-              > [!NOTE]
-              >
-              > [<now>] [ agent: #{agent.name}   status: Completed, round #{round} ]#{handoff}
-
-          Write `Completed` only if your assignment is genuinely done. Otherwise write
-          `Almost completed`, `Interrupted` or `Blocked` in its place and NO `next:` line.
-          The harness renames the plan folder and starts the next agent from these
-          lines; you never rename the folder yourself. A short note in parentheses
-          after the round is welcome, e.g. `Completed, round 1 (approved)`.
-        SECTION
+      def prompt_for(agent, subject, root = @root, control: nil, round: 1, successor: nil, partners: [],
+        profile: profile_for(agent, subject))
+        Prompt.new(agent:,
+          subject:,
+          root:,
+          profile:,
+          round:,
+          successor:,
+          partners:,
+          control:,
+          instructions: @instructions,
+          max_tokens:   @max_tokens,
+          fresh_budget: @fresh_budget,
+          seconds:      timeout_for(agent),
+          denied:       denied_commands(agent),
+          granted:      granted_to(agent)).to_s
       end
 
       # The token budget crossed, or the grace period after `q` spent. Both go
@@ -500,182 +474,12 @@ module Agentilda
       # @param handle [Agentilda::Execution::Executor::Handle]
       # @return [void]
       def abort_if_over(transcript, handle)
-        spent = transcript.up + transcript.down
+        spent = @fresh_budget ? transcript.fresh : transcript.up + transcript.down
         if @max_tokens&.positive? && spent > @max_tokens
           handle.kill!(grace: 0, reason: :budget)
         elsif Control.overdue?
           handle.kill!(grace: 0, reason: :quit)
         end
-      end
-
-      # The section `run --max-tokens` adds. Stating the number is what lets
-      # the agent finish before it, rather than discovering the cap by dying
-      # on it with half a file written.
-      #
-      # @return [String]
-      def budget_section
-        return "" unless @max_tokens&.positive?
-
-        "\n## Token budget — #{@max_tokens} tokens, enforced\n\n" \
-          "This invocation is aborted once its total spend (input plus output, " \
-          "sub-agents included) crosses #{@max_tokens} tokens. Budget the work: " \
-          "plan what fits, write results to disk as you go, and finish — or " \
-          "write a handoff note into the plan folder — before the meter runs " \
-          "out. Anything unwritten at the cap is lost.\n"
-      end
-
-      # The section describing the advisory clock this invocation runs against,
-      # stated in the prompt so an agent can pace itself. The number is
-      # whatever {#timeout_for} will actually enforce, so the prompt and the
-      # clock can never disagree — an agent whose prose names its own figure
-      # goes stale the first time someone passes `--timeout`, and stale is
-      # worse than silent.
-      #
-      # @param agent [Agentilda::Agents::Agent]
-      # @return [String]
-      def time_budget_section(agent)
-        seconds = timeout_for(agent)
-        return "" unless seconds&.positive?
-
-        minutes = (seconds / 60.0).round
-        "\n## Time budget - #{seconds} seconds\n\n" \
-          "You have about #{minutes} minute#{"s" unless minutes == 1} of wall clock. The control " \
-          "file below tells you how it is going: `WARN: 10 minutes left`, `WARN: 5 minutes left`, " \
-          "`WRAP_UP: 1 minute left, write to disk now`, then `STOP`. Sixty seconds after STOP " \
-          "the process is killed, and anything unwritten is lost. Write each result to disk as " \
-          "you reach it, and write your closing ledger line before anything else once you see " \
-          "WRAP_UP.#{concurrency_advice(agent)}\n"
-      end
-
-      # Only worth saying to an agent that can actually do it. Telling an agent
-      # without `Task` to parallelise is telling it to feel bad about a tool it
-      # was not given.
-      #
-      # @param agent [Agentilda::Agents::Agent]
-      # @return [String]
-      def concurrency_advice(agent)
-        return "" unless agent.allowed_tools.include?("Task")
-
-        " Where the work divides into parts that do not read each other's output, run them " \
-          "as one wave of concurrent sub-agents rather than in series: the wave costs one " \
-          "part's wall clock, and the series costs the sum of all of them."
-      end
-
-      # Two agents on one plan are two processes. Naming the partner and the
-      # exact commands is what replaced guessing the partner's session from
-      # every Claude session on the machine.
-      #
-      # @param agent [Agentilda::Agents::Agent]
-      # @param subject [Agentilda::Plans::Subject]
-      # @param partners [Array<Agentilda::Agents::Agent>]
-      # @return [String]
-      def mailbox_section(agent, subject, partners)
-        return "" if partners.empty?
-
-        plans_dir = File.dirname(subject.feature.path)
-        plan = subject.feature.ordinal
-        names = partners.map { |p| "`#{p.name}`" }
-        who = names.size == 1 ? "Your partner on this plan is #{names.first}" : "Your partners on this plan are #{names.join(" and ")}"
-
-        <<~SECTION
-
-          ## Mailbox - poll it between steps
-
-          #{who}. You share one worktree and one branch, but not a process, so
-          the only way to reach each other is the plan's mailbox:
-
-              #{File.join(subject.feature.path, Plans::Mailbox::FILENAME)}
-
-          Read it before each significant step and whenever you finish a unit:
-
-              agentilda mail read --dir "#{plans_dir}" --plan #{plan} --for #{agent.name}
-
-          Pass `--after N`, with the number of the last message you have read,
-          to see only what is new. Write to it when you land an interface your
-          partner is waiting on, when you amend the contract, when you need
-          something from their half, and when you finish:
-
-              agentilda mail send --dir "#{plans_dir}" --plan #{plan} --from #{agent.name} --to #{partners.first.name} "what you need them to know"
-
-          Every message is appended with a number and a timestamp and never
-          edited, so a person can read the exchange after the round. A question
-          your partner has not answered within a few steps is not a reason to
-          stop: write your assumption into implementation-plan.md and carry on.
-        SECTION
-      end
-
-      # The section a control file adds. Present on every invocation, because
-      # the advisory clock writes into it whether or not anyone is watching.
-      #
-      # INTERRUPT is what makes a restart after Ctrl-C safe: the agent that
-      # was cut off leaves a mailbox note to whoever picks the plan up, and
-      # every agent is told to read its mail first, so the next run resumes
-      # from the note rather than redoing work already on disk.
-      #
-      # @param control [String, nil]
-      # @param agent [Agentilda::Agents::Agent]
-      # @param subject [Agentilda::Plans::Subject]
-      # @return [String]
-      def control_section(control, agent, subject)
-        return "" if control.nil?
-
-        plans_dir = File.dirname(subject.feature.path)
-        plan = subject.feature.ordinal
-        <<~SECTION
-
-          ## Control file — poll it between steps
-
-              #{control}
-
-          Read this file before each significant step. Empty means carry on.
-          A line starting WARN: tells you how much time is left. WRAP_UP: means
-          finish the essential remainder now. STOP means write what you have,
-          write your ledger line, and end your turn.
-
-          INTERRUPT means the operator pressed Ctrl-C and the run will be started
-          again later. Start nothing new. Finish the write you are in the middle
-          of, so no file is left half-written, then leave a resume note for
-          whoever runs next — most likely you — saying what is done, what is
-          not, and the exact next step:
-
-              agentilda mail send --dir "#{plans_dir}" --plan #{plan} --from #{agent.name} --to #{agent.name} "RESUME: ..."
-
-          Then write your ledger line as `Interrupted` with NO `next:` line, and
-          end your turn.
-
-          Before you start, check for such a note from an earlier run:
-
-              agentilda mail read --dir "#{plans_dir}" --plan #{plan} --for #{agent.name}
-
-          If there is a RESUME note, continue from it and do not redo what it
-          says is done; check the files it names rather than taking it on trust.
-        SECTION
-      end
-
-      # The section `run --prompt` adds, labelled as coming from the person who
-      # started the run so the agent can tell a one-off steer from its own
-      # standing definition.
-      #
-      # @return [String]
-      def operator_instructions
-        return "" if @instructions.empty?
-
-        "\n## Operator instructions — this invocation only\n\n#{@instructions}\n"
-      end
-
-      # Spelled out in the prompt as well as withheld at the tool layer, because
-      # an agent that does not know it has been granted something does not use
-      # it — and `hansolo-reviewer` silently never approving anything looks
-      # exactly like `hansolo-reviewer` approving nothing worth approving.
-      #
-      # @param agent [Agentilda::Agents::Agent]
-      # @return [String]
-      def granted(agent)
-        granted = granted_to(agent)
-        return "" if granted.empty?
-
-        "\nYou may run these, which most agents may not:\n\n" +
-          granted.map { |c| "  #{c}" }.join("\n") + "\n"
       end
 
       # @return [String, nil] current commit, or nil outside a repository

@@ -51,6 +51,10 @@ update-workflow:
 test *args:
     export ENVIRONMENT=test; {{ rbenv }} rspec {{ args }}
 
+# Score every agent's eval cases against their recordings
+eval *args:
+    {{ rbenv }} exe/agentilda eval {{ args }}
+
 # Run tests with coverage
 test-coverage *args:
     export ENVIRONMENT=test; export COVERAGE=true; {{ rbenv }} rspec {{ args }}

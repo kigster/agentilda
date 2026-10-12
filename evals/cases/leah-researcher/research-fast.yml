@@ -1,0 +1,55 @@
+id: research-fast
+agent: leah-researcher
+depth: fast
+description: >
+  A bare spec asking two narrow questions. At fast depth leah should answer
+  both from the repository and one upstream page, and stop: a short Research
+  chapter, few sources, a small bill.
+fixture:
+  state: new
+  slug: billing-retries
+  files:
+    spec.md: |
+      # Billing Retries
+
+      Jobs that call the Example Corp billing API fail on transient 503 responses. Retry them.
+
+      ## What research needs to settle
+
+      1. Does the repository already have a retry helper we can reuse?
+      2. What backoff does the billing API ask clients to use?
+  repo:
+    lib/retry_policy.rb: |
+      # Bounded exponential backoff: 3 attempts, 0.5s base, doubling.
+      class RetryPolicy
+        ATTEMPTS = 3
+        BASE = 0.5
+      end
+    lib/billing_client.rb: |
+      class BillingClient
+        def charge(amount) = post("/charges", amount:)
+      end
+expect:
+  state: researched
+  signed: true
+  files_absent: [plan.md]
+  sections:
+    spec.md: [Research]
+  contains:
+    spec.md: [lib/retry_policy.rb]
+  depth:
+    fast:
+      words: { file: spec.md, section: Research, min: 40, max: 180 }
+      count: { file: spec.md, section: Research, pattern: 'https?://', min: 1, max: 3 }
+      max_seconds: 300
+      max_tokens: 80000
+    medium:
+      words: { file: spec.md, section: Research, min: 120, max: 1200 }
+      count: { file: spec.md, section: Research, pattern: 'https?://', min: 2, max: 8 }
+      max_seconds: 600
+      max_tokens: 150000
+    deep:
+      words: { file: spec.md, section: Research, min: 250, max: 3000 }
+      count: { file: spec.md, section: Research, pattern: 'https?://', min: 5 }
+      max_seconds: 1200
+      max_tokens: 300000
