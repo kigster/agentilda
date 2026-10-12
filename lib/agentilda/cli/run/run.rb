@@ -353,7 +353,13 @@ module Agentilda
       # @param options [Hash]
       # @return [Agentilda::Vcs::Publisher, nil]
       def publisher_for(root, isolation, options)
-        return nil if isolation != :worktree || options[:git_push] == false
+        if isolation != :worktree || options[:git_push] == false
+          unless quiet?(options)
+            warn("No pull request will be opened (#{isolation == :worktree ? "--no-git-push" : "--isolation shared"}), " \
+                 "so plans stop at 🟢 Ready for Review:\nhansolo-reviewer reviews a pull request, and waits until one is open.")
+          end
+          return nil
+        end
 
         Vcs.publisher(root:, dry_run: dry_run?(options))
       end

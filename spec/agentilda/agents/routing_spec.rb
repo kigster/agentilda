@@ -56,4 +56,27 @@ RSpec.describe Agentilda::Agents::Routing, :tree do
       expect(routed).to eq(%w[luke-backend rey-frontend])
     end
   end
+
+  # hansolo-reviewer reads the pull request; with none open there is
+  # nothing to review, so the plan waits at 🟢 for one.
+  describe "a plan ready for review" do
+    let(:ready) { Agentilda::Plans.status(:ready_for_review) }
+
+    def review_routed = described_class.filter(agents.for_status(ready), subject_plan).map(&:name)
+
+    it "goes to the reviewer once its pull request is open" do
+      plans { |t| t.plan "001.00", :ready_for_review, "work", files: { "spec.md" => spec_body }, prs: [t.open(7, "[001.00] Work")] }
+      expect(review_routed).to eq(%w[hansolo-reviewer])
+    end
+
+    it "waits, unassigned, while no pull request is open" do
+      plans { |t| t.plan "001.00", :ready_for_review, "work", files: { "spec.md" => spec_body } }
+      expect(review_routed).to be_empty
+    end
+
+    it "is not allowed to the reviewer with only a merged pull request" do
+      plans { |t| t.plan "001.00", :ready_for_review, "work", files: { "spec.md" => spec_body }, prs: [t.merged(7, "[001.00] Work")] }
+      expect(described_class.allows?(agents.find("hansolo-reviewer"), subject_plan)).to be(false)
+    end
+  end
 end
