@@ -164,13 +164,13 @@ RSpec.describe Agentilda::Linear::Import, :tree do
       expect(import.actions.find { |a| a.unit == "PR-1" }.args).to include(parentId: "TAX-40")
     end
 
-    context "with --force" do
-      let(:options) { { force: true } }
+    context "with --update-unchanged" do
+      let(:options) { { update_unchanged: true } }
 
       it "updates even what it would otherwise have left alone" do
         record("002.00-✅ → dev-foundation", digest: digest_of("PR-1"))
 
-        expect(import.actions.find { |a| a.unit == "PR-1" }).to have_attributes(op: :update, reason: "--force")
+        expect(import.actions.find { |a| a.unit == "PR-1" }).to have_attributes(op: :update, reason: "--update-unchanged")
       end
     end
   end

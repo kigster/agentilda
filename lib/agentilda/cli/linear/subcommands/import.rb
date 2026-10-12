@@ -21,7 +21,7 @@ module Agentilda
           desc:    "Skip plans numbered below this, e.g. 010.00"
         option :status,
           desc: "Only plans in these states: a comma-separated list of status keys"
-        option :force,
+        option :update_unchanged,
           type:    :boolean,
           default: false,
           desc:    "Update everything, whether the plan has changed or not"
@@ -94,7 +94,7 @@ module Agentilda
             project:,
             since: options[:since],
             statuses: statuses(options),
-            force: options.fetch(:force, false))
+            update_unchanged: options.fetch(:update_unchanged, false))
         end
 
         # @param options [Hash]

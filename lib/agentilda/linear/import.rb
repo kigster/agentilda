@@ -66,15 +66,15 @@ module Agentilda
       #   pull requests {Attribution} placed, by folder name
       # @param since [String, nil] skip plans numbered below this
       # @param statuses [Array<Symbol>, nil] only these states
-      # @param force [Boolean] update everything, matching digest or not
-      def initialize(tree:, team:, project:, adopted: {}, since: nil, statuses: nil, force: false)
+      # @param update_unchanged [Boolean] update everything, matching digest or not
+      def initialize(tree:, team:, project:, adopted: {}, since: nil, statuses: nil, update_unchanged: false)
         @tree = tree
         @team = team.to_s.strip.upcase
         @project = project
         @adopted = adopted
         @since = since && Plans::Ordinal.parse(since)
         @statuses = statuses
-        @force = force
+        @update_unchanged = update_unchanged
       end
 
       # @return [String] the team key
@@ -121,7 +121,7 @@ module Agentilda
       attr_reader :statuses
 
       # @return [Boolean]
-      attr_reader :force
+      attr_reader :update_unchanged
 
       # @return [Array<Agentilda::Plans::Subject>]
       def subjects = @subjects ||= chosen.select { |s| Agentilda::Linear.placement(s.status) }
@@ -232,7 +232,7 @@ module Agentilda
       # @return [Array(Symbol, String)] the operation and its reason
       def decide(existing, was, now)
         return [:create, "not recorded in #{Issues::FILENAME}"] if existing.nil?
-        return [:update, "--force"] if force
+        return [:update, "--update-unchanged"] if update_unchanged
         return [:skip, "unchanged since the last import"] if was == now
 
         [:update, "the plan has changed since #{existing} was pushed"]
