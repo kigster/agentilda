@@ -31,6 +31,7 @@ require_relative "cli/mail/subcommands/read"
 require_relative "cli/state/state"
 require_relative "cli/state/subcommands/sign"
 require_relative "cli/state/subcommands/show"
+require_relative "cli/skills/subcommands/install"
 
 module Agentilda
   # The command line. Every command is a thin shell over one library class:
@@ -76,7 +77,7 @@ module Agentilda
 
       group "Plans", "init", "create", "list-plans", "index", "resync", "unblock", "worktree"
       group "Agents", "run", "agents", "describe", "mail", "state", "eval"
-      group "Reference", "docs", "states", "linear", "completion", "version"
+      group "Reference", "docs", "states", "linear", "skills", "completion", "version"
     end
 
     register "init", Init
@@ -125,6 +126,11 @@ module Agentilda
     register "state" do |prefix|
       prefix.register "sign", State::Sign
       prefix.register "show", State::Show
+    end
+
+    # Copies the skills bundled with the gem; see {Agentilda::Skills}.
+    register "skills" do |prefix|
+      prefix.register "install", Skills::Install
     end
 
     register "completion", ::Dry::CLI::Autocomplete::Command[::Agentilda::CLI]
