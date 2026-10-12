@@ -59,6 +59,16 @@ module Agentilda
 
     # @return [Boolean] whether the project has a file at all
     def file? = !path.nil?
+
+    # The file `tilda init` writes: only what was set, in the order the
+    # keys are documented, so it reads like the example it came from.
+    #
+    # @return [String]
+    def to_yaml
+      settings = { "project" => project, "lane" => lane&.to_s, "frontend" => frontend, "jobs" => jobs }
+      settings["commands"] = commands.transform_values { it.transform_keys(&:to_s) } unless commands.empty?
+      YAML.dump(settings.compact).delete_prefix("---\n")
+    end
   end
 
   class Config

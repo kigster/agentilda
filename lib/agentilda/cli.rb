@@ -9,6 +9,7 @@ require "tty-screen"
 require_relative "cli/base"
 require_relative "cli/create/create"
 require_relative "cli/index/index"
+require_relative "cli/init/init"
 require_relative "cli/list_plans/list_plans"
 require_relative "cli/resync/subcommands/dirs"
 require_relative "cli/resync/subcommands/prs"
@@ -73,11 +74,12 @@ module Agentilda
       # Wrap at column 90, or two short of the terminal when it is narrower.
       width [90, TTY::Screen.width - 2].min
 
-      group "Plans", "create", "list-plans", "index", "resync", "unblock", "worktree"
+      group "Plans", "init", "create", "list-plans", "index", "resync", "unblock", "worktree"
       group "Agents", "run", "agents", "describe", "mail", "state", "eval"
       group "Reference", "docs", "states", "linear", "completion", "version"
     end
 
+    register "init", Init
     register "create", Create, aliases: %w[new c]
     # Renamed from `status`, which read as "is the tool OK?" rather than "what
     # plans are there?". The old spellings stay registered: other repos, agent

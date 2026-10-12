@@ -55,6 +55,7 @@ Gem::Specification.new do |spec|
   spec.add_dependency "tty-box"
   spec.add_dependency "tty-command"
   spec.add_dependency "tty-cursor"
+  spec.add_dependency "tty-prompt"
   spec.add_dependency "tty-screen"
   spec.add_dependency "unicode-display_width"
   spec.add_dependency "zeitwerk"
