@@ -69,6 +69,8 @@ phases:                         # optional per-phase adapter, model, effort
 
 The split between suggestions and requirements is the decision that matters most here. A requirement is binding: an agent that cannot meet it stops the plan and asks, and the reviewer rejects work that misses it. Put a preference there and the plan blocks over a preference. When the user says "use X", ask whether that is a must or a suggestion, unless it is obvious.
 
+Quote any list item holding `: `, ` #`, a leading `?`, `` ` `` or `{`, since YAML otherwise reads a shell command as a mapping. Check the result parses as strings: `ruby -ryaml -e 'p YAML.safe_load(File.read(ARGV[0])[/\A---\n(.*?)\n---/m, 1])' <spec.md>`.
+
 Write each rule out in full. "Follow our postgres-strict skill" means nothing to an agent that starts without skills; "every money column is `numeric(19,4)`" does.
 
 ## 5. Fill the body
