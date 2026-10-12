@@ -108,6 +108,7 @@ module Agentilda
                       File.join(Dir.tmpdir, "agentilda-#{File.basename(root)}.log")
         info("Progress: #{UI.log_path}") unless quiet?(options)
         credentials_warning if !dry_run?(options) && !quiet?(options)
+        spec_warning(tree, plans) unless quiet?(options)
 
         # The state file is what a harness that dies leaves for the next one.
         # It sits in .plans/ so a reboot keeps it, and it is ignored by name
@@ -256,6 +257,28 @@ module Agentilda
             64)
         end
         agents.without(*names)
+      end
+
+      # A spec.md whose frontmatter does not parse routes as if it had none:
+      # lane full, every override dropped. An eval agent's unquoted backtick
+      # sent a quick-lane rename to research that way, and said nothing.
+      # {Plans::Spec#problems} already knew; say it before agents are assigned.
+      #
+      # @param tree [Agentilda::Plans::Tree]
+      # @param plans [Array<Agentilda::Plans::Ordinal>, nil] the --plan ordinals, nil for all
+      # @return [void]
+      def spec_warning(tree, plans)
+        lines = tree.subjects.filter_map { |subject|
+          ordinal = subject.feature.ordinal
+          next if plans && !plans.include?(ordinal)
+
+          problems = Plans::Spec.for(subject).problems
+          "#{ordinal}: #{problems.join("; ")}" unless problems.empty?
+        }
+        return if lines.empty?
+
+        warn("spec.md frontmatter ignored in part, so these plans route on defaults:\n" \
+             "#{lines.join("\n")}")
       end
 
       # `--plan` names the whole point of scoping: a skill that just minted
