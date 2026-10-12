@@ -39,6 +39,15 @@ eval "$(tilda completion zsh)"
 eval "$(alock completion zsh)"
 ```
 
+To give your coding agents the bundled `tilda` skills (how the factory works, and how to spec, run, inspect and sync plans), copy them into the shared skill store:
+
+```bash
+tilda skills install          # copies skills/* into ~/.agents/skills; -h lists them
+tilda skills install -n       # what it would install, keep or replace
+```
+
+It copies rather than links, so re-run it with `--overwrite` after upgrading the gem.
+
 ![help-screen](./.img/help-screen.avif)
 
 ### What it compiles
@@ -57,9 +66,10 @@ Put it in `.envrc` if you hit it more than once.
 
 ## Quick start
 
-Run these from the root of your project:
+Run these anywhere inside your project:
 
 ```bash
+tilda init                  # writes .tilda.yml and creates .plans/; asks on a terminal, -y asks nothing
 tilda create tax rule dsl   # creates .plans/000.00-⚪️ → tax-rule-dsl/spec.md and opens it
                             # finish the brief in spec.md, then save it
 tilda run -n                # dry run: shows which agent would take which plan
@@ -69,6 +79,26 @@ tilda list-plans            # every plan, its state and its pull requests
 ```
 
 The agents stop at an approved pull request. Merging it is up to you.
+
+### Project settings: `.tilda.yml`
+
+Every command that reads or writes plans first finds the project root and works from there, so it does not matter which subdirectory you type it in. The root is the nearest directory above you holding `.tilda.yml` or `.plans/`; failing that, the nearest holding `.git`. Your home directory counts only if it holds `.tilda.yml`, so a dotfiles repository there cannot capture every project under it. When the root is not where you are, one line on STDERR says so (`-q` silences it); when there is none, the command exits 66. `-D` and `PLANS_DIR` resolve against the root. `version`, `states`, `docs`, `agents`, `describe`, `completion`, `eval` and `skills` need no project and skip the search.
+
+`tilda init` writes `.tilda.yml` at the nearest `.git` (else the current directory) and creates `.plans/`. It takes `--project`, `--lane`, `--[no-]frontend` and `--jobs`, asks on a terminal for whatever no flag gave, and confirms before writing. `-y` asks nothing, `-n` prints the file instead, and an existing file is kept unless `--overwrite`.
+
+```yaml
+project: Equilibris App   # heading for INDEX.md; default: the root's directory name
+lane: full                # default lane for `tilda create`: full | plan | quick
+frontend: false           # a spec's `frontend:` when spec.md says nothing; omit to let each plan decide
+jobs: 4                   # how many plans `tilda run` works on at once
+commands:                 # option defaults for any command, by the name you type it as
+  run:
+    timeout: 1800
+  resync prs:
+    adopt: false
+```
+
+A typed flag beats the plan's `spec.md` frontmatter, which beats `.tilda.yml`, which beats the built-in default. `jobs`, `lane` and `project` are the same settings as `commands.run.jobs`, `commands.create.lane` and `commands.index.project`; set either spelling, not both. An unknown key, a bad value, or an option the command does not take is an error naming the file (exit 65): a setting silently ignored is a timeout that stops applying with no signal. `dry_run` cannot be a default. `~/.local/config/agentilda.json` is no longer read; move its `run` section under `commands:`.
 
 ## How it works
 
@@ -203,6 +233,7 @@ Partial answers are fine. The plan stays blocked until the last question is answ
 ## Commands
 
 ```bash
+tilda init                             # .tilda.yml and .plans/ at the project root
 tilda create tax rule dsl              # a new plan: 003.00-⚪️ → tax-rule-dsl
 tilda create --lane quick split big migration  # one agent, straight to a pull request
 tilda create --from notes/dsl.md       # a new plan named by the file's frontmatter title
@@ -217,6 +248,7 @@ tilda worktree 003                     # create and seed a worktree for one plan
 tilda resync dirs                      # rename folders whose emoji their contents contradict
 tilda resync prs                       # add missing [NNN.MM] prefixes to pull request titles
 tilda linear import TAX -p 'Tax DSL'   # mirror the plans into Linear
+tilda skills install                   # copy the bundled skills into ~/.agents/skills
 ```
 
 > [!IMPORTANT]
@@ -317,7 +349,7 @@ Suppose an agent stops without signing, because it crashed, timed out or was kil
 
 - **`resync dirs`** renames folders whose emoji their contents contradict. For example, a ⚪️ with a `plan.md` becomes ⭐️. It is safe to run repeatedly.
 - **`resync prs`** adds the `[NNN.MM]` prefix to pull request titles. It works from the branch name first, then from the diff. It reports anything ambiguous and never changes it. It needs `gh`.
-- **`linear import TEAM`** creates one Linear issue per plan and one child issue per work unit. It only goes one way: nothing edited in Linear comes back. It uses `LINEAR_API_KEY`, or with `--format json` it hands the same data to the Linear MCP server.
+- **`linear import TEAM`** works out one Linear issue per plan and one child issue per work unit, and lists what would be created or updated. It only goes one way: nothing edited in Linear comes back. `--format json` hands the same data to the Linear MCP server, which applies it. `--update-unchanged` includes plans that have not changed since the last import.
 
 ## From Claude Code
 
