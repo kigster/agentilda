@@ -6,6 +6,7 @@ module Agentilda
   module CLI
     # `agentilda docs` — regenerate the conventions document.
     class Docs < Base
+      standalone!
       desc "Generate the conventions document from the state machine itself"
 
       option :output,

@@ -225,9 +225,9 @@ module Agentilda
       # @param prompt [String, nil]
       # @return [String, nil]
       def instructions_from(prompt)
-        return prompt unless prompt && prompt.length < PROMPT_PATH_LIMIT && File.file?(prompt)
+        return prompt unless prompt && prompt.length < PROMPT_PATH_LIMIT && File.file?(typed_path(prompt))
 
-        File.read(prompt)
+        File.read(typed_path(prompt))
       end
 
       # @param agents [Agentilda::Agents::Registry]

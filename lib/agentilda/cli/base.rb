@@ -31,8 +31,33 @@ module Agentilda
         end
       end
 
+      # Every project command starts at the project root, wherever it was
+      # typed: a `.plans` found relative to a subdirectory is a `.plans` that
+      # does not exist, and the refusal that follows names the wrong problem.
+      #
+      # Prepended for the same reason as {RefuseStrayArguments}: the command
+      # that forgets to look is the one that runs against the wrong tree.
+      module EnterProject
+        # @param options [Hash]
+        # @return [void]
+        def call(**options)
+          enter_project(options) unless self.class.standalone?
+          super
+        end
+      end
+
+      # Marks a command that needs no project — reference output, the agent
+      # roster, completion — so it runs from anywhere without the search.
+      #
+      # @return [void]
+      def self.standalone! = @standalone = true
+
+      # @return [Boolean]
+      def self.standalone? = @standalone == true
+
       def self.inherited(klass)
         super
+        klass.prepend(EnterProject)
         klass.prepend(RefuseStrayArguments)
         klass.option :dir,
           default: Agentilda::PLANS_DIR,
@@ -65,10 +90,42 @@ module Agentilda
         tree = Plans.tree(options.fetch(:dir, Agentilda::PLANS_DIR))
         unless tree.exist?
           refuse("No #{Agentilda::PLANS_DIR} directory at\n#{tree.dir}\n\n" \
-                 "Run this from the project root, or pass -D.",
+                 "Run `tilda init` to create it, or pass -D.",
             66)
         end
         tree
+      end
+
+      # The directory the command was typed in, before {EnterProject} moved
+      # to the root. A path the user typed (`--prompt notes.md`) means a file
+      # beside them, not one beside `.plans`.
+      #
+      # @return [String]
+      def origin = @origin || Dir.pwd
+
+      # @param path [String, nil]
+      # @return [String, nil] +path+ as the user meant it, from {#origin}
+      def typed_path(path) = path && File.expand_path(path, origin)
+
+      # Finds the root and moves there, saying so when that is somewhere
+      # else. `-D` and `PLANS_DIR` are relative, so they resolve against the
+      # root from here on.
+      #
+      # @param options [Hash]
+      # @return [void]
+      def enter_project(options)
+        @origin = Dir.pwd
+        root = Project.root(from: @origin)
+        unless root
+          refuse("No project here: nothing in #{@origin} or above it holds " \
+                 "#{Project::FILE}, #{Agentilda::PLANS_DIR}/ or .git.\n\n" \
+                 "Run `tilda init` to make this directory one.",
+            66)
+        end
+        return if root == Project.expand(@origin)
+
+        Dir.chdir(root)
+        UI.line("Project root: #{root}") unless options.fetch(:quiet, false)
       end
 
       # Report and stop, in the shape every refusal here takes. The statuses

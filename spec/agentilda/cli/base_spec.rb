@@ -75,4 +75,100 @@ RSpec.describe Agentilda::CLI::Base do
       it { is_expected.to eq(0) }
     end
   end
+
+  # Typed three directories down, a command still works on the project's
+  # own .plans, and says where that is.
+  describe "entering the project" do
+    subject(:run) do
+      status = 0
+      original = $stderr
+      $stderr = err
+      Dir.chdir(from)
+      begin
+        command.new.call(**options)
+      rescue SystemExit => e
+        status = e.status
+      ensure
+        $stderr = original
+      end
+      status
+    end
+
+    let(:top) { File.realpath(Dir.mktmpdir("agentilda-root")) }
+    let(:err) { CapturedStream.new }
+    let(:seen) { [] }
+    let(:recorder) { seen }
+    let(:command) do
+      log = recorder
+      Class.new(described_class) { define_method(:call) { |**| log << Dir.pwd } }
+    end
+    let(:options) { { args: [] } }
+    let(:from) { File.join(top, "app", "lib") }
+
+    after { FileUtils.rm_rf(top) }
+
+    before { FileUtils.mkdir_p([from, File.join(top, "app", ".plans")]) }
+
+    it "moves to the root before the command runs" do
+      run
+
+      expect(seen).to eq([File.join(top, "app")])
+    end
+
+    it "names the root on STDERR" do
+      run
+
+      expect(strip_ansi(err.string)).to include("Project root: #{File.join(top, "app")}")
+    end
+
+    context "with -q" do
+      let(:options) { { args: [], quiet: true } }
+
+      it "moves without a word" do
+        run
+
+        expect([seen, err.string]).to eq([[File.join(top, "app")], ""])
+      end
+    end
+
+    context "when already at the root" do
+      let(:from) { File.join(top, "app") }
+
+      it "says nothing" do
+        run
+
+        expect(err.string).to eq("")
+      end
+    end
+
+    context "when nothing above is a project" do
+      let(:from) { File.join(top, "loose") }
+
+      before { FileUtils.mkdir_p(from) }
+
+      it { is_expected.to eq(66) }
+
+      it "points at tilda init" do
+        run
+
+        expect(unwrapped(strip_ansi(err.string))).to include("No project here", "tilda init")
+      end
+    end
+
+    context "with a command that needs no project" do
+      let(:command) do
+        log = recorder
+        Class.new(described_class) do
+          standalone!
+          define_method(:call) { |**| log << Dir.pwd }
+        end
+      end
+
+      it "stays where it was typed" do
+        run
+
+        expect(seen).to eq([from])
+      end
+    end
+  end
 end
