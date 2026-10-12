@@ -50,14 +50,20 @@ module Agentilda
       end
 
       # What the spec's switch for this agent says: true forces it, false
-      # forbids it, nil leaves the decision to {Agent#needs}.
+      # forbids it, nil leaves the decision to {Agent#needs}. A spec.md that
+      # says nothing takes the project's answer from `.tilda.yml`, so a
+      # command-line tool can say once that no plan of it has a front end.
       #
+      # @param config [Agentilda::Config] the project's settings
       # @return [Boolean, nil]
-      def toggled(agent, spec)
+      def toggled(agent, spec, config = Agentilda::Config.current)
         return nil if agent.toggle.nil?
         return nil unless spec.respond_to?(agent.toggle)
 
-        spec.public_send(agent.toggle)
+        value = spec.public_send(agent.toggle)
+        return value unless value.nil?
+
+        config.public_send(agent.toggle) if config.respond_to?(agent.toggle)
       end
 
       # @param subject [Agentilda::Plans::Subject]

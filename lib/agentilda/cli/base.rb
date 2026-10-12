@@ -55,6 +55,68 @@ module Agentilda
       # @return [Boolean]
       def self.standalone? = @standalone == true
 
+      # The name this command is typed as, and the key its section takes
+      # under `commands:` in `.tilda.yml`: "run", "resync dirs", "list-plans".
+      #
+      # @return [String, nil] nil for a class with no name, as in a spec
+      def self.command_name
+        return nil unless name
+
+        name.delete_prefix("Agentilda::CLI::").split("::")
+            .map { Agentilda.inflector.underscore(it).tr("_", "-") }.join(" ")
+      end
+
+      # dry-cli merges what was typed over these, so a `.tilda.yml` value
+      # placed here sits exactly between the flag and the built-in default.
+      # A file that cannot be read adds nothing at this point; {#enter_project}
+      # reads it again and refuses with the reason.
+      #
+      # @return [Hash{Symbol => Object}]
+      def self.default_params
+        return super if standalone? || command_name.nil?
+
+        root = Project.root or return super
+        known = options.map(&:name)
+        super.merge(Agentilda::Config.load(root).for(command_name).slice(*known))
+      rescue Agentilda::Error
+        super
+      end
+
+      # Every `commands:` section must name a command that exists, and every
+      # key in it an option that command takes, with a value it accepts. Each
+      # project command checks the whole file, not only its own section: a
+      # typo under a command you rarely run is still a typo.
+      #
+      # @param config [Agentilda::Config]
+      # @return [void]
+      # @raise [Agentilda::Error]
+      def self.check_config!(config)
+        config.commands.each do |name, settings|
+          command = Agentilda::CLI.get(name.split).then { it.found? ? it.command : nil }
+          unless command.respond_to?(:command_name) && command.command_name == name
+            raise Agentilda::Error, "#{config.path}: commands.#{name}: no such command"
+          end
+
+          settings.each { |key, value| check_option!(config, command, name, key, value) }
+        end
+      end
+
+      # @return [void]
+      def self.check_option!(config, command, name, key, value)
+        where = "#{config.path}: commands.#{name}.#{key}"
+        option = command.options.find { it.name == key }
+        raise Agentilda::Error, "#{where}: #{name} takes no such option" unless option
+        raise Agentilda::Error, "#{where}: a preview is asked for each time, never set as a default" if key == :dry_run
+
+        if option.boolean? && ![true, false].include?(value)
+          raise Agentilda::Error, "#{where}: #{value.inspect} is not true or false"
+        end
+        return unless option.values && !option.values.map(&:to_s).include?(value.to_s)
+
+        raise Agentilda::Error, "#{where}: #{value.inspect} is not one of #{option.values.join(", ")}"
+      end
+      private_class_method :check_option!
+
       def self.inherited(klass)
         super
         klass.prepend(EnterProject)
@@ -122,10 +184,19 @@ module Agentilda
                  "Run `tilda init` to make this directory one.",
             66)
         end
+        check_config(root)
         return if root == Project.expand(@origin)
 
         Dir.chdir(root)
         UI.line("Project root: #{root}") unless options.fetch(:quiet, false)
+      end
+
+      # @param root [String]
+      # @return [void]
+      def check_config(root)
+        self.class.check_config!(Agentilda::Config.load(root))
+      rescue Agentilda::Error => e
+        refuse(e.message, 65)
       end
 
       # Report and stop, in the shape every refusal here takes. The statuses

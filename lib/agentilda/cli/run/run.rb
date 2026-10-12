@@ -70,18 +70,12 @@ module Agentilda
       ]
 
       # Option precedence, quietest to loudest: the built-in default, then
-      # `~/.local/config/agentilda.json` under its `"run"` key, then the flag
-      # actually typed.
+      # `.tilda.yml` (`jobs`, and the `commands.run` section), then the flag
+      # actually typed. {Base.default_params} has already folded the file in.
       #
       # @param options [Hash]
       # @return [void]
       def call(**options)
-        config = begin
-          Agentilda::Config.for(:run)
-        rescue Agentilda::Error => e
-          refuse(e.message, 66)
-        end
-
         if options[:prompt] && !options[:agent]
           refuse("--prompt only works with --agent: it speaks to one agent, and without " \
                  "that restriction every agent in the round would hear it.",
@@ -97,8 +91,8 @@ module Agentilda
         assignable!(agents, tree, plans, options[:agent]) if options[:agent]
 
         isolation = options.fetch(:isolation, "worktree").to_sym
-        jobs      = (options[:jobs] || config[:jobs] || UI.default_jobs).to_i
-        timeout   = (options[:timeout] || config[:timeout])&.to_i
+        jobs      = (options[:jobs] || UI.default_jobs).to_i
+        timeout   = options[:timeout]&.to_i
 
         if isolation == :worktree && !Agentilda::Vcs.worktree(root:).repository?
           refuse("#{root} is not a git repository, so plans cannot be isolated.\n\n" \
@@ -110,7 +104,7 @@ module Agentilda
         # whether a round prints anything at all) is read the whole time the
         # loop runs, not just when `report` prints its closing summary.
         quiet?(options)
-        UI.log_path = options[:log] || config[:log] ||
+        UI.log_path = options[:log] ||
                       File.join(Dir.tmpdir, "agentilda-#{File.basename(root)}.log")
         info("Progress: #{UI.log_path}") unless quiet?(options)
         credentials_warning if !dry_run?(options) && !quiet?(options)
@@ -155,13 +149,13 @@ module Agentilda
           plans:,
           state:,
           worktree:  (Agentilda::Vcs.worktree(root:) if isolation == :worktree),
-          rounds:    (options[:rounds] || config[:rounds])&.to_i,
+          rounds:    options[:rounds]&.to_i,
           executor:  Execution.executor(root:,
             timeout:,
             dry_run:      dry_run?(options),
             instructions: instructions_from(options[:prompt]),
             model:        options[:model],
-            max_tokens:   (options[:max_tokens] || config[:max_tokens])&.to_i,
+            max_tokens:   options[:max_tokens]&.to_i,
             interactive:  !keyboard.nil? && !dry_run?(options),
             lean:         !options[:user_config]),
           dry_run:   dry_run?(options),

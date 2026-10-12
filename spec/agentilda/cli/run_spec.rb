@@ -24,6 +24,21 @@ RSpec.describe Agentilda::CLI::Run, :tree do
   # the no-op sleeper runner_spec uses, or each real-run example is two
   # seconds of waiting for nothing. The same spy serves the --rounds examples.
 
+  # A `.tilda.yml` at the example's project root, with the suite moved there
+  # the way {Agentilda::CLI::Base} moves a real command.
+  def tilda_yml(text)
+    root = File.dirname(plans_root)
+    File.write(File.join(root, ".tilda.yml"), text)
+    Dir.chdir(root)
+  end
+
+  # What dry-cli hands the command for +argv+: typed flags over `.tilda.yml`
+  # over the built-in defaults, as a real run sees them.
+  def typed(*argv)
+    Dry::CLI::Parser.call(described_class, argv, "tilda run").arguments
+                    .except(:dir, :isolation).merge(dry_run: false)
+  end
+
   def run(**)
     out = CapturedStream.new
     err = CapturedStream.new
@@ -103,18 +118,18 @@ RSpec.describe Agentilda::CLI::Run, :tree do
       expect(Agentilda::Execution::Executor).to have_received(:new).with(hash_including(timeout: 1800))
     end
 
-    it "reads the default timeout from ~/.local/config/agentilda.json" do
-      allow(Agentilda::Config).to receive(:for).with(:run).and_return(timeout: 2400)
+    it "reads the default timeout from .tilda.yml" do
+      tilda_yml("commands:\n  run:\n    timeout: 2400\n")
       with_executor
-      run(dry_run: false)
+      run(**typed)
 
       expect(Agentilda::Execution::Executor).to have_received(:new).with(hash_including(timeout: 2400))
     end
 
     it "lets the typed flag beat the config file" do
-      allow(Agentilda::Config).to receive(:for).with(:run).and_return(timeout: 2400)
+      tilda_yml("commands:\n  run:\n    timeout: 2400\n")
       with_executor
-      run(dry_run: false, timeout: "600")
+      run(**typed("--timeout", "600"))
 
       expect(Agentilda::Execution::Executor).to have_received(:new).with(hash_including(timeout: 600))
     end
@@ -129,12 +144,24 @@ RSpec.describe Agentilda::CLI::Run, :tree do
     end
 
     it "refuses an unreadable config file rather than silently ignoring it" do
-      allow(Agentilda::Config).to receive(:for)
-        .and_raise(Agentilda::Error, "config.json is not valid JSON")
+      tilda_yml("commands: [")
       _out, err, status = run
 
-      expect(unwrapped(err)).to include("not valid JSON")
-      expect(status).to eq(66)
+      expect(unwrapped(err)).to include(".tilda.yml", "not valid YAML")
+      expect(status).to eq(65)
+    end
+
+    it "refuses an option run does not take" do
+      tilda_yml("commands:\n  run:\n    timeuot: 60\n")
+      _out, err, status = run
+
+      expect([unwrapped(err), status]).to match([include("commands.run.timeuot", "no such option"), 65])
+    end
+
+    it "takes jobs from the top of .tilda.yml" do
+      tilda_yml("jobs: 3\n")
+
+      expect(typed[:jobs]).to eq(3)
     end
   end
 
@@ -251,9 +278,9 @@ RSpec.describe Agentilda::CLI::Run, :tree do
     end
 
     it "reads a default budget from the config file" do
-      allow(Agentilda::Config).to receive(:for).with(:run).and_return(max_tokens: 80_000)
+      tilda_yml("commands:\n  run:\n    max_tokens: 80000\n")
       with_executor
-      run(dry_run: false)
+      run(**typed)
 
       expect(Agentilda::Execution::Executor).to have_received(:new).with(hash_including(max_tokens: 80_000))
     end

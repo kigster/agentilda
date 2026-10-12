@@ -35,4 +35,25 @@ RSpec.describe Agentilda::Agents::Routing, :tree do
     plan_with("spec.md" => "---\nfrontend: false\n---\n#{spec_body}")
     expect(described_class.allows?(agents.find("rey-frontend"), subject_plan)).to be(false)
   end
+
+  # The project says once what most plans would otherwise each repeat.
+  describe "the project's frontend: in .tilda.yml" do
+    let(:frontend_units) { { "plan-frontend.md" => "# FE\n\n## F1\n" } }
+
+    before do
+      root = File.dirname(plans_root)
+      File.write(File.join(root, ".tilda.yml"), "frontend: false\n")
+      Dir.chdir(root)
+    end
+
+    it "keeps rey-frontend off a plan whose spec.md says nothing" do
+      plan_with(frontend_units)
+      expect(routed).to eq(%w[luke-backend])
+    end
+
+    it "yields to a spec.md that says otherwise" do
+      plan_with(frontend_units.merge("spec.md" => "---\nfrontend: true\n---\n#{spec_body}"))
+      expect(routed).to eq(%w[luke-backend rey-frontend])
+    end
+  end
 end

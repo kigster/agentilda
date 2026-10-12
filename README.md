@@ -269,13 +269,7 @@ Flags can only tighten what an agent declares, never loosen it. Each agent is to
 
 As its time runs out, the agent is warned at 10, 5 and 1 minute left, then asked to stop. If it is still running 60 seconds after that, it is killed. A token budget works the same way: the agent is told the number, and the tool aborts it once it goes over.
 
-Defaults for `run` can live in `~/.local/config/agentilda.json`:
-
-```json
-{ "run": { "timeout": 1800, "jobs": 4 } }
-```
-
-A typed flag beats the file, and the file beats the built-in default. The file accepts `timeout`, `jobs`, `rounds`, `log` and `max_tokens`. It never accepts `commit`.
+Defaults for `run` live in the project's `.tilda.yml`, under `jobs` and `commands.run` (see [Project settings](#project-settings-tildayml)). A typed flag beats the file, and the file beats the built-in default.
 
 ### The dashboard, and the keys during a run
 
