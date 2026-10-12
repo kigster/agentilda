@@ -330,12 +330,17 @@ module Agentilda
       # is nothing to weigh, and gives it the one honest way out, which is to
       # stop and say so. A reviewer is told to hold the work to them.
       #
-      # @return [String] empty when the spec requires nothing
+      # {Checks} appends the one requirement no spec states: the suite and the
+      # linters pass. It goes last, after the author's own.
+      #
+      # @return [String] empty when the spec requires nothing and the agent
+      #   changes no code
       def requirements_section
         requirements = Plans::Spec.for(subject).requirements
+        requirements += [Checks.requirement(root)] if Checks.apply_to?(agent)
         return "" if requirements.empty?
 
-        "\n## Implementation requirements — from the spec's author\n\n" \
+        "\n## Implementation requirements\n\n" \
           "These are requirements, not suggestions. Do exactly what each one says; do not substitute, " \
           "weaken or reinterpret one, and do not decide you know better. If you cannot meet one, stop " \
           "and sign Blocked with `--note technical`, and write which requirement and why in the " \
