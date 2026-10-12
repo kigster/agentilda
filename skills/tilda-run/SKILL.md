@@ -7,7 +7,7 @@ description: Run tilda's specialist agents over `.plans/` until every plan reach
 
 Load the `tilda` skill first if it is not in context.
 
-`tilda run` loops in rounds. Each round hands every movable plan to the agent its state and lane call for, renames the folder when the agent finishes, pushes the branch and opens the pull request. It stops at a **fixed point**: a round in which no plan changed state. Your job is to start it, watch it, and turn what it stops on into questions for the human.
+`tilda run` loops in rounds. Each round hands every movable plan to the agent its state and lane call for and renames the folder when the agent finishes. When a builder lands a plan at 🟢 Ready for Review, `tilda` pushes its branch and opens the pull request, titled `[NNN.MM]`; `hansolo-reviewer` then reviews that pull request. It stops at a **fixed point**: a round in which no plan changed state. Your job is to start it, watch it, and turn what it stops on into questions for the human.
 
 ## 1. Scope and preview
 
@@ -23,11 +23,12 @@ Pick flags from the situation, and read `tilda run --help` for the rest:
 
 | Situation                                        | Flag                                 |
 | ------------------------------------------------ | ------------------------------------ |
-| the repository has no git, or the user wants one tree | `--isolation shared` (serial)   |
 | limit machine load or API spend                  | `-j <n>`, `--max-tokens <n>`         |
-| keep work local, no pushes or PRs                | `--no-git-push`                      |
+| the repository has no git                        | `--isolation shared` (serial; see below) |
 | one agent is misbehaving                         | `--skip <agent>`                     |
 | re-drive one agent with extra guidance           | `--agent <name> --prompt "<text>"`   |
+
+Keep the defaults (`--isolation worktree`, pushing on) whenever the user wants plans reviewed. `--isolation shared` and `--no-git-push` open no pull request, so every plan stops at 🟢 and the reviewer never starts; `tilda run` warns when that is the case. Use them only when the user asks to keep work local, and say that review waits for a PR they open (`tilda resync prs` then records it).
 
 ## 2. Run it
 
