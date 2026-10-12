@@ -39,10 +39,11 @@ module Agentilda
   #
   #   * The deliverable goes to STDOUT, progress and boxes go to STDERR, so
   #     every command composes in a pipe.
-  #   * Anything that writes to disk or to GitHub is DRY RUN by default and
-  #     needs `--commit`. Folder names and pull request titles are joined on by
-  #     branches, `pull-requests.md` and merged history; changing one silently
-  #     is how a plan ends up filed under work it did not do.
+  #   * A command does the work it is named for, and `-n` / `--dry-run`
+  #     previews it. Every change is reported as it is made: folder names and
+  #     pull request titles are joined on by branches, `pull-requests.md` and
+  #     merged history, and changing one silently is how a plan ends up filed
+  #     under work it did not do.
   module CLI
     extend Dry::CLI::Registry
 

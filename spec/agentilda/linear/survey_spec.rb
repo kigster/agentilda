@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
 # The survey exists because the import cannot see Linear, so someone has to
-# answer "is any of this already there under another name?" before --commit
+# answer "is any of this already there under another name?" before an import
 # creates a twin. Both matching rules are exact after normalising; everything
 # fuzzier is reported as a guess, never silently acted on.
 RSpec.describe Agentilda::Linear::Survey, :tree do

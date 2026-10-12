@@ -8,9 +8,6 @@ module Agentilda
     class Base < Dry::CLI::Command
       include UI
 
-      # Values of AGENTILDA_AUTOCOMMIT that turn it on.
-      AUTOCOMMIT = %w[true yes 1].freeze
-
       # dry-cli gathers every token a command did not declare an argument for
       # into :args, and hands it over without a word. `tilda docs
       # .plans/README.md` — the `-o` forgotten — therefore ran with every
@@ -48,6 +45,18 @@ module Agentilda
           desc:    "Suppress progress output on STDERR"
       end
 
+      # Declares `-n` / `--dry-run` on a command that changes something.
+      #
+      # @param desc [String] what the preview prints instead of doing
+      # @return [void]
+      def self.dry_run_option(desc)
+        option :dry_run,
+          type:    :boolean,
+          default: false,
+          aliases: ["-n"],
+          desc:
+      end
+
       private
 
       # @param options [Hash]
@@ -82,14 +91,12 @@ module Agentilda
         quiet
       end
 
-      # `--commit`, or AGENTILDA_AUTOCOMMIT=true, which is `--commit` on every
-      # command for someone who never wants the dry run.
+      # `-n` / `--dry-run`. A command does the work it is named for, so the
+      # preview is what has to be asked for, never the work itself.
       #
       # @param options [Hash]
       # @return [Boolean]
-      def commit?(options)
-        options.fetch(:commit, false) || AUTOCOMMIT.include?(ENV.fetch("AGENTILDA_AUTOCOMMIT", "").strip.downcase)
-      end
+      def dry_run?(options) = options.fetch(:dry_run, false)
 
       # `claude` prefers a credential in the environment to a claude.ai login,
       # so a project `.env` that direnv loads on `cd` can redirect every agent
@@ -121,7 +128,7 @@ module Agentilda
       def dry_run_footer(count, what)
         return if count.zero?
 
-        warn("#{count} #{what} pending — nothing was changed.\nRe-run with --commit to apply.")
+        warn("#{count} #{what} pending — nothing was changed.\nRe-run without --dry-run to apply.")
       end
     end
   end

@@ -325,7 +325,7 @@ module Agentilda
       def warn_about(note)
         error(
           "The folder was created, but spec.md was not written:\n#{note}\n\n" \
-          "The pull requests are recorded. Run `agentilda run --commit` to retry."
+          "The pull requests are recorded. Run `agentilda run` to retry."
         )
       end
 

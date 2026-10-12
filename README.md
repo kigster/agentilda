@@ -62,12 +62,8 @@ Run these from the root of your project:
 ```bash
 tilda create tax rule dsl   # creates .plans/000.00-⚪️ → tax-rule-dsl/spec.md and opens it
                             # finish the brief in spec.md, then save it
-tilda run                   # dry run: shows which agent would take which plan
-tilda run --commit          # runs the agents until no plan changes state
-
-# alternatively
-export AGENTILDA_AUTOCOMMIT=true 
-tilda run 001.00 
+tilda run -n                # dry run: shows which agent would take which plan
+tilda run                   # runs the agents until no plan changes state
 
 tilda list-plans            # every plan, its state and its pull requests
 ```
@@ -198,8 +194,8 @@ Run `tilda agents list` for the same table, or `tilda describe <agent>` to read 
 The loop never assigns a blocked plan (⭕️ or 🅱️) to an agent. Write your answers into the plan's `blocked.md`, then:
 
 ```bash
-tilda unblock 003            # what is 003 still waiting on?
-tilda unblock 003 --commit   # fold the answered questions into spec.md and plan.md
+tilda unblock 003 -n         # what is 003 still waiting on?
+tilda unblock 003            # fold the answered questions into spec.md and plan.md
 ```
 
 Partial answers are fine. The plan stays blocked until the last question is answered.
@@ -215,8 +211,8 @@ tilda list-plans                       # every plan, its state and its pull requ
 tilda index                            # write .plans/INDEX.md
 tilda states                           # the state machine, as a diagram
 tilda docs -o docs/WORKFLOW.md         # regenerate the conventions from the code
-tilda run --commit --plan 003          # run the agents on specific plans
-tilda unblock 003 --commit             # fold answered blocks back in
+tilda run --plan 003                   # run the agents on specific plans
+tilda unblock 003                      # fold answered blocks back in
 tilda worktree 003                     # create and seed a worktree for one plan
 tilda resync dirs                      # rename folders whose emoji their contents contradict
 tilda resync prs                       # add missing [NNN.MM] prefixes to pull request titles
@@ -224,24 +220,24 @@ tilda linear import TAX -p 'Tax DSL'   # mirror the plans into Linear
 ```
 
 > [!IMPORTANT]
-> **Every command that writes is a dry run until you add `--commit`.** Read what it would do first. Set `AGENTILDA_AUTOCOMMIT=true` to have every command behave as if `--commit` were passed.
+> **Every command does the work it is named for.** Add `-n` / `--dry-run` to `run`, `unblock`, `resync dirs`, `resync prs` or `linear import` to see what it would do first, with nothing changed.
 
 ## Running the agents
 
 ```bash
-tilda run                                  # dry run: who would take what
-tilda run --commit                         # the whole tree, one worktree per plan, in parallel
-tilda run --commit -j 4                    # at most four agents at once
-tilda run --commit --plan 003,005.01       # only these plans
-tilda run --commit --agent yoda-writer --prompt "Rework the risks section first"
-tilda run --commit --skip hansolo-reviewer # everyone but the reviewer; its plans wait
-tilda run --commit --model opus            # one model for every agent
-tilda run --commit --user-config           # agents load your personal plugins and skills too
-tilda run --commit --timeout 600           # at most ten minutes per agent
-tilda run --commit --scroll-height 5       # each agent's last five statuses under its row
-tilda run --commit --agent luke-backend --prompt steer.md  # a short --prompt naming a file is read
-tilda run --commit --rounds 1              # at most one round per agent per plan
-tilda run --commit --max-tokens 200000     # token budget per agent invocation
+tilda run -n                               # dry run: who would take what
+tilda run                                  # the whole tree, one worktree per plan, in parallel
+tilda run -j 4                             # at most four agents at once
+tilda run --plan 003,005.01                # only these plans
+tilda run --agent yoda-writer --prompt "Rework the risks section first"
+tilda run --skip hansolo-reviewer          # everyone but the reviewer; its plans wait
+tilda run --model opus                     # one model for every agent
+tilda run --user-config                    # agents load your personal plugins and skills too
+tilda run --timeout 600                    # at most ten minutes per agent
+tilda run --scroll-height 5                # each agent's last five statuses under its row
+tilda run --agent luke-backend --prompt steer.md  # a short --prompt naming a file is read
+tilda run --rounds 1                       # at most one round per agent per plan
+tilda run --max-tokens 200000              # token budget per agent invocation
 tilda run --isolation shared               # one checkout, one agent at a time, no git needed
 ```
 
@@ -283,7 +279,7 @@ A typed flag beats the file, and the file beats the built-in default. The file a
 
 ### The dashboard, and the keys during a run
 
-On a terminal, every command that runs agents draws the same ratatui dashboard and listens for the same keys: `run --commit`, `unblock --commit` and `create`. A cyan status bar runs the full width at the top and another at the bottom, and each running agent is one table row — plan, agent, file, elapsed and remaining — with its latest statuses printed under it, newest first. `run --scroll-height N` (`-s N`) keeps the last N of them; the default is three. Off a terminal (a pipe, a dry run, cron) there is no screen, and progress goes to the log instead.
+On a terminal, every command that runs agents draws the same ratatui dashboard and listens for the same keys: `run`, `unblock` and `create`. A cyan status bar runs the full width at the top and another at the bottom, and each running agent is one table row — plan, agent, file, elapsed and remaining — with its latest statuses printed under it, newest first. `run --scroll-height N` (`-s N`) keeps the last N of them; the default is three. Off a terminal (a pipe, a dry run, cron) there is no screen, and progress goes to the log instead.
 
 | Key      | What it does                                                                   |
 | :------- | :----------------------------------------------------------------------------- |
@@ -326,12 +322,12 @@ Suppose an agent stops without signing, because it crashed, timed out or was kil
 ## GitHub and Linear
 
 - **`resync dirs`** renames folders whose emoji their contents contradict. For example, a ⚪️ with a `plan.md` becomes ⭐️. It is safe to run repeatedly.
-- **`resync prs`** adds the `[NNN.MM]` prefix to pull request titles. It works from the branch name first, then from the diff. It reports anything ambiguous and never changes it, even with `--commit`. It needs `gh`.
+- **`resync prs`** adds the `[NNN.MM]` prefix to pull request titles. It works from the branch name first, then from the diff. It reports anything ambiguous and never changes it. It needs `gh`.
 - **`linear import TEAM`** creates one Linear issue per plan and one child issue per work unit. It only goes one way: nothing edited in Linear comes back. It uses `LINEAR_API_KEY`, or with `--format json` it hands the same data to the Linear MCP server.
 
 ## From Claude Code
 
-The `/plan-create`, `/plan-run`, `/plan-status` and other `/plan-*` slash commands wrap this same binary. They also add checks, such as confirming the scope and `--commit` before a run. They ship with [agentilda-ai-setup](https://github.com/kigster/agentilda-ai-setup). Use them inside a Claude Code session, and the binary everywhere else.
+The `/plan-create`, `/plan-run`, `/plan-status` and other `/plan-*` slash commands wrap this same binary. They also add checks, such as previewing the scope with `-n` before a run. They ship with [agentilda-ai-setup](https://github.com/kigster/agentilda-ai-setup). Use them inside a Claude Code session, and the binary everywhere else.
 
 ## Development
 

@@ -1,51 +1,28 @@
 # frozen_string_literal: true
 
 RSpec.describe Agentilda::CLI::Base do
-  describe "#commit?" do
-    subject { Class.new(described_class).new.send(:commit?, options) }
+  describe "#dry_run?" do
+    subject { Class.new(described_class).new.send(:dry_run?, options) }
 
     let(:options) { {} }
-    let(:autocommit) { nil }
 
-    around do |example|
-      autocommit.nil? ? ENV.delete("AGENTILDA_AUTOCOMMIT") : ENV["AGENTILDA_AUTOCOMMIT"] = autocommit
-      example.run
-    ensure
-      ENV.delete("AGENTILDA_AUTOCOMMIT")
-    end
-
-    context "without --commit" do
+    # A command does the work it is named for: no flag means do it.
+    context "without --dry-run" do
       it { is_expected.to be(false) }
     end
 
-    context "with --no-commit" do
-      let(:options) { { commit: false } }
-
-      it { is_expected.to be(false) }
-    end
-
-    context "with --commit" do
-      let(:options) { { commit: true } }
+    context "with --dry-run" do
+      let(:options) { { dry_run: true } }
 
       it { is_expected.to be(true) }
     end
+  end
 
-    # `--commit` on every command, for someone who never wants the dry run.
-    %w[true YES 1].each do |value|
-      context "with AGENTILDA_AUTOCOMMIT=#{value}" do
-        let(:autocommit) { value }
-        let(:options) { { commit: false } }
+  describe ".dry_run_option" do
+    subject(:option) { Agentilda::CLI::Run.options.find { |o| o.name == :dry_run } }
 
-        it { is_expected.to be(true) }
-      end
-    end
-
-    ["false", ""].each do |value|
-      context "with AGENTILDA_AUTOCOMMIT=#{value.inspect}" do
-        let(:autocommit) { value }
-
-        it { is_expected.to be(false) }
-      end
+    it "declares -n, off by default" do
+      expect([option.aliases, option.default]).to eq([["-n"], false])
     end
   end
 

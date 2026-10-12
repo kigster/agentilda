@@ -8,10 +8,7 @@ module Agentilda
     class Run < Base
       desc "Run specialist agents over the plans until nothing changes"
 
-      option :commit,
-        type:    :boolean,
-        default: false,
-        desc:    "Actually invoke the agents (default: dry run, prints the plan of work)"
+      dry_run_option "Invoke no agent; print which agent would take which plan"
       option :rounds,
         desc: "Cap on rounds per agent per plan; each agent declares its own, at most 5 " \
               "(default: the agent's own)"
@@ -54,7 +51,7 @@ module Agentilda
       option :git_push,
         type:    :boolean,
         default: true,
-        desc:    "With --commit and --isolation worktree, a finished branch is pushed and its pull request " \
+        desc:    "With --isolation worktree, a finished branch is pushed and its pull request " \
                  "opened as soon as it lands, titled [NNN.MM](X). --no-git-push turns that off and leaves it uncommitted."
       option :scroll_height,
         aliases: ["-s"],
@@ -63,19 +60,18 @@ module Agentilda
       option :log, desc: "Append progress to this file (default: a per-project file under the system temp dir)"
 
       example [
-        "                       # show which agent would take which plan",
-        "--commit               # run them, one worktree per plan, in parallel",
-        "--commit -j 4          # …with four at a time",
+        "-n                     # show which agent would take which plan",
+        "                       # run them, one worktree per plan, in parallel",
+        "-j 4                   # …with four at a time",
         "--isolation shared     # one tree, serial — no git required",
-        "--commit --rounds 3    # …capping every agent at three rounds per plan",
-        "--commit --plan 005,006,007  # only the plans a batch step just created",
-        "--commit -s 5          # …each agent's last five statuses under its row"
+        "--rounds 3             # …capping every agent at three rounds per plan",
+        "--plan 005,006,007     # only the plans a batch step just created",
+        "-s 5                   # …each agent's last five statuses under its row"
       ]
 
       # Option precedence, quietest to loudest: the built-in default, then
       # `~/.local/config/agentilda.json` under its `"run"` key, then the flag
-      # actually typed. The config never supplies `--commit`: an agent run
-      # that writes is something a person asks for each time.
+      # actually typed.
       #
       # @param options [Hash]
       # @return [void]
@@ -117,7 +113,7 @@ module Agentilda
         UI.log_path = options[:log] || config[:log] ||
                       File.join(Dir.tmpdir, "agentilda-#{File.basename(root)}.log")
         info("Progress: #{UI.log_path}") unless quiet?(options)
-        credentials_warning if commit?(options) && !quiet?(options)
+        credentials_warning if !dry_run?(options) && !quiet?(options)
 
         # The state file is what a harness that dies leaves for the next one.
         # It sits in .plans/ so a reboot keeps it, and it is ignored by name
@@ -125,7 +121,7 @@ module Agentilda
         # is announced, the once it happens. The runner drops the file on a
         # dry run, which is why it can be built unconditionally.
         state = Engine.state_file(tree)
-        if commit?(options) && Engine::StateFile.ensure_ignored!(root) && !quiet?(options)
+        if !dry_run?(options) && Engine::StateFile.ensure_ignored!(root) && !quiet?(options)
           info("Added #{Engine::StateFile::IGNORE.join(" and ")} to .gitignore: the run keeps its state there.")
         end
 
@@ -139,14 +135,14 @@ module Agentilda
         unless scroll_height.to_s.match?(/\A[1-9]\d*\z/)
           refuse("--scroll-height must be a whole number of lines, 1 or more, not #{scroll_height.inspect}.", 64)
         end
-        screen   = (Presentation::Screen::Ratatui.new(scroll_height: scroll_height.to_i) if UI.animate? && commit?(options))
+        screen   = (Presentation::Screen::Ratatui.new(scroll_height: scroll_height.to_i) if UI.animate? && !dry_run?(options))
         console  = (Presentation::Console.new(screen:) if screen)
         # A dry run gets no keyboard at all: every key it offers speaks to a
         # running agent, and listening costs the terminal's raw mode, whose
         # output post-processing the report below needs left alone.
         keyboard = if screen
                      Presentation::Keyboard.new(sink: console).tap { |kb| screen.attach_keyboard(kb) }
-                   elsif commit?(options)
+                   elsif !dry_run?(options)
                      Presentation::Keyboard.listen(sink: console)
                    end
         UI.line("keys: h for help - s select, k kill, x extend, w wrap up, n stop, q quit") if keyboard && console.nil? && !quiet?(options)
@@ -162,13 +158,13 @@ module Agentilda
           rounds:    (options[:rounds] || config[:rounds])&.to_i,
           executor:  Execution.executor(root:,
             timeout:,
-            dry_run:      !commit?(options),
+            dry_run:      dry_run?(options),
             instructions: instructions_from(options[:prompt]),
             model:        options[:model],
             max_tokens:   (options[:max_tokens] || config[:max_tokens])&.to_i,
-            interactive:  !keyboard.nil? && commit?(options),
+            interactive:  !keyboard.nil? && !dry_run?(options),
             lean:         !options[:user_config]),
-          dry_run:   !commit?(options),
+          dry_run:   dry_run?(options),
           publisher: publisher_for(root, isolation, options),
           on_board:  console&.method(:paint)
         )
@@ -328,7 +324,7 @@ module Agentilda
 
       # The one thing this harness does that leaves the machine — pushing a
       # branch and opening its pull request — so it takes one more thing to
-      # turn on than everything else here: `--commit` alone is not enough,
+      # turn on than everything else here: not being a dry run is not enough,
       # isolation has to actually give each plan a branch of its own too.
       #
       # `nil` is how {Runner} is told to leave a finished worktree alone; it
@@ -342,7 +338,7 @@ module Agentilda
       def publisher_for(root, isolation, options)
         return nil if isolation != :worktree || options[:git_push] == false
 
-        Vcs.publisher(root:, dry_run: !commit?(options))
+        Vcs.publisher(root:, dry_run: dry_run?(options))
       end
 
       # One line per attempt: the plan, who ran, which of that agent's rounds
@@ -367,7 +363,7 @@ module Agentilda
         # redirected to a file keeps its bill. A dry run spent nothing and gets
         # none of this.
         tally = Engine.tally(attempts:, seconds:)
-        puts("", tally.render) if commit?(options)
+        puts("", tally.render) unless dry_run?(options)
 
         return if quiet?(options)
 
@@ -383,8 +379,8 @@ module Agentilda
         summary << "#{blocked.size} blocked" unless blocked.empty?
         summary << "#{failures(attempts).size} failed" unless failures(attempts).empty?
 
-        if !commit?(options)
-          warn("Dry run — no agent was invoked.\n#{summary.join(" · ")}\n\nRe-run with --commit.")
+        if dry_run?(options)
+          warn("Dry run — no agent was invoked.\n#{summary.join(" · ")}\n\nRe-run without --dry-run.")
         elsif failures(attempts).empty?
           success("#{summary.join(" · ")}#{"\n\nEvery plan is done or deliberately parked." if runner.settled?}")
         else
@@ -396,7 +392,7 @@ module Agentilda
         warn("#{blocked.size} plan#{"s" unless blocked.size == 1} need a human decision:\n" +
                blocked.map { |b| "  #{b.feature.ordinal} #{b.status.emoji} #{b.feature.title} — see blocked.md" }.join("\n") +
                "\n\nWrite the answers into blocked.md, then: agentilda unblock " \
-               "#{blocked.map { |b| b.feature.ordinal }.join(",")} --commit")
+               "#{blocked.map { |b| b.feature.ordinal }.join(",")}")
       end
     end
   end

@@ -14,8 +14,7 @@ module Agentilda
   #
   # Precedence is: an option passed on the command line, then this file,
   # then the built-in default. The file supplies *defaults*, never
-  # mandates — nothing here can force `--commit`, which stays a flag a
-  # person types.
+  # mandates.
   #
   # An unreadable file is an error, not a shrug: a config silently ignored
   # is how a timeout somebody set stops applying with no signal anywhere.

@@ -153,7 +153,7 @@ Raw NDJSON traces land in `Dir.tmpdir/agentilda-traces` on purpose, outside the 
 ## Conventions in the code
 
 - STDOUT carries the deliverable, STDERR carries progress. `UI` draws every box on STDERR so tables stay pipeable, and `Reporter#render`, `Roster#list`, `Tally#render` and friends return strings while printing nothing.
-- Anything that writes to disk, GitHub or Linear is a dry run until `--commit`.
+- A command does the work it is named for; anything that writes to disk, GitHub or Linear previews with `-n` / `--dry-run`.
 - `Data.define` for value objects, everywhere. Endless method definitions (`def open? = state.match?(...)`) are idiomatic here.
 - YARD on public methods, with `@param` and `@return`. Comments explain why, usually by naming the specific failure the code prevents. Match that density; it is the house style, not decoration.
 - `GitHub` and `Linear::API` are seams. The suite injects doubles into both and never reaches the network.

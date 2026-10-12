@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-# `agentilda unblock 031 --commit` printed nothing at all: not what it
+# `agentilda unblock 031` printed nothing at all: not what it
 # found, not what it did, not that it had started. It was handing the folder
 # to an agent that can take a quarter of an hour and saying nothing until the
 # agent came back, so a run that had nothing to do and a run still working
@@ -37,7 +37,7 @@ RSpec.describe Agentilda::CLI::Unblock, :tree do
     original_out, original_err = $stdout, $stderr
     $stdout, $stderr = out, err
     begin
-      command.call(plans:, dir: plans_root, **)
+      command.call(plans:, dir: plans_root, dry_run: true, **)
     rescue SystemExit => e
       status = e.status
     ensure
@@ -50,7 +50,7 @@ RSpec.describe Agentilda::CLI::Unblock, :tree do
   # The boxes wrap on words at the terminal's width, so a sentence assertion
   # has to read them back unwrapped or it passes and fails by screen size.
 
-  # `--commit` is the path that was silent, and it is the path that shells out.
+  # The real run is the path that was silent, and it is the path that shells out.
   # The executor is replaced so the suite never invokes `claude`.
   def with_executor(result: [true, "completed"], &edit)
     executor = instance_double(Agentilda::Execution::Executor)
@@ -128,7 +128,7 @@ RSpec.describe Agentilda::CLI::Unblock, :tree do
     it "says plainly that nothing was invoked and nothing changed" do
       _out, err, = run("001")
 
-      expect(unwrapped(err)).to include("Dry run", "--commit")
+      expect(unwrapped(err)).to include("Dry run", "without --dry-run")
     end
 
     it "puts the machine-readable line on STDOUT and nothing else there" do
@@ -168,35 +168,35 @@ RSpec.describe Agentilda::CLI::Unblock, :tree do
     end
   end
 
-  describe "--commit" do
+  describe "without --dry-run" do
     before { blocked_plan }
 
     # The bug, stated as a property: whatever happens, the command says
     # something about it.
     it "is never silent" do
       with_executor
-      out, err, = run("001", commit: true)
+      out, err, = run("001", dry_run: false)
 
       expect(out + err).not_to be_empty
     end
 
     it "names each question it folded in, by number" do
       with_executor { |subject| fold(subject, 2) }
-      out, err, = run("001", commit: true)
+      out, err, = run("001", dry_run: false)
 
       expect(out + err).to include("folded B2")
     end
 
     it "reports what is still waiting on a human" do
       with_executor { |subject| fold(subject, 2) }
-      _out, err, = run("001", commit: true)
+      _out, err, = run("001", dry_run: false)
 
       expect(unwrapped(err)).to include("1 still waiting on a human")
     end
 
     it "says the block is retired once the last question goes" do
       with_executor { |subject| fold(subject, 1, 2) }
-      out, err, = run("001", commit: true)
+      out, err, = run("001", dry_run: false)
 
       expect(out + err).to include("blocked.md retired")
     end
@@ -205,21 +205,21 @@ RSpec.describe Agentilda::CLI::Unblock, :tree do
     it "exits zero on a partial drain" do
       with_executor { |subject| fold(subject, 2) }
 
-      expect(run("001", commit: true).last).to eq(0)
+      expect(run("001", dry_run: false).last).to eq(0)
     end
 
     # Not folding anything is the outcome a human most needs explaining, since
     # it looks identical to the command not having run.
     it "explains a run that folded nothing rather than reporting a bare zero" do
       with_executor
-      _out, err, = run("001", commit: true)
+      _out, err, = run("001", dry_run: false)
 
       expect(unwrapped(err)).to include("Nothing moved", "## A<n>")
     end
 
     it "reports a failed agent with what it said" do
       with_executor(result: [false, "claude exited 1: 401 API key is invalid"])
-      _out, err, = run("001", commit: true)
+      _out, err, = run("001", dry_run: false)
 
       expect(unwrapped(err)).to include("401 API key is invalid")
     end
@@ -227,7 +227,7 @@ RSpec.describe Agentilda::CLI::Unblock, :tree do
     it "exits non-zero when the agent failed" do
       with_executor(result: [false, "claude exited 1"])
 
-      expect(run("001", commit: true).last).to eq(1)
+      expect(run("001", dry_run: false).last).to eq(1)
     end
   end
 

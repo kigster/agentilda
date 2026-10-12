@@ -79,7 +79,7 @@ RSpec.describe Agentilda::Lifecycle::Resync::Dirs, :tree do
         expect(changes.first.reason).to eq("018 is not padded to 018.00")
       end
 
-      it "renames it on --commit" do
+      it "renames it when committing" do
         resync.call(commit: true)
 
         expect(names).to eq(["018.00-⚪️ → verify-returns"])

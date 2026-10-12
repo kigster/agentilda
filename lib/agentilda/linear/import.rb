@@ -53,7 +53,7 @@ module Agentilda
     # something a human curated, and every plan is filed under one the caller
     # named on the command line.
     #
-    # Keeping the whole decision offline is what makes `--commit` honest. The
+    # Keeping the whole decision offline is what makes `--dry-run` honest. The
     # dry run is not an approximation of what a push would do — it is the same
     # object the push consumes, so what gets printed and what gets sent cannot
     # disagree. Everything that needs the network — the project, the repository

@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
 # The import decides everything from disk. That is the property worth
-# protecting: `--commit` is only honest because the dry run and the push
+# protecting: `--dry-run` is only honest because the dry run and the push
 # consume the same object, so what gets printed and what gets sent cannot
 # disagree. Everything needing the network — the project, the repository's
 # pull requests — is handed in.

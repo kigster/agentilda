@@ -13,7 +13,7 @@ RSpec.describe "agentilda linear", :tree do
     original_out, original_err = $stdout, $stderr
     $stdout, $stderr = out, err
     begin
-      command.call(team:, dir: plans_root, **)
+      command.call(team:, dir: plans_root, dry_run: true, **)
     rescue SystemExit => e
       status = e.status
     ensure
@@ -92,7 +92,15 @@ RSpec.describe "agentilda linear", :tree do
         out, err, = run(command, team: "TAX", project: "Tax Rule DSL")
 
         expect(out).to include("create\tissue\t001.00")
-        expect(unwrapped(err)).to include("1 Linear change pending", "--commit")
+        expect(unwrapped(err)).to include("1 Linear change pending", "without --dry-run")
+      end
+
+      # The command has no push of its own, so a real run must not read as
+      # though something reached Linear.
+      it "says nothing was sent when run without --dry-run" do
+        _out, err, = run(command, team: "TAX", project: "Tax Rule DSL", dry_run: false)
+
+        expect(unwrapped(err)).to include("1 Linear change pending — nothing was sent", "--format json")
       end
 
       it "emits the exact MCP arguments under --format json" do

@@ -228,7 +228,7 @@ module Agentilda
 
           1. A human writes each answer under `## Answers` as it arrives, dated and
              attributed to whoever decided.
-          1. `agentilda unblock NNN --commit` hands the folder to `lando-broker`.
+          1. `agentilda unblock NNN` hands the folder to `lando-broker`.
              Nothing else reaches it: answers arriving is not a fact the tool can
              observe, so a human running the command *is* the signal.
           1. `lando-broker` folds each answered question into the document that question
