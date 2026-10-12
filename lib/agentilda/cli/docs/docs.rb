@@ -9,22 +9,27 @@ module Agentilda
       standalone!
       desc "Generate the conventions document from the state machine itself"
 
+      # STDOUT unless a file is named. The default used to be a file in the
+      # user's home, so an agent running `tilda docs` to *read* the
+      # conventions overwrote ~/.agents/context/workflow.md, untracked and
+      # unrecoverable, while the help promised STDOUT.
       option :output,
         aliases: ["-o"],
-        desc:    "Write here instead of STDOUT",
-        default: "#{ENV.fetch("HOME", nil)}/.agents/context/workflow.md"
+        desc:    "Write here instead of STDOUT; - for STDOUT"
 
-      example ["", "-o ~/.agents/context/workflow.md"]
+      example ["                                  # print it", "-o ~/.agents/context/workflow.md  # write it"]
 
       # @param options [Hash]
       # @return [void]
       def call(**options)
         document = Presentation.documentation
 
-        if (path = options[:output])
+        path = options[:output]
+        if path && path != "-"
           FileUtils.mkdir_p(File.dirname(path))
           File.write(path, document)
-          system("command -v mdformat>/dev/null 2>&1 && mdformat --wrap no #{path} 2>/dev/null")
+          # Argument form, so a path with a space or a quote reaches mdformat whole.
+          system("mdformat", "--wrap", "no", path, err: File::NULL, out: File::NULL)
           success("created workflow description in [#{path}]") unless quiet?(options)
         else
           $stdout.write(document)

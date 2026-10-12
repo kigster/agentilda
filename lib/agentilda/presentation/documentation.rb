@@ -40,9 +40,8 @@ module Agentilda
           > [!IMPORTANT]
           > **This file is auto generated.**
           >
-          > To regenerate it, run `agentilda docs` (which by the default
-          > writes to `${HOME}/.agents/context/workflow.md`). To override
-          > the destination, use the `-o | --output <file>` option.
+          > To regenerate it, run `agentilda docs -o <file>`; without `-o`
+          > it prints to STDOUT.
           >
           > After changing the state machine. Editing it by hand puts it back into the
           > condition it was written to end: three copies of the same table, quietly

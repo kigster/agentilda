@@ -36,6 +36,16 @@ RSpec.describe "derived-output commands" do
       expect(out).to include("⚪️", "spec.md")
     end
 
+    it "prints the document for -o -" do
+      out, = run(command, output: "-")
+
+      expect(out).to include("⚪️", "spec.md")
+    end
+
+    it "defaults to STDOUT, never a file in the home directory" do
+      expect(described_class.options.find { it.name == :output }.default).to be_nil
+    end
+
     it "writes to the named file, creating the directories above it" do
       Dir.mktmpdir("agentilda-docs") do |tmp|
         path = File.join(tmp, "deep", "workflow.md")
