@@ -284,11 +284,17 @@
 
 
   /* Tabs */
-  .tabs { display: flex; gap: 4px; padding: 12px 24px 0; }
-  .tab { min-height: 44px; padding: 8px 14px; border: 0; background: transparent; cursor: pointer;
-         font-weight: 600; color: var(--ink-soft); border-bottom: 3px solid transparent; }
-  .tab[aria-selected="true"] { color: var(--ink); border-bottom-color: var(--ink); }
-  .tab:hover { color: var(--ink); }
+  /* Tabs are very faint pills: a whisper of ink, a little more when hovered, more again when selected. */
+  .tabs { display: flex; align-items: center; gap: 8px; padding: 14px 24px 2px; }
+  .tab, .tab-wrap { --pill-tint: 4%; border: 1px solid color-mix(in srgb, var(--ink) 9%, transparent); border-radius: 999px;
+                    background: color-mix(in srgb, var(--ink) var(--pill-tint), transparent); }
+  .tab { display: inline-flex; align-items: center; min-height: 40px; padding: 6px 16px; cursor: pointer; font-weight: 600; color: var(--ink-soft); }
+  .tab:hover, .tab-wrap:hover { --pill-tint: 8%; color: var(--ink); }
+  .tab[aria-selected="true"], .tab-wrap:has(.tab[aria-selected="true"]) { --pill-tint: 14%; color: var(--ink);
+    border-color: color-mix(in srgb, var(--ink) 22%, transparent); }
+  .tab:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+  /* A test tab's pill holds its label and its close button together. */
+  .tab-wrap .tab { border: 0; background: transparent; padding-right: 8px; }
   .tab-count { margin-left: 6px; padding: 0 7px; border-radius: 999px; font-size: 12px;
                background: color-mix(in srgb, var(--alarm) 16%, transparent); color: var(--alarm); }
   .tab-count:empty { display: none; }
@@ -352,9 +358,9 @@
   .tabs { overflow-x: auto; scrollbar-width: thin; }
   .tab-wrap { display: inline-flex; align-items: center; flex: none; }
   .tab-wrap .tab { white-space: nowrap; }
-  .tab-close { width: 28px; height: 28px; margin-left: -6px; border: 0; border-radius: 6px; background: transparent;
+  .tab-close { width: 28px; height: 28px; margin: 0 6px 0 -4px; border: 0; border-radius: 6px; background: transparent;
                color: var(--ink-soft); cursor: pointer; font-size: 16px; line-height: 1; }
-  .tab-close:hover { background: var(--hairline); color: var(--ink); }
+  .tab-close:hover { background: var(--hairline); color: var(--ink); border-radius: 50%; }
   .tab-close[hidden] { display: none; }
   .run-chip { margin-left: 8px; padding: 0 8px; border-radius: 999px; font-size: 12px; font-weight: 600;
               background: var(--hairline); color: var(--ink-soft); }

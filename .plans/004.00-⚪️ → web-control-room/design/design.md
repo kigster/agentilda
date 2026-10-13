@@ -83,6 +83,8 @@ The review labels keep the colours of plan 005 (L1).
 - **Frontmatter is a form above the editor, never text in it.** Lane, research, front end and depth are segmented controls in one row (the lane options carry their lane colours). Under each, two lines of soft text say what the current choice means and change with it (decision W23); they hold two lines' height even when shorter, so the row never jumps. Research is disabled, and says why, on the plan and quick lanes; "More settings" opens per-phase adapter, model and effort and the four list fields. The idea dialog shows the first three as defaults for every plan it becomes.
 - **Plan numbers are plain `NNN`** everywhere in the mockup (decision W21).
 
+**Tabs** are very faint pills: the ink colour at 4% with a 9% hairline, 8% on hover, 14% when selected, so they read as a quiet row rather than underlined tabs. A test tab's pill holds its close button.
+
 ## Other machines
 
 - **Machines sharing one Redis** (decision W26) each get a tab at the far right of the tab bar, labelled `username@hostname` with a 🖥️, drawing that machine's plans exactly as the board draws ours, minus every control: cars are plain cards with the model as text, and the tab opens with "Read only. alex@build-01 is working on these in ~/src/agentilda; this machine will not start them. Last seen 4s ago."
