@@ -6,7 +6,7 @@ module OpenLanes
   module CLI
     # `openlanes run` — drive the specialist agents until the tree settles.
     class Run < Base
-      desc "Run specialist agents over the plans until nothing changes"
+      desc "Run specialist agents over the plans; with the control room up it stays, else it ends when nothing changes"
 
       dry_run_option "Invoke no agent; print which agent would take which plan"
       option :rounds,

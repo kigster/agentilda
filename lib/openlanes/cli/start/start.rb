@@ -16,7 +16,7 @@ module OpenLanes
     # (Redis and the control room are required, not hoped for), no dry run,
     # no `--no-web` and no `--until-settled`.
     class Start < Run
-      desc "Start the engine and the control room, with or without plans; Stop All Local in the page ends both"
+      desc "web + run in one: the engine and its control room, with or without plans, until Stop All Local"
 
       # Inherited from `run`, and meaningless here: a dry run publishes no
       # board, and a run without its page cannot be answered.
