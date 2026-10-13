@@ -105,7 +105,7 @@ export interface LogLine {
 export interface ModelChoice {
   id: string;
   label: string; // "Sonnet 5.5"
-  rates: [number, number]; // dollars per million tokens in, out
+  rates: { in: number; out: number }; // dollars per million tokens
 }
 
 export interface Run {
