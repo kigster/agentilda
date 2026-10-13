@@ -27,7 +27,7 @@ module OpenLanes
       example [
         "                 # serve the live run of this checkout",
         "--demo --no-open # the sample run, for Cypress and npm run dev",
-        "--port 4848      # somewhere other than 4747"
+        "--port 4848      # somewhere other than 11000"
       ]
 
       # @param options [Hash]

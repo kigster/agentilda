@@ -246,7 +246,7 @@ openlanes skills install                   # copy the bundled skills into ~/.age
 ### `openlanes start`: the factory with its control room
 
 ```bash
-openlanes start                                # engine plus control room on http://127.0.0.1:4747
+openlanes start                                # engine plus control room on http://127.0.0.1:11000
 openlanes start --no-open --port 4848          # print the URL instead of opening it, on another port
 openlanes start --rescan 10                    # look for new or hand-edited plans every 10 s while idle
 ```
@@ -307,7 +307,7 @@ Defaults for `run` live in the project's `.openlanes.yml`, under `jobs` and `com
 
 ### Following a run, and stopping it
 
-Every command that runs agents (`run`, `unblock` and `create`) shows each agent as a spinner line on STDERR on a terminal, and writes the same progress to its log everywhere else (a pipe, a dry run, cron). When Redis answers, `run` also serves a web control room on `http://127.0.0.1:4747` and opens it, from which a person can watch the board and message, interrupt, kill or extend an agent (`--no-web`, `--no-open`, `--port`, `--redis-url`). Without Redis the run goes on headless. `openlanes web` serves the page on its own, and `openlanes web --demo` shows a sample run.
+Every command that runs agents (`run`, `unblock` and `create`) shows each agent as a spinner line on STDERR on a terminal, and writes the same progress to its log everywhere else (a pipe, a dry run, cron). When Redis answers, `run` also serves a web control room on `http://127.0.0.1:11000` and opens it, from which a person can watch the board and message, interrupt, kill or extend an agent (`--no-web`, `--no-open`, `--port`, `--redis-url`). Without Redis the run goes on headless. `openlanes web` serves the page on its own, and `openlanes web --demo` shows a sample run.
 
 Ctrl-C once asks each running agent to write a `RESUME:` note into its plan's `mailbox.md` and sign `Interrupted`; every agent reads its mail before it starts, so a later run picks up where this one stopped instead of redoing the work. A second press aborts immediately. It works through a `SIGINT` handler.
 

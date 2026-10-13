@@ -12,7 +12,7 @@ Load the `openlanes` skill first if it is not in context.
 `openlanes start` is the way to run the factory for a person. It is `openlanes run` with the control room on, and it does not stop at a fixed point: when a plan blocks, palpatine-planner's questions included, it idles, shows the questions in **Needs You** on the page, takes the answer from there, drains it, and hands the plan back to its agent. It picks up plans created on the page, by `openlanes create` in another terminal, or edited by hand, rescanning `.plans/` every 5 s (`--rescan`).
 
 ```bash
-openlanes start              # engine and control room on http://127.0.0.1:4747, browser opened
+openlanes start              # engine and control room on http://127.0.0.1:11000, browser opened
 openlanes start --no-open    # print the URL only
 ```
 
@@ -42,7 +42,7 @@ Pick flags from the situation, and read `openlanes run --help` for the rest:
 | one agent is misbehaving                         | `--skip <agent>`                     |
 | re-drive one agent with extra guidance           | `--agent <name> --prompt "<text>"`   |
 | no browser (CI, a remote shell), or no page at all | `--no-open`; `--no-web` (`openlanes web` can serve it later) |
-| port 4747 taken, or Redis elsewhere              | `--port <n>`, `--redis-url <url>`    |
+| port 11000 taken, or Redis elsewhere              | `--port <n>`, `--redis-url <url>`    |
 
 Keep the defaults (`--isolation worktree`, pushing on) whenever the user wants plans reviewed. `--isolation shared` and `--no-git-push` open no pull request, so every plan stops at 🟢 and the reviewer never starts; `openlanes run` warns when that is the case. Use them only when the user asks to keep work local, and say that review waits for a PR they open (`openlanes resync prs` then records it).
 
@@ -54,7 +54,7 @@ openlanes run --plan <NNN,...>
 
 A run takes minutes to hours: each agent may take up to 15 minutes per round, over several rounds. Start it in the background and wait for it to exit; it prints its progress log path at the start, which is what to read when the user asks how it is going. Avoid polling in a tight loop.
 
-When Redis answers, the run also serves the control room on `http://127.0.0.1:4747` and opens it in the browser: the user watches the board there and can message, interrupt or stop an agent. Without Redis the run warns once and goes on headless; that is not a failure. To get the page, start `redis-server` (or pass `--redis-url`) before the run; `openlanes-setup` has the details.
+When Redis answers, the run also serves the control room on `http://127.0.0.1:11000` and opens it in the browser: the user watches the board there and can message, interrupt or stop an agent. Without Redis the run warns once and goes on headless; that is not a failure. To get the page, start `redis-server` (or pass `--redis-url`) before the run; `openlanes-setup` has the details.
 
 A warning about `ANTHROPIC_API_KEY` (or a similar variable) at the start means every agent will authenticate with that key instead of the user's claude.ai login. Stop and ask before running with it; a stale key fails every agent with `401` after minutes each.
 

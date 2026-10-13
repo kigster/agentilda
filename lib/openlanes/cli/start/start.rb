@@ -32,7 +32,7 @@ module OpenLanes
       example [
         "                       # engine and control room, until every plan is finished",
         "--no-open              # print the control room's URL, open no browser",
-        "--port 4848 -j 4       # somewhere other than 4747, four agents at a time",
+        "--port 4848 -j 4       # somewhere other than 11000, four agents at a time",
         "--plan 005             # only plan 005; ends once it is finished"
       ]
 

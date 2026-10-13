@@ -9,7 +9,7 @@ module OpenLanes
     # of its own, in its own process group, so a crash in one never takes the
     # other with it and stopping the run stops the server and nothing else.
     #
-    #   web = Web.launcher(root:, plans_dir:, port: 4747, redis_url:).start
+    #   web = Web.launcher(root:, plans_dir:, port: 11000, redis_url:).start
     #   web.ready?   # => true once /healthz answers
     #   web.stop
     class Launcher

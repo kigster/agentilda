@@ -37,22 +37,22 @@ RSpec.describe OpenLanes::Web do
     end
 
     it "opens the page when there is a display" do
-      described_class.open("http://127.0.0.1:4747", display: true)
-      expect(Launchy).to have_received(:open).with("http://127.0.0.1:4747")
+      described_class.open("http://127.0.0.1:11000", display: true)
+      expect(Launchy).to have_received(:open).with("http://127.0.0.1:11000")
     end
 
     it "says it did" do
-      expect(described_class.open("http://127.0.0.1:4747", display: true)).to be(true)
+      expect(described_class.open("http://127.0.0.1:11000", display: true)).to be(true)
     end
 
     it "does nothing without one" do
-      described_class.open("http://127.0.0.1:4747", display: false)
+      described_class.open("http://127.0.0.1:11000", display: false)
       expect(Launchy).not_to have_received(:open)
     end
 
     it "answers false when no browser can be found" do
       allow(Launchy).to receive(:open).and_raise(Launchy::CommandNotFoundError, "no browser")
-      expect(described_class.open("http://127.0.0.1:4747", display: true)).to be(false)
+      expect(described_class.open("http://127.0.0.1:11000", display: true)).to be(false)
     end
   end
 

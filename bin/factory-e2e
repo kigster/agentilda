@@ -45,7 +45,7 @@ if command -v redis-cli >/dev/null && ! redis-cli -u "${redis_url}" ping >/dev/n
   echo "Redis does not answer on ${redis_url}." >&2
   exit 69
 fi
-# Another server on the port (the user's own `openlanes web` on 4747, say) is
+# Another server on the port (the user's own `openlanes web` on 11000, say) is
 # left alone: the run refuses rather than share or kill it.
 if lsof -nP -iTCP:"${port}" -sTCP:LISTEN >/dev/null 2>&1; then
   echo "Port ${port} is taken; set FACTORY_PORT to a free one." >&2

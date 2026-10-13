@@ -18,7 +18,7 @@ RSpec.describe OpenLanes::CLI::Run, :tree do
   # The control room is a process of its own; the suite never spawns it, and
   # never opens a browser.
   let(:web) do
-    instance_double(OpenLanes::Web::Launcher, ready?: true, url: "http://127.0.0.1:4747", log: "/tmp/web.log", stop: nil)
+    instance_double(OpenLanes::Web::Launcher, ready?: true, url: "http://127.0.0.1:11000", log: "/tmp/web.log", stop: nil)
   end
 
   before do
@@ -656,13 +656,13 @@ RSpec.describe OpenLanes::CLI::Run, :tree do
       result
       aggregate_failures do
         expect(OpenLanes::Web).to have_received(:launcher).with(root: File.dirname(plans_root), plans_dir: plans_root, port: "4848", redis_url: "memory://")
-        expect(stderr).to include("Control room: http://127.0.0.1:4747")
+        expect(stderr).to include("Control room: http://127.0.0.1:11000")
       end
     end
 
     it "opens the browser" do
       result
-      expect(OpenLanes::Web).to have_received(:open).with("http://127.0.0.1:4747")
+      expect(OpenLanes::Web).to have_received(:open).with("http://127.0.0.1:11000")
     end
 
     it "stops it when the run ends" do
@@ -675,7 +675,7 @@ RSpec.describe OpenLanes::CLI::Run, :tree do
 
       it "only prints the URL" do
         aggregate_failures do
-          expect(stderr).to include("Control room: http://127.0.0.1:4747")
+          expect(stderr).to include("Control room: http://127.0.0.1:11000")
           expect(OpenLanes::Web).not_to have_received(:open)
         end
       end
@@ -704,7 +704,7 @@ RSpec.describe OpenLanes::CLI::Run, :tree do
 
       it "says so, points at its log, and goes on without it" do
         aggregate_failures do
-          expect(stderr).to include("The control room did not answer on http://127.0.0.1:4747", "/tmp/web.log")
+          expect(stderr).to include("The control room did not answer on http://127.0.0.1:11000", "/tmp/web.log")
           expect(OpenLanes::Web).not_to have_received(:open)
           expect(web).to have_received(:stop)
         end

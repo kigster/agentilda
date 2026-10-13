@@ -12,7 +12,7 @@ RSpec.describe OpenLanes::CLI::Start, :tree do
 
   let(:live_store) { OpenLanes::Live.memory_store }
   let(:web) do
-    instance_double(OpenLanes::Web::Launcher, ready?: true, url: "http://127.0.0.1:4747", log: "/tmp/web.log", stop: nil)
+    instance_double(OpenLanes::Web::Launcher, ready?: true, url: "http://127.0.0.1:11000", log: "/tmp/web.log", stop: nil)
   end
   let(:executor) { instance_double(OpenLanes::Execution::Executor) }
 
@@ -124,7 +124,7 @@ RSpec.describe OpenLanes::CLI::Start, :tree do
     end
 
     it "opens the control room on the idea dialog" do
-      expect(OpenLanes::Web).to have_received(:open).with("http://127.0.0.1:4747#start")
+      expect(OpenLanes::Web).to have_received(:open).with("http://127.0.0.1:11000#start")
     end
   end
 
@@ -133,7 +133,7 @@ RSpec.describe OpenLanes::CLI::Start, :tree do
 
     it "opens the board itself" do
       start
-      expect(OpenLanes::Web).to have_received(:open).with("http://127.0.0.1:4747")
+      expect(OpenLanes::Web).to have_received(:open).with("http://127.0.0.1:11000")
     end
   end
 
@@ -163,7 +163,7 @@ RSpec.describe OpenLanes::CLI::Start, :tree do
     let!(:result) { start }
 
     it "refuses with exit 69, naming its log" do
-      expect([result.last, result[1]]).to match([69, include("did not answer on http://127.0.0.1:4747", "/tmp/web.log")])
+      expect([result.last, result[1]]).to match([69, include("did not answer on http://127.0.0.1:11000", "/tmp/web.log")])
     end
 
     it "stops the server it started" do

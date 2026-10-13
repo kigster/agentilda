@@ -49,7 +49,7 @@ web-dev:
     trap 'kill %1 2>/dev/null || true' EXIT
     cd web && npm run dev
 
-# The API server over the demo engine, serving the built page on 127.0.0.1:4747
+# The API server over the demo engine, serving the built page on 127.0.0.1:11000
 web-demo *args:
     {{ rbenv }} exe/openlanes web --demo {{ args }}
 
@@ -60,7 +60,7 @@ web-e2e:
     eval "$(rbenv init - bash 2>/dev/null || true)"
     bundle exec exe/openlanes web --demo --no-open --redis-url "${E2E_REDIS_URL:-redis://localhost:6379/14}" &
     trap 'kill %1 2>/dev/null || true' EXIT
-    until curl -sf http://127.0.0.1:4747/healthz >/dev/null; do sleep 0.2; done
+    until curl -sf http://127.0.0.1:11000/healthz >/dev/null; do sleep 0.2; done
     cd web && npx cypress run
 
 # Real agents build a tic-tac-toe page through `openlanes start`; spends tokens, needs OPENLANES_FACTORY_E2E=1

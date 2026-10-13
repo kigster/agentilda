@@ -34,7 +34,7 @@ RSpec.describe OpenLanes::Web::App, :tree do
   let(:command) { { id: "01JCMD", kind: "stop_all", plan: nil, agent: nil, payload: {} } }
   let(:body) { JSON.parse(last_response.body) }
 
-  before { header "Host", "127.0.0.1:4747" }
+  before { header "Host", "127.0.0.1:11000" }
 
   def post_command(payload, token: context.csrf)
     header "X-CSRF-Token", token if token

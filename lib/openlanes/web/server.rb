@@ -9,8 +9,8 @@ module OpenLanes
     # The app on Puma, multi-threaded because every open page holds one
     # thread for its event stream, and bound to {HOST} only.
     #
-    #   server = Web.server(app:, context:, port: 4747).start
-    #   server.url   # => "http://127.0.0.1:4747"
+    #   server = Web.server(app:, context:, port: 11000).start
+    #   server.url   # => "http://127.0.0.1:11000"
     #   server.wait  # until #stop
     class Server
       # Threads: one per open event stream plus the requests beside them.

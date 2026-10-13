@@ -47,7 +47,7 @@ Builds on plan `003.00` (inter-agent communication), whose D4 already made Redis
 - **The engine** is the runner. It supervises the agents, spawning each with `Process.spawn(pgroup: true)` and sending its stream-json output straight to its trace file, so the agent does not depend on a pipe to its parent.
 - **The API server** is a multi-threaded Puma process running Sinatra. It holds no run state of its own: everything it shows comes from Redis, and everything it is told to do goes back through Redis.
 - `openlanes run` and `openlanes start` start both and open the browser. `openlanes run --no-web` starts only the engine, with the headless view (W2).
-- **If the API server crashes,** nothing is lost. A restarted server reads the streams again, and an open tab reconnects by itself, because the port is fixed (default `4747`, `--port` to change it).
+- **If the API server crashes,** nothing is lost. A restarted server reads the streams again, and an open tab reconnects by itself, because the port is fixed (default `11000`, `--port` to change it; it was 4747, which an installed agentilda still uses).
 - **If the engine crashes,** agents keep running. The restarted engine reads the running set from Redis, checks each PID, tails each trace again, and carries on.
 - Einhorn was considered and rejected. It keeps N copies of one long-lived program alive and stops its children when it exits, while these agents are all different, run once, and must outlive their parent.
 

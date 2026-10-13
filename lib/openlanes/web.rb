@@ -10,7 +10,7 @@ module OpenLanes
   # there as a command for the engine, so a restarted server loses nothing.
   #
   #   context = Web.context(stores:, keys:, plans_dir:, url:)
-  #   server  = Web.server(app: Web.app(context), context:, port: 4747).start
+  #   server  = Web.server(app: Web.app(context), context:, port: 11000).start
   #   server.wait
   module Web
     # Where the gem is, whether run from a checkout or installed.
@@ -23,7 +23,7 @@ module OpenLanes
     FIXTURE = File.join(GEM_ROOT, "web", "src", "api", "fixtures", "board.json")
 
     # Where the server listens unless told otherwise (contract.md).
-    DEFAULT_PORT = 4747
+    DEFAULT_PORT = 11_000
 
     # Loopback only: the page can stop agents, and nothing off this machine
     # may reach it (W3).

@@ -164,7 +164,7 @@ jobs:
           command: bundle exec exe/openlanes web --demo --no-open --redis-url "$E2E_REDIS_URL"
       - run:
           name: Wait for the demo
-          command: timeout 60 bash -c 'until curl -sf http://127.0.0.1:4747/healthz; do sleep 1; done'
+          command: timeout 60 bash -c 'until curl -sf http://127.0.0.1:11000/healthz; do sleep 1; done'
       - run:
           name: Cypress
           working_directory: web

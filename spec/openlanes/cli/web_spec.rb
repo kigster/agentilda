@@ -7,7 +7,7 @@ RSpec.describe OpenLanes::CLI::Web, :tree do
   subject(:command) { described_class.new }
 
   let(:store) { OpenLanes::Live.memory_store }
-  let(:server) { instance_double(OpenLanes::Web::Server, start: nil, url: "http://127.0.0.1:4747", wait: nil, stop: nil) }
+  let(:server) { instance_double(OpenLanes::Web::Server, start: nil, url: "http://127.0.0.1:11000", wait: nil, stop: nil) }
   let(:demo) { instance_double(OpenLanes::Web::Demo, stop: nil) }
   let(:built) { {} }
   let(:traps) { {} }
@@ -37,7 +37,7 @@ RSpec.describe OpenLanes::CLI::Web, :tree do
     original_out, original_err = $stdout, $stderr
     $stdout, $stderr = out, err
     begin
-      command.call(dir: plans_root, port: "4747", open: true, demo: false, **)
+      command.call(dir: plans_root, port: "11000", open: true, demo: false, **)
     rescue SystemExit => e
       status = e.status
     ensure
@@ -47,17 +47,17 @@ RSpec.describe OpenLanes::CLI::Web, :tree do
   end
 
   it "serves until stopped and says where" do
-    expect(stderr).to include("Control room: http://127.0.0.1:4747", "Redis: memory:// as")
+    expect(stderr).to include("Control room: http://127.0.0.1:11000", "Redis: memory:// as")
   end
 
   it "listens on the port asked for" do
     result
-    expect(built[:server][:port]).to eq("4747")
+    expect(built[:server][:port]).to eq("11000")
   end
 
   it "opens the page" do
     result
-    expect(OpenLanes::Web).to have_received(:open).with("http://127.0.0.1:4747")
+    expect(OpenLanes::Web).to have_received(:open).with("http://127.0.0.1:11000")
   end
 
   it "stops the server on INT and TERM" do
@@ -130,7 +130,7 @@ RSpec.describe OpenLanes::CLI::Web, :tree do
     before { allow(server).to receive(:start).and_raise(Errno::EADDRINUSE) }
 
     it "refuses and names the flag" do
-      expect([result[2], stderr]).to match([69, include("Port 4747 is taken", "--port")])
+      expect([result[2], stderr]).to match([69, include("Port 11000 is taken", "--port")])
     end
   end
 
@@ -153,7 +153,7 @@ RSpec.describe OpenLanes::CLI::Web, :tree do
     end
 
     it "says it is the demo" do
-      expect(stderr).to include("http://127.0.0.1:4747 (demo)")
+      expect(stderr).to include("http://127.0.0.1:11000 (demo)")
     end
 
     context "without Redis" do
