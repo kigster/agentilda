@@ -59,6 +59,13 @@ Naming/MemoizedInstanceVariableName:
 # AllowedNames: as, at, by, cc, db, id, if, in, io, ip, of, on, os, pp, to
 Naming/MethodParameterName:
   Exclude:
+    - 'lib/agentilda/adapters/model.rb'
+    - 'lib/agentilda/live/memory_store.rb'
+    - 'lib/agentilda/live/node.rb'
+    - 'lib/agentilda/live/snapshot.rb'
+    - 'lib/agentilda/live/store.rb'
+    - 'spec/agentilda/live/meter_spec.rb'
+    - 'spec/agentilda/live/snapshot_spec.rb'
     - 'lib/agentilda/engine/board.rb'
     - 'lib/agentilda/execution/executor.rb'
     - 'lib/agentilda/vcs/github.rb'

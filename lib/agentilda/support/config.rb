@@ -9,6 +9,7 @@ module Agentilda
   #   lane: full                # default lane for `tilda create`
   #   frontend: false           # a spec's `frontend:` when spec.md omits it
   #   jobs: 4                   # how many plans `tilda run` works on at once
+  #   redis_url: redis://10.0.4.2:6379/0  # the Redis the live run shares (W16)
   #   commands:                 # per-command option defaults
   #     run:
   #       timeout: 1800
@@ -36,11 +37,14 @@ module Agentilda
   #   @return [Boolean, nil] nil when each plan decides
   # @!attribute [r] jobs
   #   @return [Integer, nil]
+  # @!attribute [r] redis_url
+  #   @return [String, nil] where the live run keeps its board, its commands
+  #     and its plan claims; `--redis-url` beats it, and it beats `$REDIS_URL`
   # @!attribute [r] commands
   #   @return [Hash{String => Hash{Symbol => Object}}] by command name, as
   #     typed: "run", "resync dirs"
-  Config = Data.define(:path, :project, :lane, :frontend, :jobs, :commands) do
-    def initialize(path: nil, project: nil, lane: nil, frontend: nil, jobs: nil, commands: {})
+  Config = Data.define(:path, :project, :lane, :frontend, :jobs, :redis_url, :commands) do
+    def initialize(path: nil, project: nil, lane: nil, frontend: nil, jobs: nil, redis_url: nil, commands: {})
       super
     end
 
@@ -65,7 +69,8 @@ module Agentilda
     #
     # @return [String]
     def to_yaml
-      settings = { "project" => project, "lane" => lane&.to_s, "frontend" => frontend, "jobs" => jobs }
+      settings = { "project" => project, "lane" => lane&.to_s, "frontend" => frontend, "jobs" => jobs,
+                   "redis_url" => redis_url }
       settings["commands"] = commands.transform_values { it.transform_keys(&:to_s) } unless commands.empty?
       YAML.dump(settings.compact).delete_prefix("---\n")
     end
@@ -76,7 +81,10 @@ module Agentilda
     FILE = Project::FILE
 
     # Every key the top level may hold.
-    KEYS = %w[project lane frontend jobs commands].freeze
+    KEYS = %w[project lane frontend jobs redis_url commands].freeze
+
+    # Schemes a `redis_url:` may use.
+    REDIS_SCHEMES = %w[redis rediss unix].freeze
 
     # Top-level keys that are one command's option, by the command that takes it.
     SHORTHANDS = { project: "index", lane: "create", jobs: "run" }.freeze
@@ -122,11 +130,12 @@ module Agentilda
         end
 
         config = new(path:,
-          project:  project(settings, path),
-          lane:     lane(settings, path),
-          frontend: frontend(settings, path),
-          jobs:     jobs(settings, path),
-          commands: commands(settings["commands"], path))
+          project:   project(settings, path),
+          lane:      lane(settings, path),
+          frontend:  frontend(settings, path),
+          jobs:      jobs(settings, path),
+          redis_url: redis_url(settings, path),
+          commands:  commands(settings["commands"], path))
         conflicts!(config, path)
         config
       rescue Psych::Exception => e
@@ -171,6 +180,15 @@ module Agentilda
         return value if value.nil? || (value.is_a?(Integer) && value.positive?)
 
         fail_with(path, "jobs: #{value.inspect} is not a whole number above zero")
+      end
+
+      # @return [String, nil]
+      def redis_url(settings, path)
+        value = settings["redis_url"]
+        return nil if value.nil?
+        return value.strip if value.is_a?(String) && REDIS_SCHEMES.include?(value.strip[/\A([a-z]+):/, 1])
+
+        fail_with(path, "redis_url: #{value.inspect} is not a #{REDIS_SCHEMES.map { "#{it}://" }.join(", ")} URL")
       end
 
       # @return [Hash{String => Hash{Symbol => Object}}]

@@ -16,12 +16,14 @@ module Agentilda
     class Child
       # @param argv [Array<String>]
       # @param chdir [String, nil]
+      # @param env [Hash{String => String}] what the adapter adds on top of
+      #   {.environment}, e.g. claude's autocompact threshold
       # @return [Agentilda::Execution::Child]
-      def self.spawn(argv, chdir: nil)
+      def self.spawn(argv, chdir: nil, env: {})
         reader, writer = IO.pipe
         options = { out: writer, err: writer, in: File::NULL, unsetenv_others: true }
         options[:chdir] = chdir if chdir
-        pid = Process.spawn(environment, *argv, **options)
+        pid = Process.spawn(environment.merge(env), *argv, **options)
         writer.close
         new(pid:, reader:)
       end

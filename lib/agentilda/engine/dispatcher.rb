@@ -33,10 +33,33 @@ module Agentilda
         :from,
         :state,
         :frame,
-        :history) do
+        :history,
+        :context) do
         # @return [Boolean]
         def finished? = !thread.alive?
       end
+
+      # A plan a person is throwing back (W9): its agents stopping, then its
+      # worktree reset and its folder moved back one state. {Live::Commands}
+      # holds on to it and replies once {#finished?}.
+      #
+      # @!attribute [r] ordinal
+      #   @return [String]
+      # @!attribute [r] status
+      #   @return [String, nil] "done" or "refused", once it is over
+      # @!attribute [r] reason
+      #   @return [String, nil]
+      Discard = Struct.new(:ordinal, :status, :reason) do
+        # @return [Boolean]
+        def finished? = !status.nil?
+      end
+
+      # A blocked plan whose every question has an answer, being drained by
+      # the agent that handles its state, on a thread of its own.
+      Unblock = Struct.new(:ordinal, :thread, :outcome)
+
+      # States a plan waits in for a person's answer.
+      BLOCKED = %i[blocked product_blocked].freeze
 
       # How long a settled row stays on the screen.
       LINGER = 10
@@ -63,10 +86,22 @@ module Agentilda
         @preferred = {}
         @started_at = UI.monotonic
         @mutex = Mutex.new
+        @before_tick = []
+        @requeued = []
+        @discarding = {}
+        @fenced = []
+        @unblocking = []
+        @unblock_tried = {}
       end
 
       # @return [Array<Agentilda::Engine::Dispatcher::Job>]
       attr_reader :running
+
+      # @return [Agentilda::Engine::Runner]
+      attr_reader :runner
+
+      # @return [Agentilda::Engine::StateFile, nil] nil under a dry run
+      def state_file = @state
 
       # @return [Array<Agentilda::Engine::Runner::Attempt>]
       attr_reader :attempts
@@ -87,7 +122,10 @@ module Agentilda
       #
       # @return [void]
       def tick
+        @before_tick.each { |hook| hook.call(self) }
         reap
+        finish_discards
+        unblock_answered
         poll
         @running.each { |job| job.handle.kill!(grace: 0, reason: :quit) } if Execution::Control.overdue?
         dispatch unless Execution::Control.quit?
@@ -96,7 +134,11 @@ module Agentilda
       end
 
       # @return [Boolean]
-      def done? = @running.empty? && (Execution::Control.quit? || next_dispatchable.nil?)
+      def done?
+        return false unless @running.empty? && @unblocking.empty? && @discarding.empty?
+
+        Execution::Control.quit? || next_dispatchable.nil?
+      end
 
       # Kill from a view: STOP, {KILL_GRACE} seconds, SIGKILL, on a thread
       # so the tick is not held for fifteen seconds.
@@ -115,6 +157,118 @@ module Agentilda
       # @return [void]
       def extend(key, seconds)
         @running.find { |j| j.key == key }&.handle&.extend!(seconds)
+      end
+
+      # Something to run at the top of every tick, on the loop thread, where
+      # {#running} may be read and changed safely: the live run applies the
+      # page's commands here.
+      #
+      # @yieldparam dispatcher [Agentilda::Engine::Dispatcher]
+      # @return [void]
+      def before_tick(&hook) = @before_tick << hook
+
+      # @param key [String] a row's key, `"<ordinal>/<agent>"`
+      # @return [Agentilda::Engine::Dispatcher::Job, nil]
+      def job(key) = @running.find { |j| j.key == key }
+
+      # One control word into one running agent's control file.
+      #
+      # @param key [String]
+      # @param word [String] one of {Execution::Control}'s words
+      # @return [Boolean] whether there was a running agent to tell
+      def signal(key, word)
+        control = job(key)&.handle&.control or return false
+        Execution::Control.write(control, word)
+        true
+      end
+
+      # Stop the agent with a resume note and give it its round back, so it
+      # is started again, on whatever model is now preferred, as soon as it
+      # has stopped. The agent is told INTERRUPT, which is the word that
+      # makes it leave the note.
+      #
+      # @param key [String]
+      # @return [Boolean] whether there was a running agent to restart
+      def requeue(key)
+        signal(key, Execution::Control::INTERRUPT) or return false
+        @requeued |= [key]
+        true
+      end
+
+      # Hand back the round an interrupted agent lost, so a person's "resume"
+      # starts it again even when it had no rounds left.
+      #
+      # @param ordinal [#to_s]
+      # @param agent [String]
+      # @return [Boolean] whether there was an interrupted round to hand back
+      def resume(ordinal, agent)
+        @mutex.synchronize do
+          entries = @history[[ordinal.to_s, agent.to_s]]
+          last = entries.rindex { |h| h[:status] == "Interrupted" } or next false
+          entries.delete_at(last)
+          true
+        end
+      end
+
+      # The model one agent gets on one plan from its next invocation (W24).
+      #
+      # @param ordinal [#to_s]
+      # @param agent [String]
+      # @param model [String, nil] nil forgets the choice
+      # @return [Boolean] whether the executor can honour it
+      def prefer_model(ordinal, agent, model)
+        executor = @runner.executor
+        return false unless executor.respond_to?(:prefer_model)
+
+        executor.prefer_model(ordinal, agent, model)
+        @models&.delete([ordinal.to_s, agent.to_s])
+        true
+      end
+
+      # Throw a plan's work away (W9): every agent on it is stopped, each with
+      # {KILL_GRACE} seconds to finish the line it is writing, and once the
+      # last is gone the plan's worktree is reset and its folder sent back
+      # one state. Plan-wide, because a pair shares one worktree and a reset
+      # takes both halves. What can be refused is refused here, before any
+      # agent is stopped.
+      #
+      # @param ordinal [#to_s]
+      # @return [Agentilda::Engine::Dispatcher::Discard] finished on a later tick
+      # @raise [Agentilda::Error] with the reason it cannot be done
+      def discard(ordinal)
+        ordinal = ordinal.to_s
+        return @discarding[ordinal] if @discarding.key?(ordinal)
+
+        if !@runner.isolated? || @runner.dry_run?
+          raise Agentilda::Error,
+            "discard resets the plan's own worktree, and this run has none: under --isolation shared " \
+            "or a dry run every agent works in the main checkout, which a reset would wipe. " \
+            "Use stop on each agent instead."
+        end
+        subject = fresh_by(Plans::Ordinal.parse(ordinal)) or raise Agentilda::Error, "there is no plan #{ordinal}"
+        refusal = subject.machine.retreat_refusal and raise Agentilda::Error, "#{ordinal} cannot go back: #{refusal}"
+
+        @running.select { plan_of(it) == ordinal }.each do |job|
+          Thread.new { job.handle.kill!(grace: KILL_GRACE, reason: :discard) }
+        end
+        @discarding[ordinal] = Discard.new(ordinal:)
+      end
+
+      # Plans whose claim another machine now holds (W26): their agents are
+      # stopped, each with {KILL_GRACE} seconds, the plans leave this run,
+      # and nothing this node does afterwards signs or renames for them.
+      #
+      # @param ordinals [Array<String>]
+      # @return [void]
+      def fence(ordinals)
+        ordinals.map(&:to_s).each do |ordinal|
+          @fenced |= [ordinal]
+          @runner.drop_plan(ordinal)
+          @running.select { plan_of(it) == ordinal }.each do |job|
+            UI.log("claim lost; stopping", **job.task.log_fields)
+            Thread.new { job.handle.kill!(grace: KILL_GRACE, reason: :fenced) }
+          end
+        end
       end
 
       # @return [Agentilda::Engine::Board]
@@ -151,6 +305,129 @@ module Agentilda
       end
 
       # @param job [Agentilda::Engine::Dispatcher::Job]
+      # @return [String] the plan's ordinal
+      def plan_of(job) = job.task.subject.feature.ordinal.to_s
+
+      # Plans no agent may be started on and no rename may touch: one being
+      # discarded or drained, and one another machine holds (W26).
+      #
+      # @return [Array<String>]
+      def untouchable
+        busy = @running.map { plan_of(it) } + @discarding.keys + @unblocking.map(&:ordinal)
+        busy + @runner.tree.subjects.select { @runner.foreign?(it) }.map { it.feature.ordinal.to_s }
+      end
+
+      # ---- discarding -------------------------------------------------------
+
+      # Discards whose agents have all gone: the worktree is reset and the
+      # folder moved back. A finished one stays one tick, for
+      # {Live::Commands} to reply from, and is dropped on the next.
+      #
+      # @return [void]
+      def finish_discards
+        @discarding.delete_if { |_, discard| discard.finished? }
+        @discarding.each_value do |discard|
+          next if @running.any? { plan_of(it) == discard.ordinal }
+
+          discard.status, discard.reason = throw_back(discard.ordinal)
+        end
+      end
+
+      # @param ordinal [String]
+      # @return [Array(String, String)] status and reason
+      def throw_back(ordinal)
+        subject = fresh_by(Plans::Ordinal.parse(ordinal)) or return ["refused", "#{ordinal}'s folder vanished"]
+        reset = @runner.worktree.reset(subject.feature)
+        from = subject.status
+        to = subject.machine.retreat!
+        @finished_plans.delete(ordinal)
+        UI.log("discarded: #{from} -> #{to}", plan: ordinal)
+        ["done", "#{ordinal} #{reset ? "reset" : "had no worktree to reset"}, and went back from #{from} to #{to}"]
+      rescue Agentilda::Error => e
+        ["refused", "#{ordinal}'s agents were stopped, but: #{e.message}"]
+      end
+
+      # ---- unblocking -------------------------------------------------------
+
+      # A blocked plan whose questions are all answered goes to the agent
+      # that handles its state, the way `agentilda unblock` hands it over
+      # (W10): the page's answer is what a person typing that command used
+      # to be. Each answer set is tried once; a failed drain waits for
+      # `blocked.md` to change. Drains finished since the last tick are
+      # settled first, so the plan is picked up again in this run.
+      #
+      # @return [void]
+      def unblock_answered
+        @unblocking.reject { it.thread.alive? }.each { settle_unblock(it) }
+        return if @runner.dry_run? || Execution::Control.quit?
+
+        blocked = @runner.in_scope.select { BLOCKED.include?(it.status.key) }
+        return if blocked.empty?
+
+        busy = untouchable
+        blocked.each do |subject|
+          ordinal = subject.feature.ordinal.to_s
+          next if busy.include?(ordinal)
+
+          questions = Lifecycle::Unblocker.questions(subject)
+          next if questions.empty? || !questions.all?(&:answered)
+
+          answers = subject.read("blocked.md")
+          next if @unblock_tried[ordinal] == answers
+
+          # The drainer advances nothing itself, so {Registry#for_status},
+          # which offers only agents that move a plan on, never names it.
+          agent = @runner.agents.all.find { it.handles?(subject.status) } or next
+          next unless @runner.claim(subject)
+
+          @unblock_tried[ordinal] = answers
+          start_unblock(agent, subject)
+        end
+      end
+
+      # @param agent [Agentilda::Agents::Agent]
+      # @param subject [Agentilda::Plans::Subject]
+      # @return [void]
+      def start_unblock(agent, subject)
+        unblocker = Lifecycle::Unblocker.new(tree: Plans::Tree.new(dir: @runner.tree.dir),
+          agent:,
+          executor: @runner.executor,
+          commit: true)
+        UI.log("unblocking: every question answered", plan: subject.feature.ordinal.to_s, agent: agent.name)
+        unblock = Unblock.new(ordinal: subject.feature.ordinal.to_s)
+        unblock.thread = Thread.new do
+          Thread.current.report_on_exception = false
+          unblock.outcome = begin
+            unblocker.drain(subject)
+          rescue StandardError => e
+            e
+          end
+        end
+        @unblocking << unblock
+      end
+
+      # A drained plan's agents get their rounds back: a block is a question,
+      # not the agent running out of turns.
+      #
+      # @param unblock [Agentilda::Engine::Dispatcher::Unblock]
+      # @return [void]
+      def settle_unblock(unblock)
+        @unblocking.delete(unblock)
+        outcome = unblock.outcome
+        if outcome.is_a?(Exception) || !outcome.ok
+          note = outcome.is_a?(Exception) ? outcome.message : outcome.note
+          return UI.log("unblock failed: #{note}", plan: unblock.ordinal)
+        end
+
+        @mutex.synchronize do
+          @history.each { |(ordinal, _), entries| entries.reject! { it[:status] == "Blocked" } if ordinal == unblock.ordinal }
+        end
+        @finished_plans.delete(unblock.ordinal)
+        UI.log(outcome.cleared? ? "unblocked: blocked.md retired" : "unblock folded #{outcome.folded.size}",
+          plan: unblock.ordinal)
+      end
+
+      # @param job [Agentilda::Engine::Dispatcher::Job]
       # @return [Agentilda::Engine::Board::Row]
       def row_for(job)
         task = job.task
@@ -174,7 +451,9 @@ module Agentilda
           frame: job.frame,
           elapsed: (UI.monotonic - job.started_at).round,
           subagents: job.subagents.to_i,
-          history: job.history || [])
+          history: job.history || [],
+          context: job.context,
+          since: job.started_at)
       end
 
       # @param task [Agentilda::Engine::Runner::Task]
@@ -222,11 +501,13 @@ module Agentilda
           @state.load
           @state.stranded.each do |ordinal, stage|
             subject = @runner.tree.reload.find(Plans::Ordinal.parse(ordinal)) or next
+            next if @runner.foreign?(subject)
+
             resumed << interrupt_stranded(subject, stage["agent"], stage["round"])
           end
         end
         unless @runner.dry_run?
-          @runner.in_scope.each do |subject|
+          @runner.in_scope.reject { @runner.foreign?(it) }.each do |subject|
             Plans::PlanState.for(subject.feature.path).stranded.each do |stage|
               next if resumed.include?([subject.feature.ordinal.to_s, stage["agent"], stage["round"]])
 
@@ -254,6 +535,10 @@ module Agentilda
       # @return [void]
       def dispatch
         while @running.size < @runner.jobs && (pair = next_dispatchable)
+          # Lost to another machine between the check and the claim: the next
+          # pass sees the plan as foreign and steps around it.
+          next unless @runner.claim(pair.last)
+
           start(*pair)
         end
       end
@@ -270,6 +555,7 @@ module Agentilda
           state = Lifecycle::Lanes.target(subject) || Lifecycle::Resync::Dirs.target(subject)
           next if Plans::StateMachine::SETTLED.include?(state.key)
           next if @finished_plans.include?(subject.feature.ordinal.to_s)
+          next if @runner.foreign?(subject) || @discarding.key?(subject.feature.ordinal.to_s)
 
           candidates = Agents::Routing.filter(@runner.agents.for_status(state), subject)
           preferred = @preferred[subject.feature.ordinal.to_s]
@@ -287,11 +573,12 @@ module Agentilda
       # name rather than to leah-researcher under its stale one. Plans an
       # agent is working in right now are left alone: the prompt names the
       # folder by path, and moving it under a running agent would strand
-      # every write it makes afterwards.
+      # every write it makes afterwards. Nor is a plan another machine holds
+      # touched: its name is that machine's to change.
       #
       # @return [void]
       def reconcile
-        busy = @running.map { |j| j.task.subject.feature.ordinal.to_s }
+        busy = untouchable
         Lifecycle::Resync::Dirs.new(tree: @runner.tree.reload, except: busy).call(commit: !@runner.dry_run?)
         fast_forward(busy) unless @runner.dry_run?
       end
@@ -379,6 +666,7 @@ module Agentilda
               job.up = progress.up
               job.down = progress.down
               job.subagents = progress.subagents
+              job.context = progress.context
               job.message = progress.message || progress.activity
               job.history = Board::Row.remember(job.history || [], job.message)
             }
@@ -435,6 +723,7 @@ module Agentilda
         @running.select(&:finished?).each do |job|
           @running.delete(job)
           attempt = settle(job)
+          forget_round(job) if @requeued.delete(job.key)
           @attempts << attempt
           row = row_for(job)
           @recent << { at: UI.monotonic, row: row.with(state: attempt.ok ? :done : :failed,
@@ -463,7 +752,9 @@ module Agentilda
         entry = nil if entry && entry.round != task.round
         problems = reading.problems.map { |p| "#{p.file}:#{p.line} unreadable ledger line" }
 
-        attempt = if result.killed || (result.ok && (entry.nil? || entry.status == "Started"))
+        attempt = if (why = stopped_for(ordinal))
+                    stopped_by_harness(job, base, why)
+                  elsif result.killed || (result.ok && (entry.nil? || entry.status == "Started"))
                     verify_and_sign(job, base, reason_for(result))
                   elsif !result.ok
                     remember(ordinal, agent.name, job.state, "Interrupted", task.round)
@@ -499,6 +790,27 @@ module Agentilda
           up:       attempt.up,
           down:     attempt.down)
         attempt
+      end
+
+      # @param ordinal [String]
+      # @return [String, nil] why the harness stopped the plan's agents, if it did
+      def stopped_for(ordinal)
+        return "claim lost to another machine" if @fenced.include?(ordinal)
+
+        "discarded by a person" if @discarding.key?(ordinal)
+      end
+
+      # An agent stopped because its plan was discarded or taken by another
+      # machine: what it left is about to be thrown away, or is no longer
+      # this node's to judge, so the harness signs nothing for it.
+      #
+      # @return [Agentilda::Engine::Runner::Attempt]
+      def stopped_by_harness(job, base, why)
+        task = job.task
+        subject = fresh(task)
+        write_interrupted(subject, task.agent, task.round, why) if subject
+        remember(plan_of(job), task.agent.name, job.state, "Interrupted", task.round)
+        base.with(ok: false, status: "Interrupted", note: why)
       end
 
       # @param result [Agentilda::Execution::Executor::Result]
@@ -734,6 +1046,19 @@ module Agentilda
           entry = entries.find { |h| h[:state] == state && h[:round] == round }
           entry ? entry[:status] = status : entries << { state:, status:, round: }
         end
+      end
+
+      # A requeued agent's round is handed back: the stop was a person's
+      # choice, not the agent running out of turns.
+      #
+      # @param job [Agentilda::Engine::Dispatcher::Job]
+      # @return [void]
+      def forget_round(job)
+        ordinal = job.task.subject.feature.ordinal.to_s
+        @mutex.synchronize do
+          @history[[ordinal, job.task.agent.name]].reject! { |h| h[:state] == job.state && h[:round] == job.task.round }
+        end
+        @finished_plans.delete(ordinal)
       end
 
       # @return [void]

@@ -138,6 +138,20 @@ module Agentilda
         end
       end
 
+      # The live run's record (W6): what a person said about the run that no
+      # plan folder holds, kept here as the copy of Redis that survives Redis
+      # losing it. {Live::RunRecord} writes it and reads it back on start;
+      # it carries its own `seq`, so the newer of the two copies wins.
+      #
+      # @return [Hash, nil]
+      def live = @mutex.synchronize { @data["live"]&.dup }
+
+      # @param data [Hash] written by the next {#save}
+      # @return [void]
+      def live=(data)
+        @mutex.synchronize { @data["live"] = data }
+      end
+
       # @param ordinal [String]
       # @return [Array<Hash>]
       def stages(ordinal) = @mutex.synchronize { (@data.dig("plans", ordinal.to_s, "stages") || []).map(&:dup) }

@@ -15,7 +15,7 @@ RSpec.describe Agentilda::Execution::Executor, :tree do
     allow(child).to receive(:each_chunk) { |&block| stream.each { |chunk| block.call(chunk) } }
     child
   end
-  let(:spawn) { ->(_argv, chdir: nil) { fake_child } }
+  let(:spawn) { ->(_argv, chdir: nil, **) { fake_child } }
 
   let!(:built) do
     plans { |t| t.plan "000.00", :new, "a-feature", files: { "spec.md" => spec_body } }
@@ -481,7 +481,7 @@ RSpec.describe Agentilda::Execution::Executor, :tree do
     describe "the control file" do
       let(:prompts) { [] }
       let(:spawn) do
-        ->(argv, chdir: nil) {
+        ->(argv, chdir: nil, **) {
           prompts << argv[2]
           fake_child
         }

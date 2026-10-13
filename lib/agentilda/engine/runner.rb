@@ -45,9 +45,11 @@ module Agentilda
       # @param state [Agentilda::Engine::StateFile, nil]
       # @param sleeper [Proc]
       # @param on_board [Proc, nil]
+      # @param claims [Agentilda::Live::Claims, nil] plan claims shared with
+      #   other machines; nil when the run is not live, and every plan is ours
       def initialize(tree:, executor:, agents: Agents::Registry.new, isolation: :shared, jobs: 1, worktree: nil,
         plans: nil, publisher: nil, dry_run: false, rounds: nil, state: nil,
-        sleeper: ->(seconds) { sleep(seconds) }, on_board: nil)
+        sleeper: ->(seconds) { sleep(seconds) }, on_board: nil, claims: nil)
         @tree = tree
         @executor = executor
         @agents = agents
@@ -60,7 +62,9 @@ module Agentilda
         @state = dry_run ? nil : state
         @sleeper = sleeper
         @on_board = on_board
+        @claims = claims
         @attempts = []
+        @dropped = []
         @jobs = isolated? ? jobs : 1
       end
 
@@ -77,10 +81,58 @@ module Agentilda
 
       # @param subject [Agentilda::Plans::Subject]
       # @return [Boolean]
-      def in_scope?(subject) = @plans.nil? || @plans.include?(subject.feature.ordinal)
+      def in_scope?(subject)
+        ordinal = subject.feature.ordinal
+        !@dropped.include?(ordinal.to_s) && (@plans.nil? || @plans.include?(ordinal))
+      end
+
+      # Take a plan out of this run, as when another machine now holds it.
+      #
+      # @param ordinal [#to_s]
+      # @return [void]
+      def drop_plan(ordinal) = @dropped |= [ordinal.to_s]
 
       # @return [Array<Agentilda::Plans::Subject>]
       def in_scope = tree.subjects.select { |s| in_scope?(s) }
+
+      # Widen a run scoped by `--plan` to one more plan, from the page's
+      # "Choose an existing plan". An unscoped run already has every plan.
+      #
+      # @param ordinal [Agentilda::Plans::Ordinal]
+      # @return [Boolean] whether the scope grew
+      def add_plan(ordinal)
+        @dropped.delete(ordinal.to_s)
+        return false if @plans.nil? || @plans.include?(ordinal)
+
+        @plans << ordinal
+        true
+      end
+
+      # Whether another machine holds the plan (W26). Such a plan is stepped
+      # around, as a blocked one is.
+      #
+      # @param subject [Agentilda::Plans::Subject]
+      # @return [Boolean]
+      def foreign?(subject)
+        !@claims.nil? && @claims.foreign?(subject.feature.ordinal)
+      rescue Live::Unavailable => e
+        claims_unavailable(e)
+        false
+      end
+
+      # Take the plan before an agent starts on it. With Redis gone the run
+      # carries on unclaimed rather than stalling: the claim is an agreement
+      # between machines, and a machine that cannot reach the others is
+      # working alone.
+      #
+      # @param subject [Agentilda::Plans::Subject]
+      # @return [Boolean] whether this machine may work it
+      def claim(subject)
+        @claims.nil? || @claims.claim(subject.feature.ordinal)
+      rescue Live::Unavailable => e
+        claims_unavailable(e)
+        true
+      end
 
       # Run until nothing is dispatchable.
       #
@@ -126,6 +178,10 @@ module Agentilda
 
       # @return [String]
       def shared_root = File.dirname(tree.dir)
+
+      # @param error [Agentilda::Live::Unavailable]
+      # @return [void]
+      def claims_unavailable(error) = UI.log("claims unchecked: #{error.message}")
 
       # @return [void]
       def record_pull_request(path, publication)

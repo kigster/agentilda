@@ -32,6 +32,26 @@ RSpec.describe Agentilda::Execution::Transcript do
   # The meter is the number on the spinner line and the number in the closing
   # report, and every one of these is a way `claude` reports spend that would
   # otherwise be counted twice or not at all.
+  # The car's context meter: what the agent's own context holds now, which is
+  # the latest message's whole input, not the sum of every turn's.
+  describe "the context" do
+    let(:usage) { { "input_tokens" => 2, "cache_creation_input_tokens" => 100, "cache_read_input_tokens" => 900, "output_tokens" => 40 } }
+
+    it "is unknown until a message closes" do
+      expect([transcript.context, transcript.progress.context]).to eq([nil, nil])
+    end
+
+    context "with two turns and a sub-agent's message" do
+      before do
+        feed(delta(usage), delta(usage.merge("cache_read_input_tokens" => 5000)), delta(usage, parent: "toolu_1"))
+      end
+
+      it "is the main agent's latest message's input, cache reads and writes included" do
+        expect([transcript.context, transcript.progress.context]).to eq([5102, 5102])
+      end
+    end
+  end
+
   describe "the meter" do
     it "counts everything that went up, cache reads included" do
       transcript.push(delta({ "input_tokens" => 2, "cache_creation_input_tokens" => 100,

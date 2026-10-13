@@ -87,7 +87,8 @@
           "at": { "type": "string", "format": "date-time" },
           "from": { "$ref": "#/$defs/agent" },
           "to": { "$ref": "#/$defs/agent" },
-          "body": { "type": "string", "minLength": 1 }
+          "body": { "type": "string", "minLength": 1 },
+          "command": { "type": "string", "minLength": 1, "description": "The id of the page's command that sent it (plan 004, W13), so a redelivered command appends nothing twice." }
         }
       }
     }

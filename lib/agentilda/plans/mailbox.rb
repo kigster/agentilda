@@ -94,16 +94,19 @@ module Agentilda
       # @param to [String]
       # @param body [String]
       # @param at [Time]
-      # @return [Agentilda::Plans::Mailbox::Message] as written
+      # @param command [String, nil] the page command that sent it; the same
+      #   id to the same reader appends nothing the second time
+      # @return [Agentilda::Plans::Mailbox::Message] as written, or as first
+      #   written under +command+
       # @raise [Agentilda::Error] on an empty body, which would be a heading
       #   with nothing under it for the reader to act on, or on a sender or
       #   recipient that is blank or holds whitespace
-      def append(from:, to:, body:, at: Time.now)
+      def append(from:, to:, body:, at: Time.now, command: nil)
         text = body.to_s.strip
         raise Error, "a message needs a body" if text.empty?
         raise Error, "a message needs --from and --to, each one agent name" unless name?(from) && name?(to)
 
-        from_state(state.message!(from:, to:, body: text, at:, after: legacy.map(&:number).max.to_i))
+        from_state(state.message!(from:, to:, body: text, at:, after: legacy.map(&:number).max.to_i, command:))
       end
 
       private

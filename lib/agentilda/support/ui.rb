@@ -251,12 +251,33 @@ module Agentilda
       # @return [String, nil]
       attr_accessor :log_path
 
+      # Something else that hears every {.log} line, as it is logged: the
+      # live board keeps the latest few for the page. Taps are called on the
+      # logging thread and must not raise.
+      #
+      # @param tap [#call] receives the message and its fields
+      # @return [#call] the tap, to hand back to {.untap_log}
+      def tap_log(tap)
+        @log_taps = [*log_taps, tap]
+        tap
+      end
+
+      # @param tap [#call]
+      # @return [void]
+      def untap_log(tap)
+        @log_taps = log_taps - [tap]
+      end
+
+      # @return [Array<#call>]
+      def log_taps = @log_taps || []
+
       # Append one timestamped line to {.log_path}. A no-op with nothing set.
       # Safe to call from several threads at once.
       #
       # @param message [String]
       # @return [void]
       def log(message, **fields)
+        log_taps.each { |tap| tap.call(message, fields) }
         path = log_path or return
 
         line = Engine::ProgressLog.render(message, **fields)

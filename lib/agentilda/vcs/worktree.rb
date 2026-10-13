@@ -84,7 +84,7 @@ module Agentilda
       # @raise [Agentilda::Error] when git refuses
       def checkout_for(feature)
         branch = branch_for(feature)
-        path = File.join(dir, "#{feature.ordinal}-#{feature.slug}")
+        path = path_for(feature)
 
         if File.directory?(path)
           seed(path)
@@ -165,6 +165,46 @@ module Agentilda
       # @return [Array<String>] paths removed
       def prune
         list.select { |path| clean?(path) }.each { |path| remove(path) }
+      end
+
+      # Where one plan's checkout lives, whether or not it has been made.
+      #
+      # @param feature [Agentilda::Plans::Feature]
+      # @return [String]
+      def path_for(feature) = File.join(dir, "#{feature.ordinal}-#{feature.slug}")
+
+      # Throw away what has not been committed in one plan's checkout: every
+      # change to a tracked file, and every untracked file that is not
+      # ignored, so the seeded `.env` and keys stay. This is the reset behind
+      # a person's discard (W9). Agents never commit, so everything a round
+      # did is uncommitted, and the branch's own last commit is the base it
+      # started from; going further back would drop work already published
+      # behind an open pull request.
+      #
+      # It only ever runs inside a worktree this class manages. The main
+      # checkout, or a directory git does not list as one of these
+      # worktrees, is refused, because `reset --hard` there would take a
+      # person's own work with it.
+      #
+      # @param feature [Agentilda::Plans::Feature]
+      # @return [Boolean] false when the plan has no checkout, so nothing to reset
+      # @raise [Agentilda::Error] when the path is not one of these worktrees,
+      #   or git refuses
+      def reset(feature)
+        path = path_for(feature)
+        return false unless File.directory?(path)
+
+        mine = list.map { canonical(it) }
+        unless mine.include?(canonical(path)) && canonical(path) != canonical(root)
+          raise Error, "#{path} is not a worktree agentilda made, so it is not reset"
+        end
+
+        [%w[reset --hard --quiet], %w[clean -fd --quiet]].each do |args|
+          next if system("git", "-C", path, *args, out: File::NULL, err: File::NULL)
+
+          raise Error, "git #{args.first} failed in #{path}"
+        end
+        true
       end
 
       # @param path [String]

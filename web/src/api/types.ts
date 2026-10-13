@@ -52,6 +52,9 @@ export interface Car {
   elapsed: number; // seconds
   remaining: number | null; // seconds before its timeout
   held: boolean; // a person asked it to hold for now
+  // Queued by set_model for its next round, until a round runs on it. The engine always sends it;
+  // optional only until src/board/sample.ts (held by another agent) adds it to sampleCar.
+  next_model?: string | null;
 }
 
 export interface PullRequest {
@@ -153,7 +156,7 @@ export type CommandKind =
   | "stop"
   | "stop_all" // every agent on this node
   | "set_model" // next round; payload: { model }
-  | "switch_model" // now, then /compact (W27); payload: { model }
+  | "switch_model" // now: stopped with a resume note, restarted fresh on the new model (no --resume or /compact); payload: { model }
   | "add_plan" // payload: { ordinal }
   | "create_plans"; // payload: { idea }
 

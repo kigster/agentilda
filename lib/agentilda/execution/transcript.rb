@@ -51,8 +51,11 @@ module Agentilda
       # @!attribute [r] message
       #   @return [String, nil] the last thing the agent chose to say directly,
       #     via `SendUserMessage`, or nil if it never sent one
-      Progress = Data.define(:activity, :up, :down, :subagents, :pid, :message) do
-        def initialize(pid: nil, message: nil, **rest) = super
+      # @!attribute [r] context
+      #   @return [Integer, nil] tokens in the agent's context as of its latest
+      #     message, nil until one has closed, and for streams that never say
+      Progress = Data.define(:activity, :up, :down, :subagents, :pid, :message, :context) do
+        def initialize(pid: nil, message: nil, context: nil, **rest) = super
       end
 
       # The one kind of line the trace does not keep.
@@ -108,6 +111,7 @@ module Agentilda
         @streamed = {}
         @tasks = {}
         @spawned = 0
+        @context = nil
       end
 
       # Everything sent to the model, which on any turn after the first is
@@ -155,7 +159,24 @@ module Agentilda
       end
 
       # @return [Agentilda::Execution::Transcript::Progress] a snapshot, safe to keep
-      def progress = Progress.new(activity: @activity, up:, down:, subagents: @spawned, pid: @pid, message: @message)
+      def progress
+        Progress.new(activity: @activity,
+          up:,
+          down:,
+          subagents: @spawned,
+          pid: @pid,
+          message: @message,
+          context: @context)
+      end
+
+      # What the agent's own context holds now: everything its latest message
+      # was sent, fresh, cache writes and cache reads alike. Each turn re-sends
+      # the whole conversation, so the last message's input is the context, and
+      # adding them up across turns would count it once per turn. A sub-agent
+      # has a context of its own and does not fill this one.
+      #
+      # @return [Integer, nil] nil until the first message has closed
+      attr_reader :context
 
       # @return [Integer] how many tool calls have gone past, which is the one
       #   honest measure of how much work an agent that says "done" actually did
@@ -305,9 +326,9 @@ module Agentilda
 
         usage = event.dig("event", "usage") or return
         bucket = bucket_for(event["parent_tool_use_id"])
-        bucket[:up] += usage.values_at("input_tokens",
-          "cache_creation_input_tokens",
-          "cache_read_input_tokens").compact.sum
+        sent = usage.values_at("input_tokens", "cache_creation_input_tokens", "cache_read_input_tokens").compact.sum
+        bucket[:up] += sent
+        @context = sent if event["parent_tool_use_id"].nil?
         bucket[:down] += usage["output_tokens"].to_i
         bucket[:cached] += usage["cache_read_input_tokens"].to_i
         publish

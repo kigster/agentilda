@@ -51,6 +51,8 @@ Gem::Specification.new do |spec|
   spec.add_dependency "fuzzy-string-match"
   spec.add_dependency "parallel"
   spec.add_dependency "pastel"
+  # The live run (plan 004) lives in Redis: board and command streams, plan claims.
+  spec.add_dependency "redis-client", "~> 0.31"
   spec.add_dependency "tty-box"
   spec.add_dependency "tty-command"
   spec.add_dependency "tty-cursor"

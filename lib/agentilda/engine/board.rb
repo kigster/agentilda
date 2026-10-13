@@ -43,6 +43,12 @@ module Agentilda
     # @!attribute [r] history
     #   @return [Array<String>] what the agent has said, newest first, for
     #     `run --scroll-height` to show more than the latest line of
+    # @!attribute [r] context
+    #   @return [Integer, nil] tokens in the agent's context, when its
+    #     adapter's stream says
+    # @!attribute [r] since
+    #   @return [Float, nil] the monotonic time its invocation started, which
+    #     tells two invocations of one round apart
     Board::Row = Data.define(:key,
       :at,
       :ordinal,
@@ -63,9 +69,11 @@ module Agentilda
       :bold,
       :elapsed,
       :subagents,
-      :history) do
+      :history,
+      :context,
+      :since) do
       def initialize(pr: nil, phase: nil, remaining: nil, frame: 0, bold: false, message: nil,
-        elapsed: 0, subagents: 0, history: [], **rest)
+        elapsed: 0, subagents: 0, history: [], context: nil, since: nil, **rest)
         super
       end
 

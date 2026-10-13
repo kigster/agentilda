@@ -186,7 +186,7 @@ module Agentilda
       end
 
       # @param root [String] the repository the agents work in
-      # @param spawn [Proc] `argv, chdir:` → {Agentilda::Execution::Child}, swappable so the
+      # @param spawn [Proc] `argv, chdir:, env:` → {Agentilda::Execution::Child}, swappable so the
       #   suite can play back a fake process without spawning one
       # @param timeout [Integer, nil] `--timeout`: a cap on every agent's clock,
       #   or nil to let each agent's own frontmatter clock stand
@@ -219,6 +219,7 @@ module Agentilda
         @max_tokens = max_tokens
         @lean = lean
         @fresh_budget = fresh_budget
+        @preferred = {}
       end
 
       # @return [String]
@@ -234,7 +235,28 @@ module Agentilda
       # @return [Agentilda::Agents::Profile]
       def profile_for(agent, subject = nil)
         spec = subject ? Plans::Spec.for(subject) : nil
-        Agents::Profile.resolve(agent, spec:, model: @model)
+        Agents::Profile.resolve(agent, spec:, model: preferred_model(agent, subject) || @model)
+      end
+
+      # A model a person chose for one agent on one plan while the run was
+      # going (W24), taken from that agent's next invocation. It beats
+      # `run --model` because it was said later, about this agent in
+      # particular. nil forgets the choice.
+      #
+      # @param ordinal [#to_s]
+      # @param agent [String] the agent's name
+      # @param model [String, nil]
+      # @return [void]
+      def prefer_model(ordinal, agent, model)
+        key = [ordinal.to_s, agent.to_s]
+        model.nil? ? @preferred.delete(key) : @preferred[key] = model.to_s
+      end
+
+      # @param agent [Agentilda::Agents::Agent]
+      # @param subject [Agentilda::Plans::Subject, nil]
+      # @return [String, nil]
+      def preferred_model(agent, subject)
+        subject && @preferred[[subject.feature.ordinal.to_s, agent.name]]
       end
 
       # The clock this agent runs against: the tighter of its own frontmatter
@@ -280,7 +302,7 @@ module Agentilda
         handle.control = control
         argv = invocation(agent, subject, root:, control:, round:, successor:, partners:)
 
-        child = @spawn.call(argv, chdir: root)
+        child = @spawn.call(argv, chdir: root, env: profile.adapter.environment)
         handle.child = child
         transcript.pid = child.pid
         clock = Clock.new(seconds: timeout_for(agent),

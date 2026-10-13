@@ -85,6 +85,15 @@ RSpec.describe Agentilda::Plans::Mailbox, :tree do
     expect(mailbox.for("rey-frontend", after: 2).map(&:body)).to eq(["three"])
   end
 
+  describe "a command's message, appended twice" do
+    let!(:first) { mailbox.append(from: "human", to: "luke-backend", body: "hi", command: "01JM") }
+    let!(:again) { mailbox.append(from: "human", to: "luke-backend", body: "hi", command: "01JM") }
+
+    it "is there once, and the second append answers with the first" do
+      expect([mailbox.messages.size, again]).to eq([1, first])
+    end
+  end
+
   it "refuses a message with nothing in it" do
     expect { luke_to_rey("   \n") }.to raise_error(Agentilda::Error, /body/)
   end
