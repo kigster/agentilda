@@ -22,8 +22,8 @@ RSpec.describe Agentilda::CLI::Skills::Install do
     [strip_ansi(out.string), strip_ansi(err.string)]
   end
 
-  it "ships the five tilda skills" do
-    expect(bundled).to eq(%w[tilda tilda-run tilda-spec tilda-status tilda-sync])
+  it "ships the seven tilda skills" do
+    expect(bundled).to eq(%w[tilda tilda-documents tilda-run tilda-spec tilda-start tilda-status tilda-sync])
   end
 
   it "installs each bundled skill and lists it on STDOUT" do
@@ -35,12 +35,12 @@ RSpec.describe Agentilda::CLI::Skills::Install do
     run
     out, err = run
     expect([out.lines.map { it.split("\t").first }.uniq, unwrapped(err)])
-      .to match([%w[kept], include("5 kept", "--overwrite")])
+      .to match([%w[kept], include("7 kept", "--overwrite")])
   end
 
   it "copies nothing under -n" do
     _out, err = run(dry_run: true)
-    expect([Dir.exist?(into), unwrapped(err)]).to match([false, include("nothing was copied", "5 installed")])
+    expect([Dir.exist?(into), unwrapped(err)]).to match([false, include("nothing was copied", "7 installed")])
   end
 
   # Runs anywhere: no project root is looked for.
@@ -66,7 +66,7 @@ RSpec.describe Agentilda::CLI::Skills::Install do
 
     it "lists every bundled skill with its summary and whether it is installed" do
       expect(unwrapped(screen("skills", "install", "-h")))
-        .to include(*%w[tilda tilda-run tilda-spec tilda-status tilda-sync].map { "#{it} (" }, "installed) — The agentilda")
+        .to include(*%w[tilda tilda-documents tilda-run tilda-spec tilda-start tilda-status tilda-sync].map { "#{it} (" }, "installed) — The agentilda")
     end
 
     it "keeps the group screen to one line for the command" do
