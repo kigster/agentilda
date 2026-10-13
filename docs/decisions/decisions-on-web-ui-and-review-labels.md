@@ -222,7 +222,7 @@ Several machines, say three, may run agentilda on the same repository against on
 **Names.**
 
 - **The node** is this machine and user: the SHA-256 of `username@hostname` (`Etc.getlogin`, falling back to `$USER`, and `Socket.gethostname`), cut to its first 96 bits, 24 hex digits. Everything this machine writes lives under it: "our" state.
-- **The repository** is what the machines have in common, so it cannot come from a path: it is the SHA-256 of the repository's root commit (`git rev-list --max-parents=0 HEAD`, the oldest if there are several), also cut to 96 bits. Every clone has the same root commit, with no remote and no URL spelling to normalise. `.tilda.yml` may set `repo_id:` to override it. A tree outside git uses the checkout's path instead, which means it shares with nobody.
+- **The repository** is what the machines have in common: its GitHub URL, normalised to `github.com/<owner>/<repo>` (from `git remote get-url origin`, with `git@github.com:` and `https://` spellings, a trailing `.git` and letter case all folded together). It goes into keys as is, readable rather than hashed, so `redis-cli` shows whose repository a key belongs to. There is no override (W29). A tree with no GitHub remote uses the checkout's path instead, which means it shares with nobody. *Changed on 2026-10-13; this was the root commit's digest.*
 - **The checkout** stays below the node (plan `003.00` D4), so two checkouts on one machine still keep apart.
 
 **Keys.**
@@ -270,6 +270,16 @@ Settled by the author on 2026-10-13.
 - For Claude the executor sets the threshold in the child's environment (`CLAUDE_AUTOCOMPACT_PCT_OVERRIDE=40`; research confirms the name and that headless runs honour it). Other adapters map it to their own setting, or report that they cannot.
 - `.tilda.yml` may override it later (`autocompact: 50`); 40 is the default.
 - The drawer shows the agent's context as a bar with the 40% mark, and each autocompaction is written to the transcript and the log.
+
+### W29. Joining is sharing `$REDIS_URL`; everyone is trusted
+
+Settled by the author on 2026-10-13.
+
+- **agentilda is a distributed software factory, and the only way in is the Redis address.** A machine that connects to the shared `$REDIS_URL` from a clone of the same GitHub repository is part of the factory: it appears on everyone's board and takes part in the plan claims of W26. There is no invitation, account, allow-list or handshake, and none is planned.
+- **Nobody can be kept out or removed.** There is no kick, ban or eviction; anyone with the address and the repository is in, and leaves by stopping.
+- **This is not a policy enforcement system.** It assumes everyone around is friendly. Read-only views and plan claims are agreements between well-behaved agentilda processes, not security: a hostile client with the Redis address can write anything. Access control is whoever controls the Redis password and network.
+- The repository key is the GitHub URL itself (W26), so the repository you cloned decides which factory you join, and nothing else does.
+- **Stop All Local** (formerly Stop run) says what it can do: stop this machine's agents. The page's **?** pill explains all of the above; its copy is the author's to write (`design.md`, "Help dialog").
 
 ### W12. Order of work
 

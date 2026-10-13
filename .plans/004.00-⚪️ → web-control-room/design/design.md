@@ -42,7 +42,7 @@ The review labels keep the colours of plan 005 (L1).
 **Layout:** a top bar with the run's totals, the board on the left, and a rail on the right listing "Needs you" items (questions, interrupts). Selecting a car opens a drawer in place of the rail, with that agent's transcript and the message controls. Everything is left aligned. Below 960 px the rail drops beneath the board, and the board scrolls sideways inside its own frame, never the page.
 
 ```
-┌ agentilda   Run 18 min   4 agents working   ↑ 1.24M  ↓ 86k   $14.20     [Stop run] ┐
+┌ agentilda   Run 18 min   4 agents working   ↑ 1.24M  ↓ 86k   $14.20     [Stop All Local] [?] ┐
 ├─────────────────────────────────────────────────────────────────┬───────────────────┤
 │           New  Researched  Planning  Building  UI  Review  PR   │ Needs you  2      │
 │ 001.00    ●━━━━━━●━━━━━━━━━━●━━━━━━━━◉┄┄┄┄┄┄┄○┄┄┄┄┄○┄┄┄┄┄┄○     │ ┌ question ──────┐ │
@@ -90,7 +90,7 @@ The review labels keep the colours of plan 005 (L1).
 - **Machines sharing one Redis** (decision W26) each get a tab at the far right of the tab bar, labelled `username@hostname` with a 🖥️, drawing that machine's plans exactly as the board draws ours, minus every control: cars are plain cards with the model as text, and the tab opens with "Read only. alex@build-01 is working on these in ~/src/agentilda; this machine will not start them. Last seen 4s ago."
 - **All machines** in the header is a pressed-state toggle that appends every other machine's rows under ours on the Board, each machine opening with a band in the highlight colour (Barlow Condensed SemiBold, `username@hostname` at 24 px, then its IP, plan count, "read only" and last seen; ours gets one too, marked "this machine"), its rows at 85% opacity (first 25%, raised by the author once it was on screen). Fading by opacity rather than colour keeps the lane colours legible as lanes, while making it obvious which rows are not ours to touch.
 - **The status bar** lists other machines' plans at its right end, after a hairline, as their tabs sit at the right of the tab bar: number and time like ours, 🖥️ while working and ✓ once approved, at 85% opacity. The tooltip names the machine and the station; a click opens that machine's tab.
-- **This machine's name** sits in the project line under the logo ("On dana@studio-mini"), not among the run's numbers, which is where it was first put and where it pushed Stop run onto a second line.
+- **This machine's name** sits in the project line under the logo ("On dana@studio-mini"), not among the run's numbers, which is where it was first put and where it pushed Stop run (now Stop All Local) onto a second line.
 
 ## Principles
 
@@ -116,3 +116,19 @@ The review labels keep the colours of plan 005 (L1).
 
 - **Model**, at the top of the drawer, switches that one agent now: the harness stops it at its next safe point, resumes the same session on the chosen model and runs `/compact` first. Its car's dropdown follows. The car's own dropdown still queues a change for the next round (W24); the drawer's is for an agent that is stuck or struggling now (W27).
 - **Context** shows how full the agent's window is, as a bar with a highlight-colour mark at 40%, where every agent autocompacts (W28). An autocompaction lands in the transcript and the log ("Autocompacted at 40% of its context: 80.2k → 17.6k").
+
+## Stop All Local and the help pill
+
+- **Stop All Local**, formerly Stop run, stops every agent on this machine. Other machines keep running; nothing here can stop them (W26, W29).
+- A round **?** pill to its right opens the help dialog: a native `<dialog>`, closed by Got it, Esc or a click outside, returning focus to the pill.
+
+### Help dialog
+
+> **Copy: the author writes this.** The mockup carries a draft so the dialog has something to show; replace it here and in `control-room.html` (`#help`).
+
+What it has to say:
+
+- This is a distributed software factory: every machine on the same repository and the same Redis works the same set of plans.
+- You join by sharing `$REDIS_URL`. There is no other mechanism.
+- Anyone connecting from a clone of the same GitHub repository is in. Nobody can be kept out or kicked out.
+- It is not a policy enforcement system. It assumes everyone around is friendly.
