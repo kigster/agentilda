@@ -303,7 +303,10 @@
   .node strong { color: var(--ink); font-weight: 700; }
   .btn-icon { display: inline-grid; place-items: center; width: 44px; padding: 0; }
   .btn[aria-pressed="true"] { background: var(--ink); color: var(--plate); border-color: var(--ink); }
-  .tab-machine::before { content: "🔒"; margin-right: 6px; font-size: 12px; }
+  .tab-machine::before { content: "🖥️"; margin-right: 6px; font-size: 13px; }
+  /* Other machines sit at the far right of the tab bar, away from this machine's own views. */
+  .tab-machine { flex: none; white-space: nowrap; }
+  .tabs > :not(.tab-machine) + .tab-machine { margin-left: auto; }
   .machine-note { margin: 0 0 6px; padding: 12px 16px 0; font-size: 13px; color: var(--ink-soft); }
   .machine-note strong { color: var(--ink); }
   .car.is-readonly { cursor: default; }
@@ -314,8 +317,7 @@
   .plan + .machine-head, #plans + #theirs .machine-head:first-child { margin-top: 22px; }
   .machine-head { font-family: var(--condensed); font-weight: 600; }
   .machine-head h2 { margin: 0; font-size: 24px; font-weight: 600; letter-spacing: 0.01em; }
-  .machine-head h2::before { content: "🔒"; margin-right: 8px; font-size: 15px; }
-  .machine-head.is-ours h2::before { content: none; }
+  .machine-head h2::before { content: "🖥️"; margin-right: 8px; font-size: 18px; }
   .machine-head p { margin: 0; font-size: 18px; font-weight: 600; letter-spacing: 0.02em; color: var(--on-highlight); display: flex; flex-wrap: wrap; gap: 0 14px; }
   /* Their rows in the merged board, slightly faded so ours stay the thing you read. */
   .plan.is-theirs { opacity: .85; }
@@ -1155,7 +1157,9 @@
     wrap.innerHTML = `<button class="tab" role="tab" id="tab-run-${run.n}" aria-selected="false" aria-controls="panel-run-${run.n}" tabindex="-1" type="button">
         <span data-label></span><span class="run-chip" data-chip></span></button>
       <button class="tab-close" type="button" data-close hidden></button>`;
-    document.querySelector(".tabs").append(wrap);
+    // Test tabs go after Logs and before the other machines' tabs, which keep the far right.
+    const firstMachine = document.querySelector(".tab-machine");
+    firstMachine ? firstMachine.before(wrap) : document.querySelector(".tabs").append(wrap);
     run.tab = wrap.querySelector('[role="tab"]');
     run.wrap = wrap;
     wrap.querySelector("[data-close]").addEventListener("click", () => closeRun(run));
@@ -1864,14 +1868,14 @@
     paintRoute({ ...plan, el: row });
     return row;
   }
-  // One tab and one read-only board per machine, after the Board tab.
+  // One tab and one read-only board per machine, at the far right of the tab bar.
   for (const n of NODES) {
     const id = n.node.slice(0, 8);
     const tab = document.createElement("button");
     Object.assign(tab, { className: "tab tab-machine", type: "button", id: `tab-node-${id}`, tabIndex: -1, textContent: who(n) });
     tab.setAttribute("role", "tab"); tab.setAttribute("aria-selected", "false"); tab.setAttribute("aria-controls", `panel-node-${id}`);
     tab.title = `Read only: what ${who(n)} is working on`;
-    ([...document.querySelectorAll(".tab-machine")].at(-1) || $("tab-board")).after(tab);
+    document.querySelector(".tabs").append(tab);
     const panel = document.createElement("section");
     Object.assign(panel, { className: "board", id: `panel-node-${id}`, hidden: true });
     panel.setAttribute("role", "tabpanel"); panel.setAttribute("aria-labelledby", tab.id);
