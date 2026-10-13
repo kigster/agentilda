@@ -36,7 +36,16 @@ You finish `spec.md` for one plan folder so that `palpatine-planner` can split i
 
 ## Retroactive plans
 
-A folder numbered `NNN.MM` with `MM > 0` describes work that already shipped. Open with the dated provenance line from `~/.agents/skills/create-plan/references/retroactive-spec.md`, and describe what exists, not what was "decided".
+A folder numbered `NNN.MM` with `MM > 0` describes work that already shipped. Open, right after the H1, with a dated provenance note, and describe what exists, not what was "decided":
+
+```markdown
+> [!NOTE]
+> **Written retroactively on YYYY-MM-DD.** This documents work that shipped in
+> #41 and #43, merged between plan 018 and plan 019. It describes what exists;
+> it does not record a decision taken in advance.
+```
+
+The date is today's, not the merge date. The pull requests are the ones in `pull-requests.md`.
 
 ## Done when
 

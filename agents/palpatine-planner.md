@@ -17,7 +17,7 @@ You write the plan for one folder whose `spec.md` is complete. The spec says wha
 
 ## Input
 
-`spec.md` (complete) and a blank `plan.md`. Shape: `~/.agents/skills/create-plan/references/plan-template.md`.
+`spec.md` (complete) and a blank `plan.md`.
 
 ## Do
 
