@@ -90,7 +90,7 @@ A direct bidirectional socket was considered. Streams won because they keep what
 
 - The engine reads `commands` through a consumer group, so a command sent while the engine was restarting is executed when it comes back, and it is acked only once it has been applied.
 - In the engine, the web view is a `View` like the TUI (W2): its `draw(board)` appends to `board`, and its command reader feeds the same `Console` gate the keyboard uses.
-- Key names carry the host (W16) and the checkout (plan `003.00` D4), so two machines or two checkouts never read each other's streams: `agentilda:<host>:<checkout>:board`.
+- Key names carry the repository, the machine and the checkout (W26, plan `003.00` D4), so no two machines or checkouts write each other's streams: `agentilda:<repo>:<node>:<checkout>:board`.
 
 ### W14. One logging library, one log directory
 
@@ -107,7 +107,7 @@ A direct bidirectional socket was considered. Streams won because they keep what
 - **Why a tee:** stream-json reports a Bash call's output only once the call has finished, so the engine cannot watch a test run live by reading the transcript. Agents run tests through `agentilda test -- <command>`, which tees the output to `.agentilda/log/tests/<plan>-<agent>.log` and appends progress to a Redis stream. The prompt asks for this, and **(proposed)** a `PreToolUse` hook rewrites known test commands (`rspec`, `just test`, `npm test`, `pytest`, `cypress run`) to go through the wrapper. Whether hooks can rewrite a tool's input is one of plan 004's research questions.
 - Pass and fail counts come from the runner's structured output where one exists (RSpec's JSON formatter, JUnit XML), not from parsing human-readable text.
 
-### W16. Redis is found the way agent-lock finds it, and every key carries the host
+### W16. Redis is found the way agent-lock finds it
 
 Revised by the author on 2026-10-12, reversing the first version of this decision, which ruled `REDIS_URL` out. Agentilda and `agent-lock` (W20) are installed and run together, so they find Redis the same way, in this order:
 
@@ -116,9 +116,9 @@ Revised by the author on 2026-10-12, reversing the first version of this decisio
 3. `$REDIS_URL`, when it is set, as agent-lock reads it.
 4. `redis://localhost:6379/0`.
 
-The risk the first version guarded against, writing into an application's shared Redis, is now handled by namespacing rather than by refusing the variable. **Every key agentilda writes starts with `agentilda:<host>:`**, where `<host>` is the first 4 hex digits of the SHA-256 of the machine's hostname (`Socket.gethostname`). The checkout follows it (plan `003.00` D4), so a full key reads `agentilda:3f9a:<checkout>:<plan>:<stream>`. Two machines sharing one Redis never see each other's runs, and a `SCAN` for `agentilda:*` finds everything agentilda ever wrote, so it can be cleared without touching the application's keys. Four hex digits are 65,536 values: plenty to tell a handful of machines apart, which is all the prefix is for, while the checkout digest carries the uniqueness. The hostname itself is stored in `agentilda:<host>:meta`, beside each checkout's path, so a person reading keys can tell which machine wrote them.
+That Redis may be shared by several machines working on the same repository, so how keys are named, and what one machine may read or write of another's, is W26. Every key starts with `agentilda:`, so a `SCAN` for `agentilda:*` finds everything agentilda ever wrote, and it can be cleared without touching an application's keys.
 
-On startup, the engine and the API server each log the address they use, with any password masked, and the namespace they write under.
+On startup, the engine and the API server each log the address they use, with any password masked, and the node name they write under.
 
 ### W17. A copilot to talk to about the run: c3po-operator
 
@@ -213,6 +213,46 @@ The mapping changes to Fast → `low`, Medium → `high`, Deep → `xhigh`. Toda
 
 Later, `.tilda.yml` will accept a `depth:` table that replaces those three values for one project (`depth: { medium: medium }`). That is not built yet; the form's help text reads from the same table, so it will show the project's mapping when it is.
 
+### W26. Machines sharing one Redis see each other, and never work the same plan
+
+Settled by the author on 2026-10-12. This replaces the 4-hex-digit hostname prefix the revised W16 briefly had.
+
+Several machines, say three, may run agentilda on the same repository against one shared `$REDIS_URL`. Each sees what the others are working on, read-only, and **no two machines ever work on the same plan**. That one rule is the whole lock.
+
+**Names.**
+
+- **The node** is this machine and user: the SHA-256 of `username@hostname` (`Etc.getlogin`, falling back to `$USER`, and `Socket.gethostname`), cut to its first 96 bits, 24 hex digits. Everything this machine writes lives under it: "our" state.
+- **The repository** is what the machines have in common, so it cannot come from a path: it is the SHA-256 of the repository's root commit (`git rev-list --max-parents=0 HEAD`, the oldest if there are several), also cut to 96 bits. Every clone has the same root commit, with no remote and no URL spelling to normalise. `.tilda.yml` may set `repo_id:` to override it. A tree outside git uses the checkout's path instead, which means it shares with nobody.
+- **The checkout** stays below the node (plan `003.00` D4), so two checkouts on one machine still keep apart.
+
+**Keys.**
+
+| Key | Holds | Written by |
+| --- | --- | --- |
+| `agentilda:<repo>:nodes` | a set of the node ids that have run on this repository | each node adds itself |
+| `agentilda:<repo>:<node>:meta` | a hash: `username`, `hostname`, the checkout path, agentilda's version, `started_at`, `seen_at`. It expires after 60 s and the engine refreshes it every 15 s, so a machine that dies drops out within a minute | that node only |
+| `agentilda:<repo>:<node>:<checkout>:…` | the board, streams and mail of W13 and plan `003.00` D4 | that node only |
+| `agentilda:<repo>:claim:<plan>` | the id of the node working on the plan | `SET NX`, see below |
+
+`username` and `hostname` are stored in plain text beside the digest, because the digest exists to make keys short and uniform, not to hide anyone: the page shows `username@hostname` in its header for this machine, and in the other machines' tab for each of the rest.
+
+**Read-only.** The store a node writes through is scoped to its own prefix and to `claim:` keys. Other nodes' keys are read and never written. The API server serves them for display and accepts no command naming another node; a kill, message or model change for a plan on another machine is refused with 403.
+
+**The plan lock.**
+
+- `<plan>` is the plan's number and slug (`008-ledger-export`), not the number alone, so two machines that each minted an `008` do not block each other by accident.
+- Before the dispatcher hands a plan to an agent, the node claims it: `SET agentilda:<repo>:claim:<plan> <node> NX EX 60`. If the key exists and names another node, the plan is stepped around, as a blocked plan is, and the round reports it as "on `user@host`".
+- The node keeps the claim for as long as its run includes the plan, renewing the expiry with each 15-second heartbeat, between rounds too, so another machine cannot pick the plan up between two of this one's rounds. It releases the claim when the plan reaches a terminal state or the run ends, with a compare-and-delete script so it can only ever delete its own claim. A crashed machine's claims expire within 60 seconds.
+- This is advisory between well-behaved agentilda processes, like agent-lock. It is not a guard against someone editing a plan folder by hand.
+
+**On the page.**
+
+- The header shows this machine as `username@hostname` under the project's path, with the node digest and the masked Redis address on hover.
+- **Each other machine gets a tab of its own**, labelled `username@hostname` with a lock, after the Board tab. It draws that machine's plans as the board draws ours (stations, lines, agents, tokens, elapsed time) with a line naming its checkout path and when it was last seen. Nothing on it is a control: no drawer, no model dropdown, no answer box.
+- **All machines**, a toggle in the header, merges everything onto the Board tab: our plans first, as usual, then each other machine's under a heading naming it, read-only and at 25% opacity (a 75% cut), so ours stay the thing you read. The choice is remembered per browser. Off, the Board shows only this machine's plans.
+
+**Known gap.** Plan folders move by renames in each machine's own checkout, so a plan's state reaches the other machines' trees only through git, when the branch is pushed and pulled. Redis shows the live state; the folders catch up later. Making the claim the source of truth for which state a plan is in is not part of this decision.
+
 ### W12. Order of work
 
 0. Plan `003.00` lands first, or at least its phases B and C: the JSON mailbox, Redis Streams, the hook and `last-known-state`.
@@ -223,6 +263,7 @@ Later, `.tilda.yml` will accept a `depth:` table that replaces those three value
 5. Animations (W4).
 6. The new-feature form and the spec editor (W5, W23, W25), then `tilda start` and the idea dialog (W19), then `tilda init` (W20).
 7. The model dropdown on each car (W24), once commands reach the engine (W9).
+8. Machines sharing one Redis (W26): the node and repository names land with the Redis store in step 2, since they are its key layout; the claim lands with the dispatcher's next change; the Other machines tab comes after the read-only board.
 
 ## Review labels
 
