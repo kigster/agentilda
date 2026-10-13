@@ -282,6 +282,10 @@
   .md-empty { color: var(--ink-soft); }
   .ask.is-leaving, .unblock.is-leaving { opacity: 0; transition: opacity .5s ease; }
   @media (prefers-reduced-motion: reduce) { .ask.is-leaving, .unblock.is-leaving { transition: none; opacity: 1; } }
+  .md-modes { display: flex; justify-content: flex-end; gap: 4px; margin-bottom: 6px; }
+  .md-mode { min-height: 30px; padding: 3px 12px; font-size: 13px; border-radius: 999px; }
+  .md-mode[aria-pressed="true"] { background: color-mix(in srgb, var(--ink) 14%, transparent); color: var(--ink); }
+  .md-mode[aria-pressed="false"] { background: transparent; color: var(--ink-soft); }
   .unblock-buttons { display: flex; flex-direction: column; gap: 8px; }
   .ask-held { margin-left: 6px; padding: 1px 8px; border-radius: 999px; background: var(--held); color: #fff; font-weight: 700; }
   .ask.is-held { border-left-color: var(--alarm); }
@@ -980,19 +984,27 @@
         view.className = "md-preview";
         view.tabIndex = 0;
         view.setAttribute("aria-label", "Preview of your answer");
+        // Edit and Preview sit just above the editor, flush with its right edge.
+        const modes = document.createElement("div");
+        modes.className = "md-modes";
+        modes.setAttribute("role", "group");
+        modes.setAttribute("aria-label", "Answer view");
+        const mode = previewing => { ask.previewing = previewing; show(); (previewing ? view : ta).focus(); };
+        const edit = button("Edit", "md-mode", () => mode(false)), preview = button("Preview", "md-mode", () => mode(true));
+        modes.append(edit, preview);
         const pane = document.createElement("div");
-        pane.append(box, view);
-        const preview = button("Preview", "btn-quiet", () => { ask.previewing = !ask.previewing; show(); (ask.previewing ? view : ta).focus(); });
+        pane.className = "md-pane";
+        pane.append(modes, box, view);
         const show = () => {
           box.hidden = Boolean(ask.previewing); view.hidden = !ask.previewing;
-          preview.textContent = ask.previewing ? "Edit" : "Preview";
+          edit.setAttribute("aria-pressed", String(!ask.previewing));
           preview.setAttribute("aria-pressed", String(Boolean(ask.previewing)));
           if (ask.previewing) renderMarkdown(view, ta.value);
         };
         show();
         const side = document.createElement("div");
         side.className = "unblock-buttons";
-        side.append(preview, send, holdButton(ask));
+        side.append(send, holdButton(ask));
         el.querySelector(".unblock-answer").append(pane, side);
       } else if (ask.kind === "question") {
         el.innerHTML = `${who}<p class="ask-text">${ask.text}</p>
