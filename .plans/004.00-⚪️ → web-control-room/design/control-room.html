@@ -258,6 +258,15 @@
   .ask { flex: none; padding: 14px; border-radius: 10px; background: var(--enamel);
          border: 1px solid var(--hairline); border-left: 3px solid var(--alarm); }
   .ask textarea { background: var(--plate); }
+  /* The unblock widget a red pill toggles: docked under the tabs, ringed in the highlight colour. */
+  .unblock { margin: 14px 24px 0; padding: 14px 16px 16px; background: var(--plate); border: 2px solid var(--highlight); border-radius: var(--radius-plate); }
+  .unblock[hidden] { display: none; }
+  .unblock-head { display: flex; align-items: center; gap: 12px; margin-bottom: 10px; }
+  .unblock-head h2 { margin: 0; font-size: 18px; font-weight: 800; letter-spacing: -0.01em; }
+  .unblock-head .btn { margin-left: auto; }
+  .unblock .ask { max-width: 760px; }
+  .unblock textarea { min-height: 72px; }
+  @media (max-width: 960px) { .unblock { margin: 12px 16px 0; } }
   .ask.is-done { border-left-color: var(--hairline); padding: 10px 14px; }
   @media (max-width: 960px) { .rail, .drawer { position: static; max-height: 70vh; } }
   .ask-who { font-size: 13px; color: var(--ink-soft); margin: 0; }
@@ -463,6 +472,11 @@
   .pill-id { font-size: 13px; font-weight: 800; }
   .pill-time { font-size: 11px; color: var(--ink-soft); }
   .pills .divider { width: 1px; align-self: stretch; margin: 4px 6px; background: var(--hairline); flex: none; }
+  /* Other machines' plans sit at the right end, as their tabs do at the top: read only, faded like their rows. */
+  .pills-theirs { flex: none; max-width: 40%; padding-left: 10px; border-left: 1px solid var(--hairline); }
+  .pills-theirs:empty { display: none; }
+  .pills-theirs .pill { opacity: .85; }
+  .pill-host { font-size: 11px; color: var(--ink-soft); }
   .statusbar-sum { font-size: 13px; color: var(--ink-soft); white-space: nowrap; }
   @media (max-width: 720px) { .statusbar h2, .statusbar-sum { display: none; } }
 
@@ -575,6 +589,12 @@
   <button class="tab" role="tab" id="tab-logs" aria-selected="false" aria-controls="panel-logs" tabindex="-1" type="button">Logs<span class="tab-count" id="log-alerts" title="Warnings and errors since you last looked"></span></button>
 </nav>
 
+<section class="unblock" id="unblock" role="region" aria-labelledby="unblock-title" hidden>
+  <div class="unblock-head"><h2 id="unblock-title"></h2>
+    <button class="btn btn-quiet" type="button" id="unblock-close">Hide</button></div>
+  <div class="unblock-body" id="unblock-body"></div>
+</section>
+
 <main class="layout">
   <section class="board" id="panel-board" role="tabpanel" aria-labelledby="tab-board">
     <div class="board-inner">
@@ -661,6 +681,7 @@
 <footer class="statusbar" aria-labelledby="statusbar-title">
   <h2 id="statusbar-title">Plans</h2>
   <ol class="pills" id="pills"></ol>
+  <ol class="pills pills-theirs" id="pills-theirs" aria-label="Plans on other machines, read only"></ol>
   <p class="statusbar-sum" id="statusbar-sum"></p>
 </footer>
 <dialog class="start" id="start" aria-labelledby="start-title">
@@ -888,15 +909,24 @@
     $("asks").innerHTML = "";
     if (!asks.length) { $("asks").innerHTML = `<p class="empty">Nothing waiting on you. Agents will ask here.</p>`; return; }
     // Open requests first, oldest at the top; settled ones sink below them.
-    for (const ask of [...asks.filter(a => !a.done), ...asks.filter(a => a.done)]) {
+    for (const ask of [...asks.filter(a => !a.done), ...asks.filter(a => a.done)]) $("asks").append(askCard(ask, "a"));
+    $("asks").scrollTop = scrolled;
+    const back = focused && document.getElementById(focused);
+    if (back && back.closest("#asks")) { back.focus(); if (back.setSelectionRange) back.setSelectionRange(back.value.length, back.value.length); }
+    if (unblocking && unblocking.ask.done) toggleUnblock(null);
+  }
+  // One request as a card: in the Needs you rail, and in the unblock widget a red pill opens. The draft lives on the
+  // ask, so a half-typed answer follows it from one to the other.
+  function askCard(ask, prefix) {
       const el = document.createElement("div");
       el.className = "ask";
-      if (ask.done) { el.classList.add("is-done"); el.innerHTML = `<p class="ask-done">${ask.done}</p>`; $("asks").append(el); continue; }
+      el.dataset.ask = ask.id;
+      if (ask.done) { el.classList.add("is-done"); el.innerHTML = `<p class="ask-done">${ask.done}</p>`; return el; }
       const who = `<p class="ask-who">${ask.plan} — ${ask.agent}</p>`;
       if (ask.kind === "question") {
         el.innerHTML = `${who}<p class="ask-text">${ask.text}</p>
-          <label class="sr-only" for="a-${ask.id}">Your answer</label>
-          <textarea id="a-${ask.id}" placeholder="Your answer. ${SEND_KEYS} sends it."></textarea>
+          <label class="sr-only" for="${prefix}-${ask.id}">Your answer</label>
+          <textarea id="${prefix}-${ask.id}" placeholder="Your answer. ${SEND_KEYS} sends it."></textarea>
           <div class="ask-actions"><button class="btn btn-primary" type="button" aria-keyshortcuts="${MAC ? "Meta+Enter" : "Control+Enter"}">Send answer</button></div>`;
         const field = el.querySelector("textarea");
         field.value = ask.draft || "";
@@ -909,11 +939,7 @@
         el.querySelector("[data-keep]").addEventListener("click", () => resume(ask, `Kept leah-researcher's work. It resumes from its note.`));
         el.querySelectorAll("button")[1].addEventListener("click", () => resume(ask, `Discarded leah-researcher's work. It starts again.`));
       }
-      $("asks").append(el);
-    }
-    $("asks").scrollTop = scrolled;
-    const back = focused && document.getElementById(focused);
-    if (back && back.closest("#asks")) { back.focus(); if (back.setSelectionRange) back.setSelectionRange(back.value.length, back.value.length); }
+      return el;
   }
   // An answer needs words: an empty one would unblock the agent with nothing to go on.
   function answer(ask, field) {
@@ -1447,6 +1473,41 @@
   }
   const pillOrder = () => [...plans.filter(p => !p.doneAt).sort((a, b) => a.id.localeCompare(b.id)),
                            ...plans.filter(p => p.doneAt).sort((a, b) => a.doneAt - b.doneAt)];
+  // A red pill toggles the unblock widget, docked at the top under the tabs, with that plan's request in it; the same
+  // pill closes it again. A blocked agent with no request opens its drawer instead. Any other pill shows the plan's row.
+  let unblocking = null;
+  function toggleUnblock(plan) {
+    const ask = plan && asks.find(a => !a.done && a.plan === plan.id);
+    const same = unblocking && plan && unblocking.plan === plan;
+    const wasOpen = Boolean(unblocking);
+    if (unblocking) unblocking.plan.pill?.querySelector("button").setAttribute("aria-expanded", "false");
+    if (!ask || same) {
+      const pill = unblocking?.plan.pill?.querySelector("button");
+      unblocking = null;
+      $("unblock").hidden = true;
+      if (wasOpen && same) pill?.focus();
+      return;
+    }
+    unblocking = { plan, ask };
+    plan.pill.querySelector("button").setAttribute("aria-expanded", "true");
+    $("unblock-title").textContent = `Unblock ${plan.id}: ${plan.title}`;
+    $("unblock-body").replaceChildren(askCard(ask, "u"));
+    $("unblock").hidden = false;
+    $("unblock").scrollIntoView({ behavior: reduced ? "auto" : "smooth", block: "nearest" });
+    $("unblock-body").querySelector("textarea, [data-keep]").focus({ preventScroll: true });
+    $("announcer").textContent = `${plan.id} needs you: ${ask.text}`;
+  }
+  function pillClicked(plan) {
+    if (asks.some(a => !a.done && a.plan === plan.id)) { toggleUnblock(plan); return; }
+    selectTab($("tab-board"));
+    const scroll = { behavior: reduced ? "auto" : "smooth", block: "center" };
+    const blocked = plan.cars.find(c => c.blocked);
+    plan.el.scrollIntoView(scroll);
+    if (blocked) { openDrawer(plan, blocked, blocked.el.querySelector(".car-open")); return; }
+    plan.el.querySelector(".car-open, .pr-link")?.focus({ preventScroll: true });
+  }
+  $("unblock-close").addEventListener("click", () => { const pill = unblocking?.plan.pill?.querySelector("button"); toggleUnblock(null); pill?.focus(); });
+  $("unblock").addEventListener("keydown", e => { if (e.key === "Escape") { e.preventDefault(); $("unblock-close").click(); } });
   function paintPills() {
     const list = $("pills");
     const before = new Map([...list.querySelectorAll(".pill")].map(el => [el.dataset.plan, el.getBoundingClientRect().left]));
@@ -1460,14 +1521,13 @@
         li = document.createElement("li");
         li.innerHTML = `<button type="button" class="pill" data-plan="${plan.id}"><span class="pill-mark" aria-hidden="true"></span>
           <span class="pill-text"><span class="pill-id">${plan.id}</span><span class="pill-time"></span></span></button>`;
-        li.querySelector("button").addEventListener("click", () => {
-          plan.el.scrollIntoView({ behavior: reduced ? "auto" : "smooth", block: "center" });
-          plan.el.querySelector(".car-open, .pr-link")?.focus({ preventScroll: true });
-        });
+        li.querySelector("button").addEventListener("click", () => pillClicked(plan));
         plan.pill = li;
       }
       const b = li.querySelector("button");
       b.className = `pill ${st.cls}`;
+      if (asks.some(a => !a.done && a.plan === plan.id)) b.setAttribute("aria-expanded", String(unblocking?.plan === plan));
+      else b.removeAttribute("aria-expanded");
       b.querySelector(".pill-mark").textContent = st.mark;
       b.querySelector(".pill-time").textContent = span(plan.secs);
       b.title = `${plan.id} ${plan.title}: ${st.say}`;
@@ -1898,7 +1958,29 @@
     head.querySelector("h2").textContent = name;
     return head;
   }
+  // Their plans in the status bar: number and time like ours, with the machine instead of a lane. A click shows
+  // the plan on that machine's tab.
+  function paintTheirPills() {
+    for (const n of NODES) for (const plan of n.plans) {
+      if (!plan.pill) {
+        plan.pill = document.createElement("li");
+        plan.pill.innerHTML = `<button type="button" class="pill"><span class="pill-mark" aria-hidden="true"></span>
+          <span class="pill-text"><span class="pill-id">${plan.id}</span><span class="pill-time"></span></span></button>`;
+        plan.pill.querySelector("button").addEventListener("click", () => {
+          selectTab($(`tab-node-${n.node.slice(0, 8)}`));
+          n.panel.scrollIntoView({ behavior: reduced ? "auto" : "smooth", block: "start" });
+        });
+        $("pills-theirs").append(plan.pill);
+      }
+      const done = plan.at === 6, b = plan.pill.querySelector("button");
+      b.classList.toggle("is-done", done);
+      b.querySelector(".pill-mark").textContent = done ? "✓" : "🖥️";
+      b.querySelector(".pill-time").textContent = span(plan.secs);
+      b.title = `${plan.id} ${plan.title}: on ${who(n)}, ${done ? "reviewed, ready to merge" : `at ${STATIONS[plan.at].name}`}. Read only.`;
+    }
+  }
   function paintTheirs() {
+    paintTheirPills();
     for (const n of NODES) {
       n.panel.querySelector(".machine-note").innerHTML = `Read only. <strong>${who(n)}</strong> (${n.ip}) is working on these in ${n.path}; this machine will not start them. Last seen ${n.seen}s ago.`;
       n.panel.querySelector("[data-rows]").replaceChildren(...n.plans.map(p => theirRow(p, n, false)));

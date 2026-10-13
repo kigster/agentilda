@@ -73,7 +73,7 @@ The review labels keep the colours of plan 005 (L1).
   - **Green with ✓:** reviewed and approved, ready to merge.
   - **Yellow with 🛠️:** an agent is working on it.
   - **Red with a block emoji from `status.rb`:** 🅱️ for a product question, ⭕️ for a technical block or an interrupted agent.
-  - Working and blocked plans come first, in plan order. Finished plans sit after a divider on the right, in the order they finished, and a plan that finishes slides across to join them. Its clock stops when it finishes. Clicking a pill scrolls its row into view. A summary on the right reads "2 of 6 ready to merge, 3 blocked".
+  - Working and blocked plans come first, in plan order. Finished plans sit after a divider on the right, in the order they finished, and a plan that finishes slides across to join them. Its clock stops when it finishes. Clicking a red pill toggles the **unblock widget**, docked at the top under the tabs and ringed in the highlight colour: the plan's question with its answer box focused (or Keep work and resume, and Discard work), the same card as in Needs you, sharing its draft. Clicking the same pill again hides it, as do Hide and Esc; another red pill swaps it to that plan, and it closes itself once the plan is unblocked. A blocked agent with no request opens its drawer instead. Any other pill switches to the Board and scrolls its row into view. A summary on the right reads "2 of 6 ready to merge, 3 blocked".
 
 ## Start dialog
 
@@ -89,6 +89,7 @@ The review labels keep the colours of plan 005 (L1).
 
 - **Machines sharing one Redis** (decision W26) each get a tab at the far right of the tab bar, labelled `username@hostname` with a 🖥️, drawing that machine's plans exactly as the board draws ours, minus every control: cars are plain cards with the model as text, and the tab opens with "Read only. alex@build-01 is working on these in ~/src/agentilda; this machine will not start them. Last seen 4s ago."
 - **All machines** in the header is a pressed-state toggle that appends every other machine's rows under ours on the Board, each machine opening with a band in the highlight colour (Barlow Condensed SemiBold, `username@hostname` at 24 px, then its IP, plan count, "read only" and last seen; ours gets one too, marked "this machine"), its rows at 85% opacity (first 25%, raised by the author once it was on screen). Fading by opacity rather than colour keeps the lane colours legible as lanes, while making it obvious which rows are not ours to touch.
+- **The status bar** lists other machines' plans at its right end, after a hairline, as their tabs sit at the right of the tab bar: number and time like ours, 🖥️ while working and ✓ once approved, at 85% opacity. The tooltip names the machine and the station; a click opens that machine's tab.
 - **This machine's name** sits in the project line under the logo ("On dana@studio-mini"), not among the run's numbers, which is where it was first put and where it pushed Stop run onto a second line.
 
 ## Principles
