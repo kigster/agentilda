@@ -106,7 +106,7 @@ lib/agentilda/
     child.rb, clock.rb, control.rb   the process, its advisory timeout, its control file
     transcript.rb        parses --output-format stream-json into a spinner phrase
   vcs/                   Agentilda::Vcs — worktree.rb, publisher.rb (push, open the PR), github.rb (the gh seam)
-  presentation/          Agentilda::Presentation — dashboard, console, keyboard, screen/ratatui,
+  presentation/          Agentilda::Presentation —
                          documentation.rb (`agentilda docs`), diagram.rb (`agentilda states`), reporter.rb, viewer.rb
   support/               collapsed by Zeitwerk, so these stay Agentilda::UI, ::Config, ::Markdown, ::Frontmatter
   linear/                one-way export of .plans to Linear projects and issues
