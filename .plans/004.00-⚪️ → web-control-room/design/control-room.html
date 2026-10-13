@@ -25,6 +25,8 @@
     --go: #1E9E5A;
     /* The highlight colour: the orange of the logo's mark, RGB (211, 87, 40). The same in both themes. */
     --highlight: #D35728; --on-highlight: #FFFFFF;
+    /* The copilot's header and conversation: the same light colours in both themes, with black text. */
+    --copilot-head: #88b6ffe3; --copilot-body: #bad6bf;
     /* The copilot floats on an inverted surface: dark-ish here, light-ish in the dark theme. */
     --inv-plate: #1B2539; --inv-enamel: #111A2B; --inv-ink: #E4EAF3; --inv-ink-soft: #9AA7BC;
     --inv-hairline: #2D3B57; --inv-alarm: #F06A6F; --inv-go: #45D08A; --inv-focus: #8DB2FF; --inv-scheme: dark;
@@ -405,6 +407,12 @@
              box-shadow: 0 18px 50px rgb(0 0 0 / 28%); }
   .copilot-head { display: flex; align-items: center; gap: 10px; padding: 12px 12px 12px 16px; border-bottom: 1px solid var(--hairline); }
   .copilot-head { cursor: grab; touch-action: none; user-select: none; }
+  /* Header and conversation sit on fixed light colours, so their tokens turn dark-on-light whatever the theme.
+     The composer below keeps the inverted surface. */
+  .copilot-head, .chat { --ink: #000; --ink-soft: rgb(0 0 0 / 68%); --enamel: rgb(255 255 255 / 55%); --hairline: rgb(0 0 0 / 16%);
+                         --alarm: #A3161C; --go: #0F6B38; --focus: #1F5FD1; color: var(--ink); color-scheme: light; }
+  .copilot-head { --plate: #88b6ff; background: var(--copilot-head); border-radius: 13px 13px 0 0; }
+  .chat { --plate: var(--copilot-body); background: var(--copilot-body); }
   .copilot.is-dragging { box-shadow: 0 24px 64px rgb(0 0 0 / 36%); }
   .copilot.is-dragging .copilot-head { cursor: grabbing; }
   .copilot-grip { flex: none; display: grid; place-items: center; width: 28px; height: 36px; margin-left: -8px; border-radius: 6px;
