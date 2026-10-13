@@ -65,7 +65,7 @@ Why not just ask the agent to check every 10 s: an agent only acts between turns
 
 After an agent is interrupted, the page offers a choice:
 
-- **Discard:** reset the plan's worktree and send the plan back one state through an `aasm` event.
+- **Discard:** reset the plan's worktree and send the plan back one state through an `aasm` event. **Discard is plan-wide.** On the full lane luke and rey work in the same worktree at once, so resetting it would also wipe the partner's work in progress. Before the reset the engine stops every agent in that worktree, each with its grace period to leave a resume note, and the page says so before you confirm ("Discarding resets 001's worktree, which also stops rey-frontend"). There is no per-agent discard.
 - **Keep:** resume from the agent's `last-known-state` record (plan `003.00` D7), with the person's feedback added to its mailbox.
 
 The choice is made per interrupt and is never a global setting.
@@ -89,6 +89,7 @@ A direct bidirectional socket was considered. Streams won because they keep what
 | `replies` | engine → API | one reply per command id: accepted, refused (with the reason) or done |
 
 - The engine reads `commands` through a consumer group, so a command sent while the engine was restarting is executed when it comes back, and it is acked only once it has been applied.
+- **Acking after applying is at-least-once, not exactly-once:** an engine that applies a command and dies before `XACK` gets it again. So every command carries a stable id (a ULID minted by the API server, also the idempotency key the page retries with), and the engine records it in `agentilda:<repo>:<node>:<checkout>:done` (a set, entries expiring after a day) **in the same `MULTI` as the effect's own Redis writes**. Effects outside Redis are idempotent by construction: a message is appended to the mailbox keyed by the command id, so a second append is a no-op; `kill`, `stop` and `discard` check the agent's and the worktree's state first and do nothing to an agent that is already gone. A redelivered command found in `done` is acked and answered with its first reply.
 - In the engine, the web view is a `View` like the TUI (W2): its `draw(board)` appends to `board`, and its command reader feeds the same `Console` gate the keyboard uses.
 - Key names carry the repository, the machine and the checkout (W26, plan `003.00` D4), so no two machines or checkouts write each other's streams: `agentilda:<repo>:<node>:<checkout>:board`.
 
@@ -333,7 +334,11 @@ Labels are set with `gh pr edit`, which is in `FORBIDDEN_COMMANDS`. Granting it 
 
 ### L5. Pending CI waits **(proposed)**
 
-If checks are still running, hansolo does not approve. It signs "waiting on CI", leaves the PR on `review-in-progress`, and the next round looks again.
+If checks are still running, hansolo does not approve. It leaves the PR on `review-in-progress` and exits with a **parked** result rather than a verdict.
+
+- Parking is a harness state, not a reviewer round: the dispatcher records the plan as parked on CI in the run state (W6) and does **not** count the attempt against hansolo's rounds, which default to one.
+- A parked plan is stepped around, as a blocked one is, while the engine polls `gh pr checks` with the run's heartbeat. When the checks settle, pass or fail, it unparks the plan and hansolo runs again with its round intact.
+- A plan parked longer than an hour is reported on the board as "waiting on CI for 1 h", so a stuck check is visible rather than silent.
 
 ### L6. Separate from the emoji-review labels
 
