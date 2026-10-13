@@ -23,7 +23,7 @@ RSpec.describe Agentilda::CLI::Skills::Install do
   end
 
   it "ships the seven tilda skills" do
-    expect(bundled).to eq(%w[tilda tilda-documents tilda-run tilda-spec tilda-start tilda-status tilda-sync])
+    expect(bundled).to eq(%w[tilda tilda-documents tilda-run tilda-setup tilda-spec tilda-status tilda-sync])
   end
 
   it "installs each bundled skill and lists it on STDOUT" do
@@ -66,7 +66,7 @@ RSpec.describe Agentilda::CLI::Skills::Install do
 
     it "lists every bundled skill with its summary and whether it is installed" do
       expect(unwrapped(screen("skills", "install", "-h")))
-        .to include(*%w[tilda tilda-documents tilda-run tilda-spec tilda-start tilda-status tilda-sync].map { "#{it} (" }, "installed) — The agentilda")
+        .to include(*%w[tilda tilda-documents tilda-run tilda-setup tilda-spec tilda-status tilda-sync].map { "#{it} (" }, "installed) — The agentilda")
     end
 
     it "keeps the group screen to one line for the command" do
