@@ -2,10 +2,10 @@
 // agents build a tic-tac-toe page, then plays it. It spends tokens, so it is its own config and spec folder, which the
 // everyday cypress.config.ts never picks up, and it refuses to start without AGENTILDA_FACTORY_E2E=1.
 import { defineConfig } from "cypress";
-import { createReadStream, existsSync, readdirSync, statSync } from "node:fs";
+import { createReadStream, existsSync, readdirSync, realpathSync, statSync } from "node:fs";
 import { createServer, type Server } from "node:http";
 import type { AddressInfo } from "node:net";
-import { dirname, extname, join, resolve } from "node:path";
+import { dirname, extname, isAbsolute, join, relative, resolve } from "node:path";
 
 const TYPES: Record<string, string> = {
   ".html": "text/html; charset=utf-8", ".js": "text/javascript", ".css": "text/css", ".svg": "image/svg+xml", ".png": "image/png",
@@ -28,6 +28,18 @@ function findProduct(dir: string, depth = 0): string | null {
   return null;
 }
 
+/**
+ * The canonical path of `request` under `root`, or null when it is missing or lands outside: the page is written by an
+ * agent, so `..`, a sibling sharing the root's prefix, and a symlink pointing out are all refused.
+ */
+function inside(root: string, request: string): string | null {
+  const wanted = join(root, request);
+  if (!existsSync(wanted)) return null;
+  const real = realpathSync(wanted);
+  const rel = relative(root, real);
+  return rel.startsWith("..") || isAbsolute(rel) ? null : real;
+}
+
 let serving: { root: string; url: Promise<string>; server: Server } | null = null;
 
 /**
@@ -36,13 +48,14 @@ let serving: { root: string; url: Promise<string>; server: Server } | null = nul
  * would be a fresh origin, reloading forever.
  */
 function serve(dir: string): Promise<string> {
-  // Resolved, so the containment check below compares like with like: the temp dir arrives as `T//agentilda-…`.
-  const root = resolve(dir);
+  // Canonical, so the containment check below compares like with like: the temp dir arrives as `T//agentilda-…`,
+  // and on macOS under the /var -> /private/var symlink.
+  const root = realpathSync(resolve(dir));
   if (serving?.root === root) return serving.url;
   serving?.server.close();
   const server = createServer((req, res) => {
-    const path = join(root, decodeURIComponent(new URL(req.url ?? "/", "http://x").pathname).replace(/\/$/, "/index.html"));
-    if (!path.startsWith(root) || !existsSync(path) || statSync(path).isDirectory()) {
+    const path = inside(root, decodeURIComponent(new URL(req.url ?? "/", "http://x").pathname).replace(/\/$/, "/index.html"));
+    if (!path || statSync(path).isDirectory()) {
       res.writeHead(404).end();
       return;
     }

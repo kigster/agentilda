@@ -1096,13 +1096,19 @@ module Agentilda
 
       # A build finished in a run that opens no pull request: 🟢 needs one,
       # so the folder cannot move, and failing the attempt would only start
-      # the builder again on work that is done.
+      # the builder again on work that is done. Only the missing pull request
+      # is forgiven, and pull-requests.md with it, where the pull request
+      # would be recorded: a build that deleted another file 🟢 requires
+      # (spec.md, plan.md) is still reported, rather than parked as done. 🟡's own
+      # invariant is not asked, since a quick-lane plan.md has no work units.
       #
       # @param target [Symbol, nil]
       # @param subject [Agentilda::Plans::Subject]
       # @return [Boolean]
       def local_only_review?(target, subject)
-        target == :ready_for_review && !@runner.publishes? && !subject.machine.may?(target)
+        return false unless target == :ready_for_review && !@runner.publishes? && !subject.machine.may?(target)
+
+        (Plans::STATUS_BY_KEY.fetch(target).requires - %w[pull-requests.md]).all? { subject.file?(it) }
       end
 
       # The build stays at 🟡, finished for this run, saying why.

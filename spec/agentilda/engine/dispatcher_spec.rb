@@ -615,6 +615,23 @@ RSpec.describe Agentilda::Engine::Dispatcher, :tree do
       end
     end
 
+    context "when the build leaves the plan without its spec" do
+      let!(:attempts) do
+        careless = executor_with do |_agent, subject, _round|
+          File.delete(File.join(subject.feature.path, "spec.md"))
+          "Completed"
+        end
+        runner_with(careless, agents: agents.only("r2d2-mechanic")).call
+      end
+
+      it "reports the missing file instead of parking the plan as built" do
+        aggregate_failures do
+          expect(attempts.first.ok).to be(false)
+          expect(attempts.first.note).to include("`spec.md`")
+        end
+      end
+    end
+
     context "when the builder's note says approved" do
       let!(:attempts) do
         approving = executor_with do |agent, subject, round|
