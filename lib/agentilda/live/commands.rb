@@ -336,16 +336,19 @@ module Agentilda
       # it carries on in that session on the same model. Answered once the
       # continuation has started.
       #
-      # @return [Agentilda::Execution::Executor::Compaction, String] still at
-      #   work, or why it restarts afresh instead
+      # @return [Agentilda::Execution::Executor::Compaction] still at work
+      # @raise [Refusal] when it cannot be compacted
       def compact(command, dispatcher)
         job = dispatcher.job(command.car) or raise Refusal, "#{command.car} is not running"
         adapter = dispatcher.adapter_for(job)
         raise Refusal, "#{adapter.name} cannot resume a session, so #{command.agent} cannot be compacted" unless adapter.compacts?
         return dispatcher.compact(command.car) if job.handle.session
 
+        # Nothing is compacted, so the reply is a refusal, though the agent
+        # still restarts in a fresh session, which is as compact as it gets.
         dispatcher.requeue(command.car)
-        "#{command.agent} has no session id yet, so it cannot be compacted: it stops at its next step " \
+        raise Refusal,
+          "#{command.agent} has no session id yet, so it cannot be compacted: it stops at its next step " \
           "and restarts from its resume note in a fresh session"
       end
 

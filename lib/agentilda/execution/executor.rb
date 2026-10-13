@@ -172,6 +172,7 @@ module Agentilda
         # @param grace [Integer] seconds before the agent is made to stop
         # @return [Agentilda::Execution::Executor::Compaction]
         def compact!(model: nil, grace: Control::GRACE)
+          process = nil
           @mutex.synchronize do
             return @compaction if @compaction && !@compaction.finished?
 
@@ -180,10 +181,14 @@ module Agentilda
               @compaction.refuse!("the agent finished before it could be compacted")
               return @compaction
             end
+            # Aimed at the process running now, before the request is visible:
+            # once it is, {Executor#call} may already be compacting, and an
+            # INTERRUPT or a kill sent after that would stop the resumed session.
+            process = child
+            Control.write(control, Control::INTERRUPT) if control
             @requested = @compaction
           end
-          Control.write(control, Control::INTERRUPT) if control
-          stop_after(grace, child)
+          stop_after(grace, process)
           @compaction
         end
 
@@ -475,15 +480,20 @@ module Agentilda
         handle.clock = clock
         clock.start
 
-        status = drain(child, sessions, handle)
-        while (compaction = handle.take_compaction)
-          resumed = carry_on(compaction, agent, subject, root:, profile:, trace:, handle:, sessions:, &on_progress)
-          status = resumed if resumed
+        begin
+          status = drain(child, sessions, handle)
+          while (compaction = handle.take_compaction)
+            resumed = settling(compaction, agent) do
+              carry_on(compaction, agent, subject, root:, profile:, trace:, handle:, sessions:, &on_progress)
+            end
+            status = resumed if resumed
+          end
+        ensure
+          handle.close!
+          clock.stop
+          Control.release(control)
         end
-        handle.close!
         transcript = sessions.current
-        clock.stop
-        Control.release(control)
 
         if handle.killed
           return spent(sessions,
@@ -666,6 +676,19 @@ module Agentilda
           &)
         compaction.done!(compacted_note(agent, sessions, model, compaction))
         drain(child, sessions, handle)
+      end
+
+      # A compaction whose `/compact` or continuation could not even be
+      # started is refused before the error goes on up, so the person who
+      # asked is answered rather than left waiting on a thread that died.
+      #
+      # @param compaction [Agentilda::Execution::Executor::Compaction]
+      # @return [Process::Status, nil] what the block returned
+      def settling(compaction, agent)
+        yield
+      rescue StandardError => e
+        compaction.refuse!("could not compact #{agent.name}: #{e.message}") unless compaction.finished?
+        raise
       end
 
       # @return [String, nil] why the session cannot be compacted, if it cannot

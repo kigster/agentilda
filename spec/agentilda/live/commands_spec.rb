@@ -327,10 +327,11 @@ RSpec.describe Agentilda::Live::Commands, :tree do
       context "when the agent has not named its session" do
         before { send_command("compact", plan: "001.00", agent:) }
 
-        it "falls back to INTERRUPT and a fresh session, saying why" do
+        it "refuses, falling back to INTERRUPT and a fresh session, and says why" do
           aggregate_failures do
-            expect(apply.first.reason).to eq("#{agent} has no session id yet, so it cannot be compacted: it stops at " \
-                                             "its next step and restarts from its resume note in a fresh session")
+            expect(apply.first).to have_attributes(status: "refused",
+              reason: "#{agent} has no session id yet, so it cannot be compacted: it stops at " \
+                      "its next step and restarts from its resume note in a fresh session")
             expect(control_of(car)).to eq("INTERRUPT")
           end
         end

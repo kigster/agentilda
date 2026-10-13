@@ -222,6 +222,37 @@ RSpec.describe Agentilda::Execution::Executor, :tree do
     end
   end
 
+  context "when the continuation cannot even be started" do
+    let(:spawn) do
+      lambda do |argv, **|
+        spawned << argv
+        raise Errno::ENOENT, "claude" if spawned.size == 3
+
+        spawned.size == 1 ? child(agent_stream, during: during_agent) : child(compact_stream)
+      end
+    end
+
+    let(:raised) { [] }
+
+    before do
+      result
+    rescue StandardError => e
+      raised << e
+    end
+
+    it "lets the error go on up" do
+      expect(raised.map(&:class)).to eq([Errno::ENOENT])
+    end
+
+    it "refuses the request before the error goes on up" do
+      expect(compaction.to_h).to include(status: "refused", reason: start_with("could not compact luke-backend: No such file"))
+    end
+
+    it "still releases the control file" do
+      expect(File.exist?(handle.control)).to be(false)
+    end
+  end
+
   describe Agentilda::Execution::Executor::Handle do
     subject(:handle) { described_class.new }
 
@@ -257,6 +288,35 @@ RSpec.describe Agentilda::Execution::Executor, :tree do
 
       it "kills it once the grace is spent" do
         expect(process).to have_received(:kill).with("KILL")
+      end
+    end
+
+    # The executor may move on to /compact the moment the request is visible,
+    # so the INTERRUPT and the kill timer are aimed at the process that was
+    # running when it was asked, never at the one that replaced it.
+    context "when the agent is replaced while the request is being made" do
+      let(:first) { instance_double(Agentilda::Execution::Child, alive?: true, kill: nil) }
+      let(:replacement) { instance_double(Agentilda::Execution::Child, alive?: true, kill: nil) }
+      let(:visible) { [] }
+
+      before do
+        handle.child = first
+        handle.control = Agentilda::Execution::Control.register(Dir.mktmpdir, "001.00-luke")
+        allow(Agentilda::Execution::Control).to receive(:write).and_wrap_original do |original, *args|
+          visible << handle.instance_variable_get(:@requested)
+          handle.child = replacement
+          original.call(*args)
+        end
+        allow(Thread).to receive(:new).and_yield
+        handle.compact!(grace: 0)
+      end
+
+      it "writes the INTERRUPT before the request can be taken" do
+        expect(visible).to eq([nil])
+      end
+
+      it "never kills the replacement" do
+        expect(replacement).not_to have_received(:kill)
       end
     end
   end
