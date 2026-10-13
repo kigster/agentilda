@@ -39,7 +39,7 @@ eval "$(tilda completion zsh)"
 eval "$(alock completion zsh)"
 ```
 
-To give your coding agents the bundled `tilda` skills (how the factory works, and how to spec, run, inspect and sync plans), copy them into the shared skill store:
+To give your coding agents the bundled `tilda` skills, copy them into the shared skill store. There are seven: `tilda` (how the factory works, and which of the others to load), `tilda-start` (put a project on tilda), `tilda-spec` (create a plan and write its spec), `tilda-documents` (the files in a plan folder and the formats tilda parses), `tilda-run` (run the agents, clear blocks), `tilda-status` (where plans stand, the control room) and `tilda-sync` (folder names, PR titles, Linear).
 
 ```bash
 tilda skills install          # copies skills/* into ~/.agents/skills; -h lists them
@@ -290,7 +290,7 @@ Defaults for `run` live in the project's `.tilda.yml`, under `jobs` and `command
 
 ### Following a run, and stopping it
 
-Every command that runs agents (`run`, `unblock` and `create`) shows each agent as a spinner line on STDERR on a terminal, and writes the same progress to its log everywhere else (a pipe, a dry run, cron). A web control room, from which a person can watch the board and message, interrupt, kill or extend an agent, is planned in `.plans/004.00-⚪️ → web-control-room/`; the terminal UI that used to do part of this has been removed.
+Every command that runs agents (`run`, `unblock` and `create`) shows each agent as a spinner line on STDERR on a terminal, and writes the same progress to its log everywhere else (a pipe, a dry run, cron). When Redis answers, `run` also serves a web control room on `http://127.0.0.1:4747` and opens it, from which a person can watch the board and message, interrupt, kill or extend an agent (`--no-web`, `--no-open`, `--port`, `--redis-url`). Without Redis the run goes on headless. `tilda web` serves the page on its own, and `tilda web --demo` shows a sample run.
 
 Ctrl-C once asks each running agent to write a `RESUME:` note into its plan's `mailbox.md` and sign `Interrupted`; every agent reads its mail before it starts, so a later run picks up where this one stopped instead of redoing the work. A second press aborts immediately. It works through a `SIGINT` handler.
 

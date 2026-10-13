@@ -59,3 +59,12 @@ commands:                 # per-command option defaults, what agentilda.json use
 - `-n` / `--dry-run` previews. Needs no project root.
 - The gemspec ships `skills/**/*`.
 - `tilda skills install -h` lists every bundled skill: its name, the first sentence of its `description`, and whether it is already installed at the default destination. The list is read from `skills/*/SKILL.md` frontmatter when help renders, so a new skill appears without editing the command.
+
+## 6. Seven skills: `tilda-start` and `tilda-documents` join the five
+
+Decided 2026-10-13.
+
+- `tilda-start` walks a project onto tilda: prerequisites (tilda, git, `gh`, `claude`, Redis), `tilda init`, `tilda skills install`, the first plan.
+- The leftover `skills/tilda-factory/` draft is reworked into `tilda-documents`: what each file in a plan folder is for, the formats the code parses (B1/A1, spec frontmatter, `pull-requests.md`, the retroactive provenance line), and templates matching what `tilda create` and the agents write.
+- Renamed because the umbrella `tilda` skill already calls itself the software factory; a second skill with "factory" in its name would compete for the same trigger while covering something narrower. "Documents" names what it covers.
+- Which state requires which file is never copied into a skill; they point at `tilda docs` and `tilda states`.
