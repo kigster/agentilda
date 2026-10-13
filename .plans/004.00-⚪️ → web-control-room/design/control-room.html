@@ -264,8 +264,10 @@
   .unblock-head { display: flex; align-items: center; gap: 12px; margin-bottom: 10px; }
   .unblock-head h2 { margin: 0; font-size: 18px; font-weight: 800; letter-spacing: -0.01em; }
   .unblock-head .btn { margin-left: auto; }
-  .unblock .ask { max-width: 760px; }
-  .unblock textarea { min-height: 72px; }
+  /* The answer takes the widget's full width; Send sits to its right, at the bottom, so the editor can be tall. */
+  .unblock-answer { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 12px; align-items: end; }
+  .unblock .md { height: 180px; min-height: 120px; resize: vertical; }
+  @media (max-width: 640px) { .unblock-answer { grid-template-columns: minmax(0, 1fr); } }
   @media (max-width: 960px) { .unblock { margin: 12px 16px 0; } }
   .ask.is-done { border-left-color: var(--hairline); padding: 10px 14px; }
   @media (max-width: 960px) { .rail, .drawer { position: static; max-height: 70vh; } }
@@ -923,7 +925,15 @@
       el.dataset.ask = ask.id;
       if (ask.done) { el.classList.add("is-done"); el.innerHTML = `<p class="ask-done">${ask.done}</p>`; return el; }
       const who = `<p class="ask-who">${ask.plan} — ${ask.agent}</p>`;
-      if (ask.kind === "question") {
+      if (ask.kind === "question" && prefix === "u") {
+        // The unblock widget spans the board, so the answer gets its whole width as a Markdown editor, with Send beside it.
+        el.innerHTML = `${who}<p class="ask-text">${ask.text}</p><div class="unblock-answer"></div>`;
+        const { box, ta } = editor(ask.draft || "", `Your answer, in Markdown. ${SEND_KEYS} sends it.`, "Your answer", `u-${ask.id}`);
+        ta.addEventListener("input", () => { ask.draft = ta.value; ta.removeAttribute("aria-invalid"); });
+        const send = button("Send answer", "btn-primary", () => answer(ask, ta));
+        send.setAttribute("aria-keyshortcuts", MAC ? "Meta+Enter" : "Control+Enter");
+        el.querySelector(".unblock-answer").append(box, send);
+      } else if (ask.kind === "question") {
         el.innerHTML = `${who}<p class="ask-text">${ask.text}</p>
           <label class="sr-only" for="${prefix}-${ask.id}">Your answer</label>
           <textarea id="${prefix}-${ask.id}" placeholder="Your answer. ${SEND_KEYS} sends it."></textarea>
@@ -1583,10 +1593,10 @@
         .replace(/\[[^\]]+\]\([^)]+\)/g, m => `<span class="a">${m}</span>`);
     }).join("\n") + "\n";
   }
-  function editor(value, placeholder, label) {
+  function editor(value, placeholder, label, id = "md-input") {
     const box = document.createElement("div");
     box.className = "md";
-    box.innerHTML = `<pre aria-hidden="true"></pre><label class="sr-only" for="md-input"></label><textarea id="md-input" spellcheck="true"></textarea>`;
+    box.innerHTML = `<pre aria-hidden="true"></pre><label class="sr-only" for="${id}"></label><textarea id="${id}" spellcheck="true"></textarea>`;
     const [pre, , ta] = box.children;
     box.querySelector("label").textContent = label;
     ta.placeholder = placeholder;
