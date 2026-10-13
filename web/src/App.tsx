@@ -73,8 +73,12 @@ function ControlRoom({ board, connection, fixture }: { board: BoardData; connect
   const [openCar, setOpenCar] = useState<OpenCar | null>(null);
   const [unblocking, setUnblocking] = useState<string | null>(null);
   const [logsSeenAt, setLogsSeenAt] = useState<string | null>(null);
-  // #start in the URL opens the idea dialog, so `tilda start` can send the browser straight to it (W19).
-  const [ideaOpen, setIdeaOpen] = useState(() => window.location.hash === "#start");
+  // #start in the URL opens the idea dialog, so `tilda start` can send the browser straight to it (W19). A page
+  // `tilda start` joined was opened before it, without the hash, and mounts here on the engine's first board: when
+  // that board has nothing to do, it opens on the idea dialog too.
+  const [ideaOpen, setIdeaOpen] = useState(
+    () => window.location.hash === "#start" || (me.plans.length === 0 && me.backlog.length === 0),
+  );
   const pressedSelected = useRef(false);
 
   const runs = useMemo(() => testRuns(me.plans), [me.plans]);

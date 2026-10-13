@@ -127,6 +127,15 @@ it("opens the idea dialog when the page is loaded at #start", async () => {
   expect(await screen.findByRole("dialog")).toBeInTheDocument();
 });
 
+it("opens the idea dialog when an engine's first board has nothing to do", async () => {
+  const empty = sampleBoard();
+  empty.me.plans = [];
+  empty.me.backlog = [];
+  vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(JSON.stringify(empty), { status: 200 })));
+  renderApp();
+  expect(await screen.findByRole("dialog")).toBeInTheDocument();
+});
+
 it("works in a private window, where storage throws", async () => {
   window.history.replaceState(null, "", "/?fixture");
   const get = vi.spyOn(Storage.prototype, "getItem").mockImplementation(() => {
