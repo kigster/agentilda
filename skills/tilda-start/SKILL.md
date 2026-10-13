@@ -16,8 +16,8 @@ Check each, then report every gap at once with its fix. Ask before installing an
 | `command -v tilda && tilda version` | `gem install agentilda` |
 | `git rev-parse --show-toplevel` | offer `git init`; without git, `tilda run` needs `--isolation shared` and opens no pull request |
 | `gh auth status` | `gh auth login`; a "token in GH_TOKEN is invalid" line means `unset GH_TOKEN` and retry |
-| `command -v claude` | install Claude Code; every agent runs through it |
-| Redis answers: `redis-cli -u "${REDIS_URL:-redis://localhost:6379/0}" ping` | start `redis-server`, or point tilda at another Redis (below) |
+| the agents' CLI: `command -v claude`, the default adapter, or `codex` / `pi` when the plans' `spec.md` select them per phase | install the CLI the plans use; `tilda agents list` shows each agent's adapter |
+| Redis answers at the URL tilda will use (order below): `url=$(ruby -ryaml -e 'puts((YAML.safe_load_file(".tilda.yml") rescue {}).to_h["redis_url"])' 2>/dev/null); redis-cli -u "${url:-${REDIS_URL:-redis://localhost:6379/0}}" ping` | start `redis-server`, or point tilda at another Redis (below) |
 
 Redis carries the control room, its commands and plan claims. Without it `tilda run` still works, headless, and says so. tilda looks for it in `--redis-url`, then `redis_url:` in `.tilda.yml`, then `$REDIS_URL`, then `redis://localhost:6379/0`; `tilda web` checks `$AGENTILDA_REDIS_URL` before all of those but the flag.
 

@@ -21,7 +21,7 @@ description: The agentilda software factory (`tilda` CLI) that drives `.plans/` 
 ## Before any command
 
 1. `command -v tilda` must answer. Otherwise tell the user to install the gem (`gem install agentilda`) and stop. These skills ship inside the gem; after a gem upgrade, `tilda skills install --overwrite` refreshes them in `~/.agents/skills`.
-1. `tilda` finds the project root by itself: the nearest ancestor holding `.tilda.yml` or `.plans/`, else the nearest `.git`. With none of them, commands exit 66; load `tilda-start`.
+1. `tilda` finds the project root by itself: the nearest ancestor holding `.tilda.yml` or `.plans/`, else the nearest `.git`. With none of them, project commands exit 66; load `tilda-start`. `init`, `docs`, `states`, `agents`, `describe`, `skills`, `eval`, `completion` and `version` need no project and still work.
 1. Bundler errors inside a Ruby project (a Gemfile that is not agentilda's) come from the calling shell's Bundler variables. Re-run in a subshell: `(unset BUNDLE_GEMFILE BUNDLE_BIN_PATH BUNDLER_SETUP BUNDLER_VERSION RUBYOPT RUBYLIB; tilda …)`.
 1. A flag these skills use being rejected (`-n`, or output saying `Re-run with --commit`) means the `tilda` on PATH is older than the skills: an rbenv shim or a stale gem shadowing the one that installed them. `which -a tilda` and `tilda version` show which; call the right one by its full path and tell the user.
 1. `--help` on any command or subcommand is the source of truth for flags (`tilda resync dirs --help`). Read it rather than guessing a flag.
