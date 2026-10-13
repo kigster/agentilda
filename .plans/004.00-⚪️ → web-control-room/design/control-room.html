@@ -292,6 +292,8 @@
   .md-mode[aria-pressed="true"] { background: color-mix(in srgb, var(--ink) 14%, transparent); color: var(--ink); }
   .md-mode[aria-pressed="false"] { background: transparent; color: var(--ink-soft); }
   .unblock-buttons { display: flex; flex-direction: column; gap: 8px; }
+  .btn-choice { min-width: 76px; justify-content: center; }
+  .btn-words { font-size: 13px; text-decoration: underline; text-underline-offset: 3px; }
   .ask-held { margin-left: 6px; padding: 1px 8px; border-radius: 999px; background: var(--held); color: #fff; font-weight: 700; }
   .ask.is-held { border-left-color: var(--alarm); }
   .unblock-answer { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 12px; align-items: end; }
@@ -750,8 +752,9 @@
     <div class="d-block" id="d-block" hidden>
       <p><strong>Blocked on your answer.</strong> <span id="d-block-q"></span></p>
       <label class="sr-only" for="d-answer">Your answer</label>
+      <div class="ask-actions ask-choices" id="d-choices" hidden></div>
       <textarea id="d-answer" placeholder="Your answer"></textarea>
-      <div class="ask-actions"><button class="btn btn-primary" type="button" id="d-answer-send">Send answer</button></div>
+      <div class="ask-actions" id="d-answer-row"><button class="btn btn-primary" type="button" id="d-answer-send">Send answer</button></div>
     </div>
     <ol class="transcript" id="d-transcript" aria-live="polite"></ol>
     <form class="composer" id="composer">
@@ -1071,6 +1074,11 @@
       if (ask.done) { el.classList.add("is-done"); el.innerHTML = `<p class="ask-done">${ask.done}</p>`; return el; }
       const who = `<p class="ask-who">${ask.plan} — ${ask.agent}${ask.held ? ` <span class="ask-held">held blocked</span>` : ""}</p>`;
       el.classList.toggle("is-held", Boolean(ask.held));
+      if (ask.kind === "question" && ask.choices && !ask.inWords) {
+        el.innerHTML = `${who}<p class="ask-text">${ask.text}</p><div class="ask-actions ask-choices"></div>`;
+        el.querySelector(".ask-choices").append(...choiceButtons(ask, prefix), holdButton(ask));
+        return el;
+      }
       if (ask.kind === "question" && prefix === "u") {
         // The unblock widget spans the board, so the answer gets its whole width as a Markdown editor, with Send beside it.
         el.innerHTML = `${who}<p class="ask-text">${ask.text}</p><div class="unblock-answer"></div>`;
@@ -1136,6 +1144,17 @@
       if (window.hljs && lang && hljs.getLanguage(lang)) code.innerHTML = hljs.highlight(code.textContent, { language: lang, ignoreIllegals: true }).value;
     }
   }
+  // A yes/no question is answered by its buttons. "Answer in words" swaps them for the usual text box, for the times
+  // the honest answer is "yes, but".
+  function choiceButtons(ask, prefix) {
+    return [...ask.choices.map(c => button(c, "btn-choice", () => settle(ask, `Answered ${c.toLowerCase()} to ${ask.agent}.`, c))),
+      button("Answer in words", "btn-quiet btn-words", () => {
+        ask.inWords = true;
+        paintAsks(); paintDrawer();
+        if (unblocking?.ask === ask) $("unblock-body").replaceChildren(askCard(ask, "u"));
+        document.getElementById(`${prefix}-${ask.id}`)?.focus();
+      })];
+  }
   // Hold blocked keeps the agent parked on purpose: no timeout or default answer moves it, and its pill turns solid
   // red. Pressing it again releases the hold; the question still waits for an answer.
   function holdButton(ask) {
@@ -1192,13 +1211,15 @@
     "Redis refused the connection on 6379. Is it meant to be running for this plan?",
     "The PR has a merge conflict in lib/agentilda/cli.rb. Should I rebase onto main?",
   ];
+  // Questions the agent marked as yes/no (W30): they are answered with two buttons instead of a text box.
+  const YES_NO = new Set([BLOCKERS[2], BLOCKERS[3]]);
   // Which of the two block states a question puts its plan in. The real board reads it from the plan's folder name.
   const PRODUCT_QUESTIONS = [BLOCKERS[1], "Should Redis keys carry the checkout path, or the remote URL plus the worktree name?"];
   let askSeq = 1;
   function block(plan, car, text) {
     car.blocked = text;
     car.log.unshift(`Asked you: ${text}`);
-    asks.push({ id: `q${++askSeq}`, kind: "question", plan: plan.id, agent: car.agent, text });
+    asks.push({ id: `q${++askSeq}`, kind: "question", plan: plan.id, agent: car.agent, text, choices: YES_NO.has(text) ? ["Yes", "No"] : null });
     paintNumbers(plan);
     paintAsks();
     $("announcer").textContent = `${car.agent} on ${plan.id} is blocked and needs you.`;
@@ -1278,6 +1299,15 @@
     const open = asks.find(a => !a.done && a.plan === watching.plan.id && a.agent === car.agent);
     $("d-block").hidden = !(car.blocked && open);
     if (open) $("d-block-q").textContent = open.text;
+    const yesNo = Boolean(open?.choices && !open.inWords);
+    $("d-answer").hidden = $("d-answer-row").hidden = yesNo;
+    $("d-choices").hidden = !yesNo;
+    // Rebuilt only when the question changes, so the every-second repaint never takes focus off a button.
+    if (yesNo && $("d-choices").dataset.ask !== open.id) {
+      $("d-choices").dataset.ask = open.id;
+      $("d-choices").replaceChildren(...choiceButtons(open, "d"));
+      for (const b of $("d-choices").querySelectorAll(".btn-choice")) b.addEventListener("click", () => paintDrawer());
+    }
     $("d-transcript").replaceChildren(...car.log.map(line => Object.assign(document.createElement("li"), { textContent: line })));
   }
   $("drawer-close").addEventListener("click", closeDrawer);
@@ -2484,7 +2514,7 @@
     }
     if (tick % 17 === 0) {
       const free = plans.flatMap(p => p.cars.filter(c => !c.blocked && !c.run).map(c => [p, c]));
-      if (free.length && asks.filter(a => !a.done).length < 4) { const [p, c] = pick(free); block(p, c, pick(BLOCKERS)); }
+      if (free.length && asks.filter(a => !a.done).length < 4) { const [p, c] = pick(free); block(p, c, tick === 17 ? BLOCKERS[3] : pick(BLOCKERS)); }
     }
   }, 1000);
 

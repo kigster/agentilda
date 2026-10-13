@@ -281,6 +281,14 @@ Settled by the author on 2026-10-13.
 - The repository key is the GitHub URL itself (W26), so the repository you cloned decides which factory you join, and nothing else does.
 - **Stop All Local** (formerly Stop run) says what it can do: stop this machine's agents. The page's **?** pill explains all of the above; its copy is the author's to write (`design.md`, "Help dialog").
 
+### W30. Yes/no questions are answered with buttons, and the agent says which questions they are
+
+Settled by the author on 2026-10-13.
+
+- A question an agent asks may carry `answers: [yes, no]` in its mailbox message (plan `003.00`). The page then offers **Yes** and **No** buttons in place of the text box, in the drawer, Needs you and the unblock widget, with **Answer in words** to fall back to the text box.
+- The agent declares it; the page never guesses from the wording. "Should I start it, or skip the integration specs?" starts with "Should I" and is not a yes/no question, and a guess that offers Yes to it would send an answer that means nothing.
+- The answer reaches the agent as the plain word (`yes` or `no`), so an agent can branch on it without parsing prose. The agents' prompts gain one line: ask yes/no questions as yes/no, and mark them.
+
 ### W12. Order of work
 
 0. Plan `003.00` lands first, or at least its phases B and C: the JSON mailbox, Redis Streams, the hook and `last-known-state`.

@@ -148,3 +148,18 @@ What it has to say:
 - **New idea** — "Describe it here; plans are created for you": the idea dialog, as before.
 - **Choose an existing plan** — "Add a plan from .plans to this run": the same menu swaps its items for the plans this machine may take, with ← Back at the top. A plan is offered when it is **not complete** and **not being worked on by any machine**, this one included (no W26 claim on it). **Blocked plans are offered**, marked 🅱️: the person adding one is right here to answer it, and its question goes straight to Needs you. Each item shows the plan's station and lane. A note at the bottom names what was left out and why ("001, 002 in this run; 008 on alex@build-01; 011 complete").
 - Choosing a plan claims it (`SET agentilda:<repo>:claim:<plan> <node> NX EX 60`) before it joins the run, so two machines choosing the same plan at once cannot both get it; the one that loses the race is told the plan was just taken.
+
+## Yes/no questions
+
+- An agent that asks a yes/no question ("The PR has a merge conflict in lib/agentilda/cli.rb. Should I rebase onto main?") marks it so (W30), and every place the question shows, the drawer, Needs you and the unblock widget, offers **Yes** and **No** buttons instead of a text box, beside Hold blocked.
+- **Answer in words** swaps the buttons for the usual text box, for the times the honest answer is "yes, but". The choice sticks to that question everywhere it shows.
+- The answer goes back to the agent as the word itself, and the card says "Answered yes to luke-backend."
+
+## Before going live
+
+The mockup carries pieces that exist only to make it demonstrable. None of them ships:
+
+- [ ] **Remove the "Sample data" badge** from the header. The live page shows real numbers and has nothing to flag.
+- [ ] Drop the simulation: the one-second ticks, random blockers and test runs, the timed merges, the sample plans, machines and backlog. Everything comes from the API and its event stream (W9, W13).
+- [ ] Drop the mockup's localStorage of settled requests (`agentilda-mockup-settled`); a settled request lives in the plan's mailbox.
+- [ ] Replace the draft help copy with the author's (see "Help dialog").
