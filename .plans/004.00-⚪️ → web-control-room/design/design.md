@@ -37,7 +37,7 @@ The review labels keep the colours of plan 005 (L1).
 
 **Lane grooves:** rows are separated by a groove pressed into the board rather than a hairline: a 6 px channel inset 10 px from each edge, shadowed along its top and catching light along its bottom (`--groove`, `--groove-shade`, `--groove-light`). The channel is deeper and the highlight fainter in the dark theme.
 
-**Type:** Overpass for everything. It descends from Highway Gothic, the US road-sign face, which is wayfinding type for a wayfinding board. Station names are set bold and tight. Overpass Mono appears in exactly one place: agents' activity lines, which really are terminal output. Every number uses tabular figures, so ticking counters don't jitter.
+**Type:** Overpass for everything. It descends from Highway Gothic, the US road-sign face, which is wayfinding type for a wayfinding board. Station names are set bold and tight. Barlow Condensed SemiBold sets the machine bands of the merged board, at the author's request, and nothing else. Overpass Mono appears in exactly one place: agents' activity lines, which really are terminal output. Every number uses tabular figures, so ticking counters don't jitter.
 
 **Layout:** a top bar with the run's totals, the board on the left, and a rail on the right listing "Needs you" items (questions, interrupts). Selecting a car opens a drawer in place of the rail, with that agent's transcript and the message controls. Everything is left aligned. Below 960 px the rail drops beneath the board, and the board scrolls sideways inside its own frame, never the page.
 
@@ -86,7 +86,7 @@ The review labels keep the colours of plan 005 (L1).
 ## Other machines
 
 - **Machines sharing one Redis** (decision W26) each get a tab after Board, labelled `username@hostname` with a 🔒, drawing that machine's plans exactly as the board draws ours, minus every control: cars are plain cards with the model as text, and the tab opens with "Read only. alex@build-01 is working on these in ~/src/agentilda; this machine will not start them. Last seen 4s ago."
-- **All machines** in the header is a pressed-state toggle that appends every other machine's rows under ours on the Board, each machine opening with a band in the highlight colour (`username@hostname` at 19 px, then its IP, plan count, "read only" and last seen; ours gets one too, marked "this machine"), its rows at 85% opacity (first 25%, raised by the author once it was on screen). Fading by opacity rather than colour keeps the lane colours legible as lanes, while making it obvious which rows are not ours to touch.
+- **All machines** in the header is a pressed-state toggle that appends every other machine's rows under ours on the Board, each machine opening with a band in the highlight colour (Barlow Condensed SemiBold, `username@hostname` at 24 px, then its IP, plan count, "read only" and last seen; ours gets one too, marked "this machine"), its rows at 85% opacity (first 25%, raised by the author once it was on screen). Fading by opacity rather than colour keeps the lane colours legible as lanes, while making it obvious which rows are not ours to touch.
 - **This machine's name** sits in the project line under the logo ("On dana@studio-mini"), not among the run's numbers, which is where it was first put and where it pushed Stop run onto a second line.
 
 ## Principles
