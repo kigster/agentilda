@@ -29,7 +29,7 @@ export function useQuestion(plan: Plan, question: Question, onCommand: SendComma
 
   const settle = async (text: string, note: string) => {
     const reply = await command.send({ ...base, kind: "answer", payload: { question: questionRef(question), text } }, note);
-    if (reply.status !== "refused") {
+    if (reply && reply.status !== "refused") {
       update({ settled: note, draft: "" });
       onAnswered?.(text);
     }
@@ -50,8 +50,9 @@ export function useQuestion(plan: Plan, question: Question, onCommand: SendComma
       { ...base, kind: holding ? "hold_blocked" : "release_hold", payload: { question: questionRef(question) } },
       holding ? `${plan.ordinal} held blocked. Its red pill in the status bar brings it back.` : `${plan.ordinal} no longer held.`,
     );
-    if (reply.status !== "refused") setHeld(holding);
-    return reply.status !== "refused" && holding;
+    if (!reply || reply.status === "refused") return false;
+    setHeld(holding);
+    return holding;
   };
   return {
     state, update, command, invalid, isHeld, answer, choose, toggleHold,

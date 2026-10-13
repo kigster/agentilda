@@ -47,8 +47,8 @@ export function typeInEditor(container: HTMLElement, text: string) {
 }
 
 /** Finds text where the panel shows it, not in the page's announcer, which repeats it. */
-export const findInline = (text: string | RegExp) => screen.findByText(text, { ignore: "[data-testid=announcer], script, style" });
-export const getInline = (text: string | RegExp) => screen.getByText(text, { ignore: "[data-testid=announcer], script, style" });
+export const findInline = (text: string | RegExp) => screen.findByText(text, { ignore: "[data-testid=announcer], [data-testid=announcer] *, script, style" });
+export const getInline = (text: string | RegExp) => screen.getByText(text, { ignore: "[data-testid=announcer], [data-testid=announcer] *, script, style" });
 
 // axe asks a canvas for colours; jsdom has none and says so loudly. Nothing here depends on it.
 HTMLCanvasElement.prototype.getContext = (() => null) as typeof HTMLCanvasElement.prototype.getContext;

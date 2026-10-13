@@ -4,11 +4,13 @@ import { AnnouncerContext, type Outcome } from "./command";
 
 /** One polite live region for the whole page. Panels inside it announce through it rather than through their own. */
 export function AnnouncerProvider({ children }: { children: ReactNode }) {
-  const [text, setText] = useState("");
+  // Each announcement is a fresh node, keyed by a counter, so saying the same sentence twice is heard twice.
+  const [said, setSaid] = useState({ text: "", n: 0 });
+  const [announce] = useState(() => (text: string) => setSaid((was) => ({ text, n: was.n + 1 })));
   return (
-    <AnnouncerContext.Provider value={setText}>
+    <AnnouncerContext.Provider value={announce}>
       {children}
-      <p className="sr-only" aria-live="polite" data-testid="announcer">{text}</p>
+      <p className="sr-only" aria-live="polite" data-testid="announcer"><span key={said.n}>{said.text}</span></p>
     </AnnouncerContext.Provider>
   );
 }

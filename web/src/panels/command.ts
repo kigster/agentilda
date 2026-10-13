@@ -1,6 +1,6 @@
 // Every command answers: accepted, refused with a reason, or done. This is where a panel hears that, says it to screen
 // readers through the page's announcer, and keeps it to show in place.
-import { createContext, useCallback, useContext, useMemo, useState } from "react";
+import { createContext, useCallback, useContext, useMemo, useRef, useState } from "react";
 import type { Command, Reply } from "../api/types";
 import type { SendCommand } from "./support";
 
@@ -24,13 +24,18 @@ export const refusal = (reply: Reply): string => `Refused: ${reply.reason ?? "no
 /**
  * Sends a command and keeps its outcome. A rejected promise (the network, a 5xx) reads as a refusal, so nothing fails
  * silently. `say` is the sentence an accepted or done reply shows, or a function of the reply when the two differ.
+ * One command at a time: a second send while one is in flight (a repeated ⌘ Enter) is a no-op that resolves to null,
+ * because each send would otherwise mint its own id and the engine would act twice.
  */
 export function useCommand(onCommand: SendCommand) {
   const { announce, mounted } = useAnnounce();
   const [outcome, setOutcome] = useState<Outcome | null>(null);
   const [pending, setPending] = useState(false);
+  const inFlight = useRef(false);
   const send = useCallback(
-    async (command: Omit<Command, "id">, say: string | ((reply: Reply) => string)): Promise<Reply> => {
+    async (command: Omit<Command, "id">, say: string | ((reply: Reply) => string)): Promise<Reply | null> => {
+      if (inFlight.current) return null;
+      inFlight.current = true;
       setPending(true);
       let reply: Reply;
       try {
@@ -38,6 +43,7 @@ export function useCommand(onCommand: SendCommand) {
       } catch (error) {
         reply = { id: "", status: "refused", reason: error instanceof Error ? error.message : String(error), at: new Date().toISOString() };
       }
+      inFlight.current = false;
       const next: Outcome = reply.status === "refused" ? { tone: "refused", text: refusal(reply) } : { tone: "ok", text: typeof say === "string" ? say : say(reply) };
       setOutcome(next);
       setPending(false);

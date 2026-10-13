@@ -8,7 +8,9 @@ import { useAsk } from "./asks";
 import { refusal, useCommand, type Outcome } from "./command";
 import { Feedback } from "./feedback";
 import { useQuestion } from "./question";
+import { renderMarkdown } from "./markdown";
 import { ModelSelect } from "./ModelSelect";
+import { pend, unconfirmed, type Pending } from "./transcript";
 import { ariaSendKeys, clock, fmt, isSendKey, modelName, sendKeys, type SendCommand } from "./support";
 
 export interface AgentDrawerProps {
@@ -34,7 +36,8 @@ function QuestionBlock({ plan, question, onCommand, onAnswered }: {
   const q = useQuestion(plan, question, onCommand, onAnswered);
   return (
     <div className="d-block">
-      <p><strong>Blocked on your answer.</strong> <span>{question.body}</span></p>
+      <p><strong>Blocked on your answer.</strong></p>
+      <div className="ask-text" dangerouslySetInnerHTML={{ __html: renderMarkdown(question.body) }} />
       {q.yesNo ? (
         <Choices answers={question.answers ?? []} onChoose={q.choose} onWords={() => q.update({ inWords: true })} disabled={q.command.pending} />
       ) : (
@@ -53,7 +56,9 @@ function QuestionBlock({ plan, question, onCommand, onAnswered }: {
 export function AgentDrawer({ plan, car, models, autocompact, onCommand, onClose }: AgentDrawerProps) {
   const ids = { title: useId(), model: useId(), message: useId() };
   const command = useCommand(onCommand);
-  const [mine, setMine] = useState<{ key: string; lines: string[] }>({ key: car.key, lines: [] });
+  const [mine, setMine] = useState<{ key: string; lines: Pending[] }>({ key: car.key, lines: [] });
+  const history = useRef(car.history);
+  useEffect(() => { history.current = car.history; }, [car.history]);
   const [text, setText] = useState("");
   const [refused, setRefused] = useState<Outcome | null>(null);
   const close = useRef<HTMLButtonElement>(null);
@@ -61,9 +66,16 @@ export function AgentDrawer({ plan, car, models, autocompact, onCommand, onClose
   useEffect(() => { close.current?.focus(); }, [car.key]);
 
   // Lines the person added this visit, newest first, until the snapshot's history carries them.
-  const lines = mine.key === car.key ? mine.lines : [];
+  const lines = unconfirmed(mine.key === car.key ? mine.lines : [], car.history).map((p) => p.text);
+  // Forget the ones the history now holds, so a later trim of the history cannot bring them back.
+  useEffect(() => {
+    setMine((was) => {
+      const kept = unconfirmed(was.lines, car.history);
+      return kept.length === was.lines.length ? was : { ...was, lines: kept };
+    });
+  }, [car.history]);
   const push = (line: string) =>
-    setMine((was) => ({ key: car.key, lines: [line, ...(was.key === car.key ? was.lines : [])] }));
+    setMine((was) => ({ key: car.key, lines: pend(was.key === car.key ? was.lines : [], history.current, line) }));
   const say = (line: string) => push(`you: ${line}`);
   const heard = (said: string, wasRefused: boolean) => {
     if (wasRefused) setRefused({ tone: "refused", text: said });
@@ -78,6 +90,7 @@ export function AgentDrawer({ plan, car, models, autocompact, onCommand, onClose
 
   const act = async (kind: AgentAction) => {
     const reply = await command.send({ kind, plan: plan.ordinal, agent: car.agent, payload: {} }, kind === "compact" ? compactSaid : SAID[kind]);
+    if (!reply) return;
     heard(reply.status === "refused" ? refusal(reply) : kind === "compact" ? compactSaid(reply) : SAID[kind], reply.status === "refused");
   };
   const send = async (e?: FormEvent) => {
@@ -85,6 +98,7 @@ export function AgentDrawer({ plan, car, models, autocompact, onCommand, onClose
     const body = text.trim();
     if (!body) { field.current?.focus(); return; }
     const reply = await command.send({ kind: "message", plan: plan.ordinal, agent: car.agent, payload: { text: body } }, `Message sent to ${car.agent}.`);
+    if (!reply) return;
     if (reply.status === "refused") { heard(refusal(reply), true); return; }
     heard(body, false);
     setText("");

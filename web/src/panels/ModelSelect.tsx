@@ -24,6 +24,14 @@ export function ModelSelect({ plan, car, models, mode, onCommand, labelledBy, on
   const command = useCommand(onCommand);
   // A queued model shows in bold until the next round picks it up; the snapshot's model is the one running now.
   const [queued, setQueued] = useState<string | null>(null);
+  // The queue empties once the snapshot runs the queued model, or when the picker is handed another car.
+  const [seen, setSeen] = useState(car.key);
+  if (seen !== car.key) {
+    setSeen(car.key);
+    setQueued(null);
+  } else if (queued !== null && queued === car.model) {
+    setQueued(null);
+  }
   const value = mode === "next" ? queued ?? car.model : car.model;
   const rank = (id: string) => models.findIndex((m) => m.id === id);
 
@@ -32,6 +40,7 @@ export function ModelSelect({ plan, car, models, mode, onCommand, labelledBy, on
       if (to === car.model) return;
       const said = `Switching from ${modelName(models, car.model)} to ${modelName(models, to)}; it runs /compact first.`;
       const reply = await command.send({ kind: "switch_model", plan, agent: car.agent, payload: { model: to } }, said);
+      if (!reply) return;
       onOutcome?.(reply.status === "refused" ? refusal(reply) : said, reply.status === "refused");
       return;
     }
@@ -41,6 +50,7 @@ export function ModelSelect({ plan, car, models, mode, onCommand, labelledBy, on
     const previous = queued;
     setQueued(staying ? null : to);
     const reply = await command.send({ kind: "set_model", plan, agent: car.agent, payload: { model: to } }, said);
+    if (!reply) { setQueued(previous); return; }
     if (reply.status === "refused") setQueued(previous);
     onOutcome?.(reply.status === "refused" ? refusal(reply) : said, reply.status === "refused");
   };

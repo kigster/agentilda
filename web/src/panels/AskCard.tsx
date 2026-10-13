@@ -154,7 +154,7 @@ function InterruptCard({ ask, onCommand, variant }: { ask: Extract<Ask, { kind: 
   const others = plan.cars.map((c) => c.agent).filter((a) => a !== interrupted.agent);
   const act = async (kind: "resume" | "discard", note: string) => {
     const reply = await command.send({ kind, plan: plan.ordinal, agent: kind === "resume" ? interrupted.agent : null, payload: {} }, note);
-    if (reply.status !== "refused") update({ settled: note });
+    if (reply && reply.status !== "refused") update({ settled: note });
   };
   if (state.settled) return <div className="ask is-done" data-ask={ask.id}><p className="ask-done">{state.settled}</p></div>;
   const pending = command.pending;

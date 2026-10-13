@@ -15,6 +15,9 @@ export interface ActionMenuProps {
   onCommand: SendCommand;
   /** What was left out of the list and why, e.g. "Not listed: 001, 002 in this run; 008 on alex@build-01." */
   note?: string;
+  /** Controls the idea dialog, so the page can open it from the #start hash. Uncontrolled when omitted. */
+  ideaOpen?: boolean;
+  onIdeaOpenChange?: (open: boolean) => void;
 }
 
 function Item({ title, sub, onSelect, className = "" }: { title: string; sub?: string; onSelect: (e: Event) => void; className?: string }) {
@@ -26,11 +29,14 @@ function Item({ title, sub, onSelect, className = "" }: { title: string; sub?: s
   );
 }
 
-export function ActionMenu({ backlog, onCommand, note }: ActionMenuProps) {
+export function ActionMenu({ backlog, onCommand, note, ideaOpen, onIdeaOpenChange }: ActionMenuProps) {
   const [open, setOpen] = useState(false);
   const [view, setView] = useState<"main" | "plans">("main");
   const [filter, setFilter] = useState("");
-  const [idea, setIdea] = useState(false);
+  // The idea dialog is the menu's own unless the page controls it (to open it from #start).
+  const [ownIdea, setOwnIdea] = useState(false);
+  const idea = ideaOpen ?? ownIdea;
+  const setIdea = (next: boolean) => { setOwnIdea(next); onIdeaOpenChange?.(next); };
   const command = useCommand(onCommand);
   const filterRef = useRef<HTMLInputElement>(null);
 
@@ -92,7 +98,7 @@ export function ActionMenu({ backlog, onCommand, note }: ActionMenuProps) {
           </Menu.Content>
         </Menu.Portal>
       </Menu.Root>
-      <Feedback outcome={command.outcome?.tone === "refused" ? command.outcome : null} announced={command.announced} />
+      <Feedback outcome={command.outcome} announced={command.announced} />
       <IdeaDialog open={idea} onOpenChange={setIdea} onCommand={onCommand} />
     </>
   );

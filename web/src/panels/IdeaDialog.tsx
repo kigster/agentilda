@@ -107,7 +107,7 @@ export function IdeaDialog({ open, onOpenChange, onCommand }: IdeaDialogProps) {
       { kind: "create_plans", plan: null, agent: null, payload: { idea: idea.trim(), frontmatter } },
       "Idea sent. Its plans join this run as they are created.",
     );
-    if (reply.status !== "refused") {
+    if (reply && reply.status !== "refused") {
       setIdea("");
       onOpenChange(false);
     }

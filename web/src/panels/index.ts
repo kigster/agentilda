@@ -3,7 +3,7 @@ import "./panels.css";
 
 export type { SendCommand } from "./support";
 export { AnnouncerProvider, Feedback } from "./feedback";
-export { useCommand, type Outcome } from "./command";
+export { useAnnounce, useCommand, type Outcome } from "./command";
 export { AsksProvider } from "./AsksProvider";
 export { AskStore } from "./asks";
 export { MarkdownEditor, type MarkdownEditorProps } from "./MarkdownEditor";

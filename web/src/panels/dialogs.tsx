@@ -48,7 +48,7 @@ export function StopAllDialog({ agents, plans, onCommand, ...openable }: StopAll
   const cancel = useRef<HTMLButtonElement>(null);
   const stop = async () => {
     const reply = await command.send({ kind: "stop_all", plan: null, agent: null, payload: {} }, `Stopping ${agents} agents on this machine.`);
-    if (reply.status !== "refused") setOpen(false);
+    if (reply && reply.status !== "refused") setOpen(false);
   };
   return (
     <Dialog.Root open={open} onOpenChange={(next) => { if (next) command.setOutcome(null); setOpen(next); }}>
