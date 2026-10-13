@@ -280,6 +280,8 @@
                     background: color-mix(in srgb, var(--ink) 6%, transparent); }
   .md-preview a { color: var(--focus); }
   .md-empty { color: var(--ink-soft); }
+  .ask.is-leaving, .unblock.is-leaving { opacity: 0; transition: opacity .5s ease; }
+  @media (prefers-reduced-motion: reduce) { .ask.is-leaving, .unblock.is-leaving { transition: none; opacity: 1; } }
   .unblock-buttons { display: flex; flex-direction: column; gap: 8px; }
   .ask-held { margin-left: 6px; padding: 1px 8px; border-radius: 999px; background: var(--held); color: #fff; font-weight: 700; }
   .ask.is-held { border-left-color: var(--alarm); }
@@ -943,14 +945,15 @@
 
   // Rail
   function paintAsks() {
-    const open = asks.filter(a => !a.done);
+    // A held request leaves the rail: its solid red pill is the way back to it.
+    const open = asks.filter(a => !a.done && !a.held);
     $("needs-count").textContent = open.length ? `(${open.length})` : "";
     // A new request must not cost anyone the answer they are halfway through typing.
     const focused = document.activeElement?.id, scrolled = $("asks").scrollTop;
     $("asks").innerHTML = "";
     if (!asks.length) { $("asks").innerHTML = `<p class="empty">Nothing waiting on you. Agents will ask here.</p>`; return; }
     // Open requests first, oldest at the top; settled ones sink below them.
-    for (const ask of [...asks.filter(a => !a.done), ...asks.filter(a => a.done)]) $("asks").append(askCard(ask, "a"));
+    for (const ask of [...open, ...asks.filter(a => a.done)]) $("asks").append(askCard(ask, "a"));
     $("asks").scrollTop = scrolled;
     const back = focused && document.getElementById(focused);
     if (back && back.closest("#asks")) { back.focus(); if (back.setSelectionRange) back.setSelectionRange(back.value.length, back.value.length); }
@@ -1028,8 +1031,23 @@
     const b = button(ask.held ? "Release hold" : "Hold blocked", "btn-quiet", () => {
       ask.held = !ask.held;
       log("api", "info", `POST /api/commands ${ask.held ? "hold" : "release"} ${ask.plan}/${ask.agent} accepted`);
-      $("announcer").textContent = ask.held ? `${ask.plan} held blocked.` : `${ask.plan} no longer held.`;
-      paintAsks(); paintPills();
+      $("announcer").textContent = ask.held ? `${ask.plan} held blocked. Its red pill in the status bar brings it back.` : `${ask.plan} no longer held.`;
+      paintPills();
+      if (ask.held) {
+        // Say so on the card, then fade it out over half a second; in the widget the whole widget goes.
+        const card = b.closest(".ask"), inWidget = Boolean(b.closest("#unblock"));
+        const gone = inWidget ? $("unblock") : card;
+        card.innerHTML = `<p class="ask-done">Held blocked. ${esc(ask.plan)} stays red in the status bar; click it to answer.</p>`;
+        void gone.offsetWidth;
+        gone.classList.add("is-leaving");
+        setTimeout(() => {
+          gone.classList.remove("is-leaving");
+          if (inWidget) { const pill = ask && plans.find(p => p.id === ask.plan)?.pill?.querySelector("button"); toggleUnblock(null); pill?.focus(); }
+          paintAsks();
+        }, 500);
+        return;
+      }
+      paintAsks();
       if (unblocking?.ask === ask) $("unblock-body").replaceChildren(askCard(ask, "u"));
       document.querySelector(`[data-ask="${ask.id}"] [aria-pressed]`)?.focus();
     }, { title: ask.held ? "Let the agent's question go back to waiting normally" : "Keep this agent blocked until you answer; nothing else unblocks it" });
