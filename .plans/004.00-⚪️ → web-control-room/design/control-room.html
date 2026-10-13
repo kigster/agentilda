@@ -1283,7 +1283,7 @@
     $("copilot-tab").hidden = open;
     $("copilot-tab").setAttribute("aria-expanded", String(open));
     try { localStorage.setItem(COPILOT_KEY, open ? "1" : ""); } catch { /* forget it */ }
-    if (open) { $("copilot-dot").hidden = true; restoreCopilotPos(); }
+    if (open) $("copilot-dot").hidden = true;
     if (focus) (open ? $("copilot-input") : $("copilot-tab")).focus();
   }
   $("copilot-tab").addEventListener("click", () => setCopilot(true));
@@ -1383,13 +1383,13 @@
 
 
 
-  // Dragging the copilot by its header. The position is kept per viewer and clamped to the window, so it can never be lost off-screen.
-  // Declared with function scope in mind: setCopilot runs earlier in the script, on load, and calls restoreCopilotPos.
+  // Dragging the copilot by its header. Every page load starts it glued to the bottom-right corner; a drag lasts
+  // for the visit (minimising and reopening keeps it) and is clamped to the window, so it can never be lost off-screen.
   function copilotPane() { return $("copilot"); }
-  function placeCopilot(pos, save = true) {
+  try { localStorage.removeItem("agentilda-mockup-copilot-pos"); } catch { /* a position saved by an older mockup */ }
+  function placeCopilot(pos) {
     if (!pos) {
       copilotPane().style.left = copilotPane().style.top = ""; copilotPane().style.right = copilotPane().style.bottom = "";
-      try { localStorage.removeItem("agentilda-mockup-copilot-pos"); } catch { /* fine */ }
       return;
     }
     const r = copilotPane().getBoundingClientRect();
@@ -1397,14 +1397,13 @@
     const x = Math.min(Math.max(8, pos.x), innerWidth - r.width - 8);
     const y = Math.min(Math.max(8, pos.y), barTop - r.height - 8);
     Object.assign(copilotPane().style, { left: x + "px", top: y + "px", right: "auto", bottom: "auto" });
-    if (save) try { localStorage.setItem("agentilda-mockup-copilot-pos", JSON.stringify({ x, y })); } catch { /* fine */ }
   }
   $("copilot-head").addEventListener("pointerdown", e => {
     if (e.button !== 0 || e.target.closest("button")) return;
     const r = copilotPane().getBoundingClientRect(), dx = e.clientX - r.left, dy = e.clientY - r.top;
     copilotPane().classList.add("is-dragging");
     $("copilot-head").setPointerCapture(e.pointerId);
-    const move = ev => placeCopilot({ x: ev.clientX - dx, y: ev.clientY - dy }, false);
+    const move = ev => placeCopilot({ x: ev.clientX - dx, y: ev.clientY - dy });
     const up = ev => {
       copilotPane().classList.remove("is-dragging");
       $("copilot-head").removeEventListener("pointermove", move);
@@ -1421,9 +1420,7 @@
     if (e.key === "Home") { e.preventDefault(); placeCopilot(null); }
   });
   addEventListener("resize", () => { if (copilotPane().style.left) { const r = copilotPane().getBoundingClientRect(); placeCopilot({ x: r.left, y: r.top }); } });
-  function restoreCopilotPos() {
-    try { const pos = JSON.parse(localStorage.getItem("agentilda-mockup-copilot-pos")); if (pos) placeCopilot(pos, false); } catch { /* corner it is */ }
-  }
+
 
   // Status bar. One pill per plan; a plan that finishes moves to the right-hand end, after the ones that finished before it.
   let finishedSeq = Math.max(0, ...plans.map(p => p.doneAt || 0));
