@@ -1,4 +1,4 @@
-# OpenLanes
+# Open Lanes Depot
 
 [![CircleCI](https://dl.circleci.com/status-badge/img/gh/kigster/openlanes/tree/main.svg?style=shield)](https://dl.circleci.com/status-badge/redirect/gh/kigster/openlanes/tree/main) ![Coverage](docs/badges/coverage_badge.svg)
 

@@ -56,7 +56,7 @@ module OpenLanes
     # dry-cli-help 0.2 configures once per process, not per registry, which
     # suits a gem with exactly one registry.
     Dry::CLI::Help.configure do
-      title "openlanes — Agentic Specification-Driven Development v#{OpenLanes::VERSION}"
+      title "Open Lanes Depot — Agentic Specification-Driven Development v#{OpenLanes::VERSION}"
 
       description <<~TEXT
         Drives the agentic flow: spec → plan → build → review → tune/fix → approve.
