@@ -3,7 +3,7 @@
   --enamel: #E9EDF1;
   --plate: #FFFFFF;
   --ink: #13233F;
-  --ink-soft: #5A6A82;
+  --ink-soft: #45556E; /* 4.5:1 or better on every tinted surface, down to #C8D0DB */
   --hairline: #D3DAE3;
   --road: #B9C3D0;
   --lane-full: #1F5FD1;

@@ -18,10 +18,14 @@ describe("the board", () => {
     });
   });
 
-  it("has no serious accessibility violations", () => {
-    cy.injectAxe();
-    cy.checkA11y(undefined, { includedImpacts: ["serious", "critical"] }, report);
-  });
+  // The whole page, in both themes: tinted chips and tabs are where soft text loses contrast first.
+  for (const theme of ["light", "dark"]) {
+    it(`has no serious accessibility violations in the ${theme} theme`, () => {
+      cy.document().then((doc) => doc.documentElement.setAttribute("data-theme", theme));
+      cy.injectAxe();
+      cy.checkA11y(undefined, { includedImpacts: ["serious", "critical"] }, report);
+    });
+  }
 
   // The pills' time sits on a tinted plate in every state, so contrast is checked in both themes.
   for (const theme of ["light", "dark"]) {
