@@ -64,14 +64,52 @@ jobs:
     resource_class: medium
     docker:
       - image: cimg/ruby:4.0.6
+      # The Live store's shared examples run against a real Redis as well as the in-memory fake.
+      - image: cimg/redis:7.4
     working_directory: ~/agentilda
     steps:
       - checkout
       - install_packages
       - bundle_deps
       - run:
+          name: Wait for Redis
+          command: dockerize -wait tcp://localhost:6379 -timeout 30s
+      - run:
           name: Run tests
           command: bundle exec rspec
+
+  # The page: lint, types, unit tests with coverage, and the production build that ships in the gem.
+  web:
+    docker:
+      - image: cimg/node:22.21
+    working_directory: ~/agentilda
+    steps:
+      - checkout
+      - restore_cache:
+          keys:
+            - v1-npm-{{ arch }}-{{ checksum "web/package-lock.json" }}
+      - run:
+          name: Install web dependencies
+          working_directory: web
+          command: CYPRESS_INSTALL_BINARY=0 npm ci
+      - save_cache:
+          key: v1-npm-{{ arch }}-{{ checksum "web/package-lock.json" }}
+          paths:
+            - ~/.npm
+      - run:
+          name: Lint and type-check
+          working_directory: web
+          command: npm run lint && npm run typecheck
+      - run:
+          name: Unit tests with coverage
+          working_directory: web
+          command: npm run coverage
+      - run:
+          name: Build
+          working_directory: web
+          command: npm run build
+      - store_artifacts:
+          path: web/coverage
 
 workflows:
   # .github/workflows/ci.yml + lint.yml + biome.yml. They are separate files on
@@ -81,3 +119,4 @@ workflows:
     jobs:
       - test
       - linter
+      - web

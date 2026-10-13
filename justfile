@@ -31,9 +31,17 @@ install:
 
 build: install
 
-build-rust:
-    cargo build --release
-    cp target/release/tilda-rs ./exe
+# Install the page's dependencies
+web-install:
+    cd web && npm ci
+
+# Build the page into web/dist, which the gem ships and the API server serves
+web-build:
+    cd web && npm run build
+
+# Lint, type-check and unit-test the page, with coverage
+web-test:
+    cd web && npm run lint && npm run typecheck && npm run coverage
 
 # rubocop
 lint:
