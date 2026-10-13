@@ -98,6 +98,14 @@ describe("postCommand", () => {
     expect(JSON.parse(fetchMock.mock.calls[3][1].body).id).toBe(command.id);
   });
 
+  it("treats a failed token refresh after a 403 as a definite refusal", async () => {
+    fetchMock
+      .mockResolvedValueOnce(json(200, session))
+      .mockResolvedValueOnce(json(403, {}))
+      .mockRejectedValueOnce(new TypeError("Failed to fetch"));
+    await expect(postCommand(command)).rejects.toMatchObject({ name: "ApiError", status: 403 });
+  });
+
   it("throws on anything else", async () => {
     fetchMock.mockResolvedValueOnce(json(200, session)).mockResolvedValueOnce(json(500, {}));
     await expect(postCommand(command)).rejects.toMatchObject({ status: 500 });

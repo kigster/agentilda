@@ -2,7 +2,7 @@ import type { CSSProperties, ReactNode } from "react";
 import type { Board as BoardData, Snapshot, Station } from "../api/types";
 import { PlanRow, type CarHandlers } from "./PlanRow";
 import { lastSeen, who } from "./format";
-import { isMerged } from "./model";
+import { nodePlanKey } from "./model";
 import "./board.css";
 
 /** The station columns: StateMachine::SPINE, each with the agents whose `handles:` names it. */
@@ -43,8 +43,16 @@ export function MachineHead({ name, facts }: { name: string; facts: string[] }) 
   );
 }
 
-/** Their plans still on their board: merged ones left it long ago. */
-const showing = (s: Snapshot) => s.plans.filter(p => !isMerged(p));
+/** Other machines' merged rows, keyed by nodePlanKey: fading now, or gone. */
+export interface TheirLifecycle {
+  retiring: ReadonlySet<string>;
+  gone: ReadonlyMap<string, unknown>;
+}
+
+const NOTHING: TheirLifecycle = { retiring: new Set(), gone: new Map() };
+
+/** Their plans still on the board: a merged one stays ten seconds, fades, then leaves, as ours do. */
+const showing = (s: Snapshot, life: TheirLifecycle) => s.plans.filter(p => !life.gone.has(nodePlanKey(s.node.id, p.ordinal)));
 
 interface BoardProps extends CarHandlers {
   board: BoardData;
@@ -54,10 +62,12 @@ interface BoardProps extends CarHandlers {
   retiring: ReadonlySet<string>;
   /** Merged rows that have left the board. */
   gone: ReadonlyMap<string, unknown>;
+  /** The same for other machines' rows. */
+  theirs?: TheirLifecycle;
 }
 
 /** The transit board: our plans, and with All machines on, everyone else's under ours. */
-export function Board({ board, merged, retiring, gone, ...cars }: BoardProps) {
+export function Board({ board, merged, retiring, gone, theirs = NOTHING, ...cars }: BoardProps) {
   const { me, others } = board;
   const ours = me.plans.filter(p => !gone.has(p.ordinal));
   return (
@@ -69,14 +79,14 @@ export function Board({ board, merged, retiring, gone, ...cars }: BoardProps) {
       ))}
       {merged &&
         others.map(their => (
-          <MachineRows key={their.node.id} their={their} me={me} />
+          <MachineRows key={their.node.id} their={their} me={me} life={theirs} />
         ))}
     </Inner>
   );
 }
 
-function MachineRows({ their, me }: { their: Snapshot; me: Snapshot }) {
-  const plans = showing(their);
+function MachineRows({ their, me, life }: { their: Snapshot; me: Snapshot; life: TheirLifecycle }) {
+  const plans = showing(their, life);
   return (
     <>
       <MachineHead
@@ -84,14 +94,17 @@ function MachineRows({ their, me }: { their: Snapshot; me: Snapshot }) {
         facts={[their.node.ip, `${plans.length} plans`, "read only", `last seen ${lastSeen(their, me)}s ago`].filter((f): f is string => f !== null)}
       />
       {plans.map(plan => (
-        <PlanRow key={plan.ordinal} plan={plan} stations={their.stations} models={their.models} owner={their.node} faded />
+        <PlanRow
+          key={plan.ordinal} plan={plan} stations={their.stations} models={their.models} owner={their.node} faded
+          retiring={life.retiring.has(nodePlanKey(their.node.id, plan.ordinal))}
+        />
       ))}
     </>
   );
 }
 
 /** One other machine's board, read only, for its tab. */
-export function MachineBoard({ their, me }: { their: Snapshot; me: Snapshot }) {
+export function MachineBoard({ their, me, life = NOTHING }: { their: Snapshot; me: Snapshot; life?: TheirLifecycle }) {
   return (
     <>
       <p className="machine-note">
@@ -100,8 +113,11 @@ export function MachineBoard({ their, me }: { their: Snapshot; me: Snapshot }) {
         them. Last seen {lastSeen(their, me)}s ago.
       </p>
       <Inner stations={their.stations}>
-        {showing(their).map(plan => (
-          <PlanRow key={plan.ordinal} plan={plan} stations={their.stations} models={their.models} owner={their.node} />
+        {showing(their, life).map(plan => (
+          <PlanRow
+            key={plan.ordinal} plan={plan} stations={their.stations} models={their.models} owner={their.node}
+            retiring={life.retiring.has(nodePlanKey(their.node.id, plan.ordinal))}
+          />
         ))}
       </Inner>
     </>

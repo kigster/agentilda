@@ -152,3 +152,9 @@ export function testTabLabel(run: TestRun, runs: TestRun[]): string {
   const shared = runs.some(r => r !== run && r.plan.ordinal === run.plan.ordinal);
   return shared ? `${planId(run.plan.ordinal)} tests, ${run.car.agent.split("-")[0]}` : `${planId(run.plan.ordinal)} tests`;
 }
+
+/** Another machine's plan, named so plans with one ordinal on two machines never collide. */
+export const nodePlanKey = (nodeId: string, ordinal: string): string => `${nodeId}:${ordinal}`;
+
+/** An agent still at work: running, or stuck waiting on a person. Done and failed cars only linger on the board. */
+export const isWorking = (car: Car): boolean => car.state === "running" || car.state === "stuck";

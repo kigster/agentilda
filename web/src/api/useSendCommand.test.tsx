@@ -48,6 +48,32 @@ it("rejects when the POST fails", async () => {
   await expect(sendCommand(input)).rejects.toThrow("500");
 });
 
+it("keeps waiting by the same id when the POST fails ambiguously after sending", async () => {
+  let sent = "";
+  fetchMock.mockImplementation(async (path: string, init?: RequestInit) => {
+    if (path === "/api/session") return json(200, { csrf: "t" });
+    sent = (JSON.parse(String(init?.body)) as Command).id;
+    setTimeout(() => replies.deliver({ id: sent, status: "done", reason: null, at: "t" }), 0);
+    throw new TypeError("Failed to fetch"); // the connection dropped after the body went out
+  });
+  await expect(sendCommand(input)).resolves.toMatchObject({ status: "done" });
+  expect(fetchMock.mock.calls.filter(([p]) => p === "/api/commands")).toHaveLength(1);
+});
+
+it("gives up after the timeout when an ambiguous failure never gets a reply", async () => {
+  fetchMock.mockImplementation(async (path: string) => {
+    if (path === "/api/session") return json(200, { csrf: "t" });
+    throw new TypeError("Failed to fetch");
+  });
+  await expect(sendCommand(input, 20)).rejects.toThrow("No reply to command");
+});
+
+it("fails fast when the session cannot be fetched before sending", async () => {
+  fetchMock.mockRejectedValue(new TypeError("Failed to fetch"));
+  await expect(sendCommand(input)).rejects.toThrow("Failed to fetch");
+  expect(fetchMock.mock.calls.some(([p]) => p === "/api/commands")).toBe(false);
+});
+
 it("answers done locally under ?fixture", async () => {
   window.history.replaceState(null, "", "/?fixture");
   await expect(sendCommand(input)).resolves.toMatchObject({ status: "done" });

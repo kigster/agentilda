@@ -81,7 +81,11 @@ export async function postCommand(command: Command): Promise<Reply> {
   let res = await send(command, (await getSession()).csrf);
   if (res.status === 403) {
     resetSession();
-    res = await send(command, (await getSession()).csrf);
+    // The command was refused, so failing to get a fresh token is as definite as the 403 itself.
+    const fresh = await getSession().catch(() => {
+      throw new ApiError("POST /api/commands answered 403 and no new session could be fetched", 403);
+    });
+    res = await send(command, fresh.csrf);
   }
   if (res.status === 202 || res.status === 422) return (await res.json()) as Reply;
   throw new ApiError(`POST /api/commands answered ${res.status}`, res.status);

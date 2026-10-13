@@ -159,12 +159,13 @@ describe("live", () => {
     // New warnings count on the Logs tab until it is opened.
     const next = structuredClone(first);
     const warn: LogLine = { at: "2026-10-13T09:00:10Z", source: "api", level: "warn", text: "slow", plan: null };
+    next.me.seq += 1; // every change the engine publishes carries a higher seq
     next.me.log.push(warn);
     next.me.plans[1].pr = samplePr({ state: "merged", number: 44 });
     next.me.plans[0].cars[1].message = "Writing tests";
     act(() => {
       stream.onState("live");
-      stream.onBoard(next);
+      stream.onBoard(structuredClone(next));
     });
     const logs = screen.getByRole("tab", { name: /Logs/ });
     expect(logs).toHaveTextContent("Logs1");
@@ -175,9 +176,46 @@ describe("live", () => {
 
     // A stuck car with no question: its pill opens the drawer.
     next.me.plans[0].questions = [];
+    next.me.seq += 1;
     act(() => stream.onBoard(structuredClone(next)));
     await userEvent.click(pills().getByRole("button", { name: /^001,/ }));
     expect(screen.getByRole("button", { name: "luke-backend" })).toHaveAttribute("aria-expanded", "true");
+  });
+
+  it("counts only agents still at work in Stop All Local, and keeps their merged rows ten seconds", async () => {
+    const first = sampleBoard();
+    first.me.plans[1].cars[0].state = "done"; // 005: its reviewer finished, the car lingers
+    first.me.plans[2].cars[0].state = "failed"; // 006: nothing left to stop
+    first.others[0].plans[0].pr = samplePr({ state: "merged" });
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(json(first)));
+    localStorage.setItem("agentilda-merged", "1");
+    renderApp();
+    await screen.findByRole("tab", { name: "Board" });
+    // Their merged row is still on the merged board, not dropped on sight.
+    expect(document.querySelector('.plan.is-theirs[data-plan="010.00"]')).not.toBeNull();
+    await userEvent.click(screen.getByRole("button", { name: "Stop All Local" }));
+    expect(await screen.findByText(/shut down 2 agents currently working on 1 plans/)).toBeInTheDocument();
+  });
+
+  it("fades another machine's merged row after ten seconds and drops it a second later", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    try {
+      const first = sampleBoard();
+      first.others[0].plans[0].pr = samplePr({ state: "merged" });
+      vi.stubGlobal("fetch", vi.fn().mockResolvedValue(json(first)));
+      localStorage.setItem("agentilda-merged", "1");
+      renderApp();
+      await screen.findByRole("tab", { name: "Board" });
+      const row = () => document.querySelector('.plan.is-theirs[data-plan="010.00"]');
+      act(() => vi.advanceTimersByTime(9_000));
+      expect(row()).not.toHaveClass("is-retiring");
+      act(() => vi.advanceTimersByTime(1_100));
+      expect(row()).toHaveClass("is-retiring");
+      act(() => vi.advanceTimersByTime(1_100));
+      expect(row()).toBeNull();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("says when the board cannot be loaded", async () => {

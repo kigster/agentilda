@@ -3,6 +3,7 @@ import userEvent from "@testing-library/user-event";
 import { axe } from "vitest-axe";
 import { Board, MachineBoard } from "./Board";
 import { PlanRow } from "./PlanRow";
+import { nodePlanKey } from "./model";
 import { sampleBoard, sampleCar, samplePlan, samplePr } from "./sample";
 
 const none = new Map<string, unknown>();
@@ -50,8 +51,10 @@ describe("Board", () => {
   it("appends other machines under ours with All machines on, read only and faded", async () => {
     const board = sampleBoard();
     board.others[0].node.ip = null;
+    // A merged plan of theirs that has already left their board.
     board.others[0].plans.push(samplePlan({ ordinal: "011.00", pr: samplePr({ state: "merged" }) }));
-    const { container } = render(<Board board={board} merged retiring={noRetire} gone={none} />);
+    const life = { retiring: new Set<string>(), gone: new Map([[nodePlanKey(board.others[0].node.id, "011.00"), 1]]) };
+    const { container } = render(<Board board={board} merged retiring={noRetire} gone={none} theirs={life} />);
     const heads = container.querySelectorAll(".machine-head");
     expect(heads).toHaveLength(2);
     expect(heads[0]).toHaveTextContent("dana@studio-mini10.0.4.123 plansthis machine");
@@ -62,6 +65,20 @@ describe("Board", () => {
     expect(within(theirs as HTMLElement).getByText("Sonnet 5.5")).toBeInTheDocument();
     expect(await axe(container)).toHaveNoViolations();
   });
+});
+
+it("keeps another machine's merged row on the board, purple, until its lifecycle retires it", () => {
+  const board = sampleBoard();
+  const id = board.others[0].node.id;
+  board.others[0].plans[0].pr = samplePr({ state: "merged" });
+  const { container, rerender } = render(<Board board={board} merged retiring={noRetire} gone={none} />);
+  expect(container.querySelector('.plan.is-theirs[data-plan="010.00"]')).not.toBeNull();
+  rerender(<Board board={board} merged retiring={noRetire} gone={none} theirs={{ retiring: new Set([nodePlanKey(id, "010.00")]), gone: none }} />);
+  expect(container.querySelector('[data-plan="010.00"]')).toHaveClass("is-retiring");
+  rerender(<MachineBoard their={board.others[0]} me={board.me} life={{ retiring: new Set([nodePlanKey(id, "010.00")]), gone: none }} />);
+  expect(container.querySelector('[data-plan="010.00"]')).toHaveClass("is-retiring");
+  rerender(<MachineBoard their={board.others[0]} me={board.me} life={{ retiring: noRetire, gone: new Map([[nodePlanKey(id, "010.00"), 1]]) }} />);
+  expect(container.querySelector('[data-plan="010.00"]')).toBeNull();
 });
 
 describe("MachineBoard", () => {

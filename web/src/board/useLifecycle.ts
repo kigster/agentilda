@@ -38,6 +38,9 @@ const without = <T,>(set: ReadonlySet<T>, item: T): Set<T> => {
  * The page's memory of what the snapshot no longer says: when each merged row should fade, which merged plans have
  * already left the board, and the order plans finished in. Timers live here, not in the board, so switching tabs
  * never restarts a merged row's ten seconds.
+ *
+ * Keyed by ordinal. For other machines, App passes their plans with the ordinal replaced by nodePlanKey, so one hook
+ * tracks every machine without two machines' 010.00 colliding.
  */
 export function useLifecycle(plans: Plan[], reduced = false): Lifecycle {
   const [retiring, setRetiring] = useState<ReadonlySet<string>>(new Set());
@@ -48,12 +51,14 @@ export function useLifecycle(plans: Plan[], reduced = false): Lifecycle {
   const merged = useRef(new Map<string, Plan>());
 
   const leave = useCallback((plan: Plan) => {
-    setRetiring(prev => (prev.has(plan.ordinal) ? without(prev, plan.ordinal) : prev));
-    setGone(prev => (prev.has(plan.ordinal) ? prev : new Map(prev).set(plan.ordinal, { plan, at: Date.now() })));
+    const k = plan.ordinal;
+    setRetiring(prev => (prev.has(k) ? without(prev, k) : prev));
+    setGone(prev => (prev.has(k) ? prev : new Map(prev).set(k, { plan, at: Date.now() })));
   }, []);
 
   useEffect(() => {
-    const live = new Set(plans.map(p => p.ordinal));
+    const k = (p: Plan) => p.ordinal;
+    const live = new Set(plans.map(k));
     // A merged plan the engine already dropped has left the board, whatever its timer says.
     for (const [ordinal, plan] of merged.current) {
       if (live.has(ordinal)) continue;
@@ -62,18 +67,19 @@ export function useLifecycle(plans: Plan[], reduced = false): Lifecycle {
       leave(plan);
     }
     for (const plan of plans) {
-      if (!isMerged(plan) || merged.current.has(plan.ordinal)) continue;
-      merged.current.set(plan.ordinal, plan);
-      timers.current.set(plan.ordinal, setTimeout(() => {
-        setRetiring(prev => new Set(prev).add(plan.ordinal));
-        timers.current.set(plan.ordinal, setTimeout(() => leave(plan), reduced ? 0 : FADE_MS));
+      const id = k(plan);
+      if (!isMerged(plan) || merged.current.has(id)) continue;
+      merged.current.set(id, plan);
+      timers.current.set(id, setTimeout(() => {
+        setRetiring(prev => new Set(prev).add(id));
+        timers.current.set(id, setTimeout(() => leave(plan), reduced ? 0 : FADE_MS));
       }, ROW_STAYS_MS));
     }
     setFinishOrder(prev => {
-      const fresh = plans.filter(p => isFinished(p) && !prev.has(p.ordinal)).sort((a, b) => a.ordinal.localeCompare(b.ordinal));
+      const fresh = plans.filter(p => isFinished(p) && !prev.has(k(p))).map(k).sort();
       if (!fresh.length) return prev;
       const next = new Map(prev);
-      for (const p of fresh) next.set(p.ordinal, next.size + 1);
+      for (const id of fresh) next.set(id, next.size + 1);
       return next;
     });
   }, [plans, leave, reduced]);

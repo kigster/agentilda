@@ -4,6 +4,8 @@ import {
   carLook,
   hasRequest,
   isFinished,
+  isWorking,
+  nodePlanKey,
   modelLabel,
   pillState,
   routeOf,
@@ -113,6 +115,11 @@ describe("pillState", () => {
 });
 
 describe("predicates and labels", () => {
+  it("counts running and stuck cars as working, not done or failed ones", () => {
+    expect(["running", "stuck", "done", "failed"].map(state => isWorking(sampleCar({ state: state as "running" })))).toEqual([true, true, false, false]);
+    expect(nodePlanKey("abc", "010.00")).toBe("abc:010.00");
+  });
+
   it("knows requests, finished plans and model labels", () => {
     expect(hasRequest(samplePlan({ questions: [sampleQuestion()] }))).toBe(true);
     expect(hasRequest(samplePlan())).toBe(false);

@@ -29,7 +29,7 @@ it("draws a pill per plan with the mockup's states and the summary, accessibly",
   expect(pill).toHaveAttribute("aria-expanded", "true");
   expect(screen.getByRole("button", { name: "005, working, at Review, 1h 38m" })).not.toHaveAttribute("aria-expanded");
   expect(screen.getByText("0 merged, 0 ready to merge, 2 blocked")).toBeInTheDocument();
-  expect(screen.getByRole("list", { name: "Plans on other machines, read only" })).toHaveTextContent("010");
+  expect(screen.getByRole("button", { name: "010 on sam@ci-runner-2, read only, at Review, 1h 38m" })).toBeInTheDocument();
   expect(await axe(container)).toHaveNoViolations();
 });
 

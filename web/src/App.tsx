@@ -7,7 +7,7 @@ import { useBoard, type ConnectionState } from "./api/useBoard";
 import { useSendCommand } from "./api/useSendCommand";
 import { Board, MachineBoard } from "./board/Board";
 import { planId, who } from "./board/format";
-import { rowDomId, testRuns, testTabLabel, testTabValue } from "./board/model";
+import { isWorking, nodePlanKey, rowDomId, testRuns, testTabLabel, testTabValue } from "./board/model";
 import { useLifecycle } from "./board/useLifecycle";
 import { Header } from "./shell/Header";
 import { Logs } from "./shell/Logs";
@@ -60,6 +60,12 @@ function ControlRoom({ board, connection, fixture }: { board: BoardData; connect
   const send = useSendCommand();
   const onCommand = useCallback<SendCommand>(command => send.mutateAsync(command), [send]);
   const life = useLifecycle(me.plans, reduced);
+  // Other machines' merged rows stay and fade like ours; one hook tracks them all, keyed by machine and plan.
+  const theirPlans = useMemo(
+    () => others.flatMap(o => o.plans.map(p => ({ ...p, ordinal: nodePlanKey(o.node.id, p.ordinal) }))),
+    [others],
+  );
+  const theirLife = useLifecycle(theirPlans, reduced);
   useBoardNews(me, announce);
 
   const [tab, setTab] = useState("board");
@@ -144,7 +150,8 @@ function ControlRoom({ board, connection, fixture }: { board: BoardData; connect
     [me.models, onCommand],
   );
 
-  const busy = me.plans.filter(p => p.cars.length > 0);
+  // Stop All Local counts agents that are still at it: a done or failed car lingers on the board but has nothing to stop.
+  const busy = me.plans.map(p => p.cars.filter(isWorking).length).filter(n => n > 0);
 
   return (
     <>
@@ -155,7 +162,7 @@ function ControlRoom({ board, connection, fixture }: { board: BoardData; connect
         merged={merged}
         onToggleMerged={() => setMerged(!merged)}
         actionMenu={<ActionMenu backlog={me.backlog} onCommand={onCommand} note={backlogNote(board)} ideaOpen={ideaOpen} onIdeaOpenChange={setIdeaOpen} />}
-        stopAll={<StopAllDialog agents={busy.reduce((n, p) => n + p.cars.length, 0)} plans={busy.length} onCommand={onCommand} />}
+        stopAll={<StopAllDialog agents={busy.reduce((sum, n) => sum + n, 0)} plans={busy.length} onCommand={onCommand} />}
         help={<HelpDialog />}
       />
       <Tabs.Root className="tabs-root" value={current} onValueChange={setTab}>
@@ -209,6 +216,7 @@ function ControlRoom({ board, connection, fixture }: { board: BoardData; connect
               merged={merged}
               retiring={life.retiring}
               gone={life.gone}
+              theirs={theirLife}
               openCar={drawer && drawerCar ? drawerCar.key : null}
               onOpenCar={onOpenCar}
               renderModel={renderModel}
@@ -216,7 +224,7 @@ function ControlRoom({ board, connection, fixture }: { board: BoardData; connect
           </Tabs.Content>
           {others.map(o => (
             <Tabs.Content key={o.node.id} value={machineTab(o.node.id)} className="board">
-              <MachineBoard their={o} me={me} />
+              <MachineBoard their={o} me={me} life={theirLife} />
             </Tabs.Content>
           ))}
           <Tabs.Content value="logs" className="logs" forceMount hidden={current !== "logs"}>

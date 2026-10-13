@@ -125,6 +125,7 @@ export function StatusBar(props: StatusBarProps) {
                   type="button"
                   className={`pill${merged ? " is-gone" : done ? " is-done" : ""}`}
                   title={`${id} ${plan.title}: on ${who(their.node)}, ${state}. Read only.`}
+                  aria-label={`${id} on ${who(their.node)}, read only, ${state}, ${span(plan.elapsed)}`}
                   onClick={() => onOpenMachine(their.node.id)}
                 >
                   <span className="pill-mark" aria-hidden="true">
