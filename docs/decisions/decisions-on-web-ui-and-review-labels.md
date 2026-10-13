@@ -230,11 +230,11 @@ Several machines, say three, may run agentilda on the same repository against on
 | Key | Holds | Written by |
 | --- | --- | --- |
 | `agentilda:<repo>:nodes` | a set of the node ids that have run on this repository | each node adds itself |
-| `agentilda:<repo>:<node>:meta` | a hash: `username`, `hostname`, the checkout path, agentilda's version, `started_at`, `seen_at`. It expires after 60 s and the engine refreshes it every 15 s, so a machine that dies drops out within a minute | that node only |
+| `agentilda:<repo>:<node>:meta` | a hash: `username`, `hostname`, `ip`, the checkout path, agentilda's version, `started_at`, `seen_at`. It expires after 60 s and the engine refreshes it every 15 s, so a machine that dies drops out within a minute | that node only |
 | `agentilda:<repo>:<node>:<checkout>:…` | the board, streams and mail of W13 and plan `003.00` D4 | that node only |
 | `agentilda:<repo>:claim:<plan>` | the id of the node working on the plan | `SET NX`, see below |
 
-`username` and `hostname` are stored in plain text beside the digest, because the digest exists to make keys short and uniform, not to hide anyone: the page shows `username@hostname` in its header for this machine, and in the other machines' tab for each of the rest.
+`ip` is the local address of this node's connection to Redis, which is the interface the other machines share with it; when that cannot be read, the first non-loopback address (`Socket.ip_address_list`). It is shown, never used to identify the node: addresses change with DHCP and VPNs, while `username@hostname` does not. `username` and `hostname` are stored in plain text beside the digest, because the digest exists to make keys short and uniform, not to hide anyone: the page shows `username@hostname` in its header for this machine, and in the other machines' tab for each of the rest.
 
 **Read-only.** The store a node writes through is scoped to its own prefix and to `claim:` keys. Other nodes' keys are read and never written. The API server serves them for display and accepts no command naming another node; a kill, message or model change for a plan on another machine is refused with 403.
 
@@ -247,9 +247,9 @@ Several machines, say three, may run agentilda on the same repository against on
 
 **On the page.**
 
-- The header shows this machine as `username@hostname` under the project's path, with the node digest and the masked Redis address on hover.
+- The header shows this machine as `username@hostname` under the project's path, with the node digest, its IP and the masked Redis address on hover.
 - **Each other machine gets a tab of its own**, labelled `username@hostname` with a lock, after the Board tab. It draws that machine's plans as the board draws ours (stations, lines, agents, tokens, elapsed time) with a line naming its checkout path and when it was last seen. Nothing on it is a control: no drawer, no model dropdown, no answer box.
-- **All machines**, a toggle in the header, merges everything onto the Board tab: our plans first, as usual, then each other machine's under a heading naming it, read-only and at 85% opacity, so they stay readable while ours stay first. The choice is remembered per browser. Off, the Board shows only this machine's plans.
+- **All machines**, a toggle in the header, merges everything onto the Board tab: our plans first, as usual, then each other machine's under a heading naming it, read-only and at 85% opacity, so they stay readable while ours stay first. Each machine's section, ours included, opens with a band on the inverted surface: `username@hostname` in larger type, then its IP, plan count, and for other machines "read only" and when it was last seen. The choice is remembered per browser. Off, the Board shows only this machine's plans.
 
 **Known gap.** Plan folders move by renames in each machine's own checkout, so a plan's state reaches the other machines' trees only through git, when the branch is pushed and pulled. Redis shows the live state; the folders catch up later. Making the claim the source of truth for which state a plan is in is not part of this decision.
 

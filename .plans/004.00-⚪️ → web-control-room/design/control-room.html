@@ -303,8 +303,14 @@
   .machine-note strong { color: var(--ink); }
   .car.is-readonly { cursor: default; }
   .car.is-readonly:hover { border-color: color-mix(in srgb, var(--car-tint) 32%, transparent); border-left-color: var(--lane-color); }
-  .theirs-head { margin: 26px 0 4px; padding: 0 16px; font-size: 15px; font-weight: 800; color: var(--ink-soft); }
-  .theirs-head span { font-weight: 600; }
+  /* A band per machine in the merged board, on the copilot's inverted surface so the break between machines is unmissable. */
+  .machine-head { display: flex; align-items: baseline; flex-wrap: wrap; gap: 4px 16px; margin: 0 0 2px; padding: 12px 18px;
+                  background: var(--inv-plate); color: var(--inv-ink); border-radius: 10px; }
+  .plan + .machine-head, #plans + #theirs .machine-head:first-child { margin-top: 22px; }
+  .machine-head h2 { margin: 0; font-size: 19px; font-weight: 800; letter-spacing: -0.01em; }
+  .machine-head h2::before { content: "🔒"; margin-right: 8px; font-size: 15px; }
+  .machine-head.is-ours h2::before { content: none; }
+  .machine-head p { margin: 0; font-size: 14px; color: var(--inv-ink-soft); display: flex; flex-wrap: wrap; gap: 0 14px; }
   /* Their rows in the merged board, slightly faded so ours stay the thing you read. */
   .plan.is-theirs { opacity: .85; }
   .log-tools { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; padding: 12px 16px; border-bottom: 1px solid var(--hairline); }
@@ -529,7 +535,7 @@
     <h1 class="sr-only">Agentilda control room</h1>
     <p class="project-meta"><span>A web-based software factory: spec, plan, build, review</span>
       <span class="project-path" title="Title and summary from agentilda.gemspec">~/github/kigster/agentic-workflow/agentilda</span>
-      <span class="node" id="node" title="Node 5e0c41d2a7b39f80c1d4e6a2, the first 96 bits of SHA-256(&quot;dana@studio-mini&quot;). Redis redis://:•••@redis.internal:6379/0">On <strong>dana@studio-mini</strong></span></p>
+      <span class="node" id="node" title="Node 5e0c41d2a7b39f80c1d4e6a2, the first 96 bits of SHA-256(&quot;dana@studio-mini&quot;). IP 10.0.4.12. Redis redis://:•••@redis.internal:6379/0">On <strong>dana@studio-mini</strong></span></p>
   </div>
   <span class="topbar-stat">Run <strong id="run-clock">0 min</strong></span>
   <span class="topbar-stat"><strong id="run-working">0</strong> agents working</span>
@@ -1809,13 +1815,13 @@
   // Other machines on the same repository and Redis (W26). The real page reads agentilda:<repo>:nodes and each
   // node's meta and board; it never writes them, and it offers no control over their plans.
   const NODES = [
-    { user: "alex", host: "build-01", node: "3f9a0c7be21d44a8f6031c5e", path: "~/src/agentilda", seen: 3, plans: [
+    { user: "alex", host: "build-01", ip: "10.0.4.21", node: "3f9a0c7be21d44a8f6031c5e", path: "~/src/agentilda", seen: 3, plans: [
       { id: "008", title: "Export the ledger to Linear", lane: "full", at: 2, secs: 52 * 60 + 9,
         cars: [{ agent: "palpatine-planner", model: "claude-opus-5-5", up: 702000, down: 48100, secs: 611, act: "Splitting the export into four work units" }] },
       { id: "009", title: "Trim stale worktrees on start", lane: "quick", at: 3, secs: 14 * 60 + 2,
         cars: [{ agent: "r2d2-mechanic", model: "claude-sonnet-5-5", up: 188000, down: 12900, secs: 402, act: "bundle exec rspec spec/agentilda/vcs" }] },
     ] },
-    { user: "sam", host: "ci-runner-2", node: "c07d5e1a99b2f3046e8a1d7b", path: "/srv/checkouts/agentilda", seen: 11, plans: [
+    { user: "sam", host: "ci-runner-2", ip: "10.0.4.37", node: "c07d5e1a99b2f3046e8a1d7b", path: "/srv/checkouts/agentilda", seen: 11, plans: [
       { id: "010", title: "Cache agent registry lookups", lane: "plan", at: 5, secs: 1 * 3600 + 7 * 60, pr: 47,
         cars: [{ agent: "hansolo-reviewer", model: "claude-opus-5-5", up: 233000, down: 15400, secs: 288, act: "gh pr diff 47" }] },
       { id: "011", title: "Document the lanes in the README", lane: "quick", at: 6, secs: 19 * 60 + 44, pr: 46, cars: [] },
@@ -1865,16 +1871,27 @@
   }
   let merged = false;
   try { merged = localStorage.getItem("agentilda-mockup-merged") === "1"; } catch { /* private window */ }
+  function machineHead(name, facts, ours) {
+    const head = document.createElement("header");
+    head.className = "machine-head" + (ours ? " is-ours" : "");
+    head.innerHTML = `<h2></h2><p>${facts.map(f => `<span>${f}</span>`).join("")}</p>`;
+    head.querySelector("h2").textContent = name;
+    return head;
+  }
   function paintTheirs() {
     for (const n of NODES) {
-      n.panel.querySelector(".machine-note").innerHTML = `Read only. <strong>${who(n)}</strong> is working on these in ${n.path}; this machine will not start them. Last seen ${n.seen}s ago.`;
+      n.panel.querySelector(".machine-note").innerHTML = `Read only. <strong>${who(n)}</strong> (${n.ip}) is working on these in ${n.path}; this machine will not start them. Last seen ${n.seen}s ago.`;
       n.panel.querySelector("[data-rows]").replaceChildren(...n.plans.map(p => theirRow(p, n, false)));
     }
     let box = $("theirs");
+    $("ours-head")?.remove();
     if (!merged) { box?.remove(); return; }
+    const ours = machineHead("dana@studio-mini", ["10.0.4.12", `${plans.length} plans`, "this machine"], true);
+    ours.id = "ours-head";
+    $("plans").before(ours);
     if (!box) { box = Object.assign(document.createElement("div"), { id: "theirs" }); $("plans").after(box); }
     box.replaceChildren(...NODES.flatMap(n => [
-      Object.assign(document.createElement("h2"), { className: "theirs-head", innerHTML: `${who(n)} <span>read only</span>` }),
+      machineHead(who(n), [n.ip, `${n.plans.length} plans`, "read only", `last seen ${n.seen}s ago`]),
       ...n.plans.map(p => theirRow(p, n, true))]));
   }
   function setMerged(on) {
