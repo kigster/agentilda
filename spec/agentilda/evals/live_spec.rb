@@ -21,7 +21,7 @@ RSpec.describe Agentilda::Evals::Live do
   end
   let(:exit_status) { instance_double(Process::Status, success?: true) }
   let(:spawn) do
-    lambda { |argv, chdir:|
+    lambda { |argv, chdir:, **|
       folder = Dir.glob(File.join(chdir, ".plans", "*")).first
       seen.merge!(argv:, folder: File.basename(folder), spec: File.read(File.join(folder, "spec.md")))
       agent_writes.call(chdir, folder)

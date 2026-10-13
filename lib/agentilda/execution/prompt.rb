@@ -65,7 +65,7 @@ module Agentilda
           Repository root: #{root}
 
           #{"The folder's name is not currently justified: #{subject.violation}" if subject.violation}
-          #{operator_instructions}#{requirements_section}#{completion_section}#{suggestions_section}#{ledger_section(agent, subject, round:, successor:)}#{budget_section}#{time_budget_section(agent)}#{control_section(control, agent, subject)}#{mailbox_section(agent, subject, partners)}
+          #{operator_instructions}#{requirements_section}#{completion_section}#{suggestions_section}#{ledger_section(agent, subject, round:, successor:)}#{budget_section}#{time_budget_section(agent)}#{control_section(control, agent, subject)}#{questions_section}#{mailbox_section(agent, subject, partners)}
           ## Boundary — enforced, not requested
 
           You may read anything, and write source, tests and the plan's own
@@ -282,6 +282,14 @@ module Agentilda
           finish the essential remainder now. STOP means write what you have,
           sign your ledger entry, and end your turn.
 
+          HOLD means a person wants to say something to you. Finish the write
+          you are in, then read your mail and wait for their next message
+          before you do anything else; check every thirty seconds:
+
+              #{cli} mail read --dir "#{plans_dir}" --plan #{plan} --for #{agent.name}
+
+          COMPACT means run `/compact` now, then carry on where you were.
+
           INTERRUPT means the operator pressed Ctrl-C and the run will be started
           again later. Start nothing new. Finish the write you are in the middle
           of, so no file is left half-written, then leave a resume note for
@@ -299,6 +307,37 @@ module Agentilda
 
           If there is a RESUME note, continue from it and do not redo what it
           says is done; check the files it names rather than taking it on trust.
+        SECTION
+      end
+
+      # How to mark a yes/no question in `blocked.md` (W30). The page offers
+      # Yes and No buttons for exactly the questions marked this way and never
+      # guesses from the wording, so an agent that does not mark one gets a
+      # text box, and one that marks a two-way choice gets a meaningless yes.
+      # Said once here, for every agent that writes `blocked.md`, rather than
+      # in each definition, so the marker cannot drift between them.
+      #
+      # @return [String] empty for an agent whose definition never mentions
+      #   `blocked.md`, and for the agent that drains it
+      def questions_section
+        return "" unless agent.prompt.include?("blocked.md") && !agent.handles.include?(:blocked)
+
+        <<~SECTION
+
+          ## Questions in blocked.md: yes/no questions
+
+          When a question can be answered with a plain yes or no, ask it that
+          way and mark it, on its own line straight under its heading:
+
+              ## B2 Rebase onto main
+              #{Live::Snapshot::YES_NO_MARK}
+
+              The pull request conflicts in lib/agentilda/cli.rb. Should I rebase onto main?
+
+          The person answers with a button, and the answer reaches you as the
+          bare word `yes` or `no`, so branch on the word. Mark only a real yes/no
+          question: "Should I start it, or skip the integration specs?" is a
+          choice between two things, and needs words.
         SECTION
       end
 

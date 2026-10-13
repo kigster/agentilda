@@ -1,0 +1,91 @@
+# frozen_string_literal: true
+
+module Agentilda
+  module Live
+    # One engine's live run: its node and keys, its claims, the publisher
+    # that writes its board and the reader that applies its commands, built
+    # once and handed to the runner.
+    #
+    #   live = Live.session(store:, root:, tree:, agents:)
+    #   runner = Engine.runner(..., on_board: live.on_board, claims: live.claims)
+    #   runner.call { |dispatcher| live.attach(dispatcher) }
+    #   live.close
+    class Session
+      # @param store [Agentilda::Live::Store, Agentilda::Live::MemoryStore]
+      # @param root [String] the checkout
+      # @param tree [Agentilda::Plans::Tree]
+      # @param agents [Agentilda::Agents::Registry]
+      # @param project [String, nil] the header's name (W18); the root's name by default
+      # @param node [Agentilda::Live::Node]
+      # @param repo [String]
+      # @param clock [Proc] wall time
+      def initialize(store:, root:, tree:, agents:, project: nil, node: Node.current(root:), repo: Repo.for(root),
+        clock: -> { Time.now })
+        @store = store
+        @node = node
+        @keys = Keys.new(repo:, node: node.name)
+        @run_state = RunState.new
+        @claims = Claims.new(store:, keys: @keys)
+        @publisher = Publisher.new(store:,
+          keys: @keys,
+          node:,
+          tree:,
+          agents:,
+          claims: @claims,
+          run_state: @run_state,
+          project: project || File.basename(root),
+          clock:)
+        @commands = Commands.new(store:, keys: @keys, node:, run_state: @run_state, claims: @claims, clock:)
+      end
+
+      # @return [Agentilda::Live::Store, Agentilda::Live::MemoryStore]
+      attr_reader :store
+
+      # @return [Agentilda::Live::Node]
+      attr_reader :node
+
+      # @return [Agentilda::Live::Keys]
+      attr_reader :keys
+
+      # @return [Agentilda::Live::Claims]
+      attr_reader :claims
+
+      # @return [Agentilda::Live::Publisher]
+      attr_reader :publisher
+
+      # @return [Agentilda::Live::Commands]
+      attr_reader :commands
+
+      # @return [Agentilda::Live::RunState]
+      attr_reader :run_state
+
+      # @return [Proc] the runner's `on_board:`
+      def on_board = @publisher.to_proc
+
+      # Wire the run in: commands are applied at the top of each tick, and
+      # the log is heard from now on.
+      #
+      # @param dispatcher [Agentilda::Engine::Dispatcher]
+      # @return [void]
+      def attach(dispatcher)
+        @publisher.listen
+        dispatcher.before_tick(&@commands)
+      end
+
+      # The run is over: claims go back, and this node's snapshot goes at
+      # once rather than when it expires, so other pages stop showing it.
+      #
+      # @return [void]
+      def close
+        @publisher.close
+        @claims.release_all
+        @store.del(@keys.snapshot)
+      rescue Unavailable
+        nil
+      end
+
+      # @return [String] where, with the password masked, and as whom
+      def describe = "#{Live.mask(@store.url)} as #{@node.label} (#{@node.name})"
+    end
+  end
+end

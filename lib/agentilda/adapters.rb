@@ -12,6 +12,12 @@ module Agentilda
     # Each adapter translates it into its own CLI's words.
     EFFORTS = %w[low medium high xhigh max].freeze
 
+    # Percent of the context window at which every agent compacts itself
+    # (W28), instead of the CLI's default near the limit: a long session's
+    # quality drops well before its window is full. Each adapter maps it to
+    # its own CLI's setting in {Base#environment}.
+    AUTOCOMPACT = 40
+
     # Everything an adapter needs to start one agent, and nothing about why.
     #
     # @!attribute [r] prompt

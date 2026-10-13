@@ -54,6 +54,9 @@ module Agentilda
         desc:    "With --isolation worktree, a finished branch is pushed and its pull request " \
                  "opened as soon as it lands, titled [NNN.MM](X). --no-git-push turns that off and leaves it uncommitted."
       option :log, desc: "Append progress to this file (default: a per-project file under the system temp dir)"
+      option :redis_url,
+        desc: "Redis for the live board, its commands and plan claims shared with other machines " \
+              "(default: .tilda.yml redis_url, else $REDIS_URL, else #{Live::DEFAULT_URL})"
 
       example [
         "-n                     # show which agent would take which plan",
@@ -120,6 +123,7 @@ module Agentilda
         # is what will draw the board and take kill, extend and stop.
         Execution::Control.reset!
 
+        live = live_for(root:, tree:, agents:, options:)
         runner = Engine.runner(
           tree:,
           agents:,
@@ -137,16 +141,55 @@ module Agentilda
             max_tokens:   options[:max_tokens]&.to_i,
             lean:         !options[:user_config]),
           dry_run:   dry_run?(options),
-          publisher: publisher_for(root, isolation, options)
+          publisher: publisher_for(root, isolation, options),
+          on_board:  live&.on_board,
+          claims:    live&.claims
         )
 
         started  = UI.monotonic
-        attempts = Execution.on_interrupt { runner.call }
+        attempts = begin
+          Execution.on_interrupt { runner.call { |dispatcher| live&.attach(dispatcher) } }
+        ensure
+          live&.close
+        end
         report(runner, attempts, options, seconds: UI.monotonic - started)
         exit(failures(attempts).empty? ? 0 : 1)
       end
 
       private
+
+      # The live board (W6, W13, W26), when this run has one: not on a dry
+      # run, which must leave nothing behind, and not without Redis, where
+      # the run goes on exactly as it did before there was a page. Either
+      # way it is said once, so a page that never updates is not a mystery.
+      #
+      # @param root [String]
+      # @param tree [Agentilda::Plans::Tree]
+      # @param agents [Agentilda::Agents::Registry]
+      # @param options [Hash]
+      # @param live [Boolean] false runs without Redis at all, for the
+      #   headless flags a later command adds
+      # @return [Agentilda::Live::Session, nil]
+      def live_for(root:, tree:, agents:, options:, live: true)
+        return nil unless live
+
+        if dry_run?(options)
+          warn("Dry run: the live board is off, so nothing is published to Redis and no plan is claimed.") unless quiet?(options)
+          return nil
+        end
+
+        config = Config.current
+        store = Live.connect(Live.redis_url(option: options[:redis_url], config:))
+        Live.session(store:, root:, tree:, agents:, project: config.project).tap do |session|
+          info("Live board: #{session.describe}") unless quiet?(options)
+        end
+      rescue Live::Unavailable => e
+        unless quiet?(options)
+          warn("#{e.message}\n\nThe run goes on without the live board: no page, no commands from it, and no " \
+               "plan claims shared with other machines. Start redis-server, or pass --redis-url.")
+        end
+        nil
+      end
 
       # The attempts list, padded into columns.
       #

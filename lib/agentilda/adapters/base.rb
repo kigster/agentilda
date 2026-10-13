@@ -32,6 +32,21 @@ module Agentilda
       # @return [String, nil] this CLI's word for it
       def effort(effort) = effort
 
+      # What the child process gets on top of the harness's own environment.
+      #
+      # @return [Hash{String => String}]
+      def environment = {}
+
+      # The models this CLI offers, most capable first, for the page's
+      # dropdowns and the cost meter. Empty for a CLI nobody has priced.
+      #
+      # @return [Array<Agentilda::Adapters::Model>]
+      def models = []
+
+      # @param name [String, nil] an alias or a full id
+      # @return [Agentilda::Adapters::Model, nil]
+      def model_entry(name) = models.find { |m| m.id == name.to_s }
+
       # Whether the CLI itself refuses the denied tools, rather than only being
       # asked not to use them. The prompt says which, because telling an agent
       # a guard exists when it does not is how it stops being careful.

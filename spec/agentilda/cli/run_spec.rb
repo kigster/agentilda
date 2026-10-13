@@ -11,11 +11,16 @@
 RSpec.describe Agentilda::CLI::Run, :tree do
   subject(:command) { described_class.new }
 
-  before {
+  # The live board publishes to a store kept in this process, never to the
+  # Redis a developer's machine happens to run.
+  let(:live_store) { Agentilda::Live.memory_store }
+
+  before do
     allow(Agentilda::Engine::Runner).to receive(:new).and_wrap_original do |original, **keywords|
       original.call(**keywords, sleeper: ->(_) {})
     end
-  }
+    allow(Agentilda::Live).to receive(:connect).and_return(live_store)
+  end
 
   # The loop sleeps a second between ticks. Every example hands the runner
   # the no-op sleeper runner_spec uses, or each real-run example is two
@@ -567,6 +572,59 @@ RSpec.describe Agentilda::CLI::Run, :tree do
       _out, err, = run
 
       expect(unwrapped(err)).to include("1 plan need", "agentilda unblock 001.00")
+    end
+  end
+
+  # Plan 004: a real run publishes its board to Redis and takes commands from
+  # it; a dry run and a run without Redis go on exactly as before, saying so.
+  describe "the live board" do
+    subject(:stderr) { unwrapped(result[1]) }
+
+    let(:result) { run(dry_run: false, rounds: 1) }
+
+    before do
+      building_plan
+      with_executor
+    end
+
+    it "says where the board is published, and as whom" do
+      expect(stderr).to include("Live board: memory:// as")
+    end
+
+    it "publishes while the run lasts and takes its snapshot down at the end" do
+      result
+      aggregate_failures do
+        expect(live_store.scan("agentilda:").grep(/:board\z/).map { live_store.xlen(it) }).to all(be_positive)
+        expect(live_store.scan("agentilda:").grep(/:snapshot\z/)).to eq([])
+      end
+    end
+
+    context "without Redis" do
+      before { allow(Agentilda::Live).to receive(:connect).and_raise(Agentilda::Live::Unavailable, "Redis at redis://h/0 is unavailable") }
+
+      it "runs anyway and says what is missing" do
+        expect(stderr).to include("Redis at redis://h/0 is unavailable", "The run goes on without the live board", "2 failed")
+      end
+    end
+
+    context "with --redis-url" do
+      let(:result) { run(dry_run: false, rounds: 1, redis_url: "redis://elsewhere:6380/2") }
+
+      it "connects there" do
+        result
+        expect(Agentilda::Live).to have_received(:connect).with("redis://elsewhere:6380/2")
+      end
+    end
+
+    context "with --dry-run" do
+      let(:result) { run }
+
+      it "stays off, and says so" do
+        aggregate_failures do
+          expect(stderr).to include("Dry run: the live board is off")
+          expect(Agentilda::Live).not_to have_received(:connect)
+        end
+      end
     end
   end
 end

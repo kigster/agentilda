@@ -26,6 +26,18 @@ module Agentilda
       # The clock's warnings start with this; the agent's prompt explains them.
       WARN = "WARN"
 
+      # From the page, to one agent: stop at the next safe point, read the
+      # plan's mailbox, and wait there for the next message before going on.
+      # A person holds an agent to say something to it.
+      HOLD = "HOLD"
+
+      # From the page, to one agent: run `/compact` at the next step, so a
+      # long session sheds its context before it degrades (W28).
+      COMPACT = "COMPACT"
+
+      # The words a person may send one agent from the page, by command kind.
+      WORDS = { "hold" => HOLD, "wrap_up" => WRAP_UP, "stop" => STOP, "compact" => COMPACT }.freeze
+
       # Seconds between {#quit!} and the harness terminating whatever is still
       # running. Long enough to write files and a handoff note; short enough
       # that q means quit rather than "quit eventually".

@@ -63,10 +63,15 @@ module Agentilda
         @preferred = {}
         @started_at = UI.monotonic
         @mutex = Mutex.new
+        @before_tick = []
+        @requeued = []
       end
 
       # @return [Array<Agentilda::Engine::Dispatcher::Job>]
       attr_reader :running
+
+      # @return [Agentilda::Engine::Runner]
+      attr_reader :runner
 
       # @return [Array<Agentilda::Engine::Runner::Attempt>]
       attr_reader :attempts
@@ -87,6 +92,7 @@ module Agentilda
       #
       # @return [void]
       def tick
+        @before_tick.each { |hook| hook.call(self) }
         reap
         poll
         @running.each { |job| job.handle.kill!(grace: 0, reason: :quit) } if Execution::Control.overdue?
@@ -115,6 +121,72 @@ module Agentilda
       # @return [void]
       def extend(key, seconds)
         @running.find { |j| j.key == key }&.handle&.extend!(seconds)
+      end
+
+      # Something to run at the top of every tick, on the loop thread, where
+      # {#running} may be read and changed safely: the live run applies the
+      # page's commands here.
+      #
+      # @yieldparam dispatcher [Agentilda::Engine::Dispatcher]
+      # @return [void]
+      def before_tick(&hook) = @before_tick << hook
+
+      # @param key [String] a row's key, `"<ordinal>/<agent>"`
+      # @return [Agentilda::Engine::Dispatcher::Job, nil]
+      def job(key) = @running.find { |j| j.key == key }
+
+      # One control word into one running agent's control file.
+      #
+      # @param key [String]
+      # @param word [String] one of {Execution::Control}'s words
+      # @return [Boolean] whether there was a running agent to tell
+      def signal(key, word)
+        control = job(key)&.handle&.control or return false
+        Execution::Control.write(control, word)
+        true
+      end
+
+      # Stop the agent with a resume note and give it its round back, so it
+      # is started again, on whatever model is now preferred, as soon as it
+      # has stopped. The agent is told INTERRUPT, which is the word that
+      # makes it leave the note.
+      #
+      # @param key [String]
+      # @return [Boolean] whether there was a running agent to restart
+      def requeue(key)
+        signal(key, Execution::Control::INTERRUPT) or return false
+        @requeued |= [key]
+        true
+      end
+
+      # Hand back the round an interrupted agent lost, so a person's "resume"
+      # starts it again even when it had no rounds left.
+      #
+      # @param ordinal [#to_s]
+      # @param agent [String]
+      # @return [Boolean] whether there was an interrupted round to hand back
+      def resume(ordinal, agent)
+        @mutex.synchronize do
+          entries = @history[[ordinal.to_s, agent.to_s]]
+          last = entries.rindex { |h| h[:status] == "Interrupted" } or next false
+          entries.delete_at(last)
+          true
+        end
+      end
+
+      # The model one agent gets on one plan from its next invocation (W24).
+      #
+      # @param ordinal [#to_s]
+      # @param agent [String]
+      # @param model [String, nil] nil forgets the choice
+      # @return [Boolean] whether the executor can honour it
+      def prefer_model(ordinal, agent, model)
+        executor = @runner.executor
+        return false unless executor.respond_to?(:prefer_model)
+
+        executor.prefer_model(ordinal, agent, model)
+        @models&.delete([ordinal.to_s, agent.to_s])
+        true
       end
 
       # @return [Agentilda::Engine::Board]
@@ -254,6 +326,10 @@ module Agentilda
       # @return [void]
       def dispatch
         while @running.size < @runner.jobs && (pair = next_dispatchable)
+          # Lost to another machine between the check and the claim: the next
+          # pass sees the plan as foreign and steps around it.
+          next unless @runner.claim(pair.last)
+
           start(*pair)
         end
       end
@@ -270,6 +346,7 @@ module Agentilda
           state = Lifecycle::Lanes.target(subject) || Lifecycle::Resync::Dirs.target(subject)
           next if Plans::StateMachine::SETTLED.include?(state.key)
           next if @finished_plans.include?(subject.feature.ordinal.to_s)
+          next if @runner.foreign?(subject)
 
           candidates = Agents::Routing.filter(@runner.agents.for_status(state), subject)
           preferred = @preferred[subject.feature.ordinal.to_s]
@@ -435,6 +512,7 @@ module Agentilda
         @running.select(&:finished?).each do |job|
           @running.delete(job)
           attempt = settle(job)
+          forget_round(job) if @requeued.delete(job.key)
           @attempts << attempt
           row = row_for(job)
           @recent << { at: UI.monotonic, row: row.with(state: attempt.ok ? :done : :failed,
@@ -734,6 +812,19 @@ module Agentilda
           entry = entries.find { |h| h[:state] == state && h[:round] == round }
           entry ? entry[:status] = status : entries << { state:, status:, round: }
         end
+      end
+
+      # A requeued agent's round is handed back: the stop was a person's
+      # choice, not the agent running out of turns.
+      #
+      # @param job [Agentilda::Engine::Dispatcher::Job]
+      # @return [void]
+      def forget_round(job)
+        ordinal = job.task.subject.feature.ordinal.to_s
+        @mutex.synchronize do
+          @history[[ordinal, job.task.agent.name]].reject! { |h| h[:state] == job.state && h[:round] == job.task.round }
+        end
+        @finished_plans.delete(ordinal)
       end
 
       # @return [void]
