@@ -265,6 +265,9 @@
   .unblock-head h2 { margin: 0; font-size: 18px; font-weight: 800; letter-spacing: -0.01em; }
   .unblock-head .btn { margin-left: auto; }
   /* The answer takes the widget's full width; Send sits to its right, at the bottom, so the editor can be tall. */
+  .unblock-buttons { display: flex; flex-direction: column; gap: 8px; }
+  .ask-held { margin-left: 6px; padding: 1px 8px; border-radius: 999px; background: var(--held); color: #fff; font-weight: 700; }
+  .ask.is-held { border-left-color: var(--alarm); }
   .unblock-answer { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 12px; align-items: end; }
   .unblock .md { height: 180px; min-height: 120px; resize: vertical; }
   @media (max-width: 640px) { .unblock-answer { grid-template-columns: minmax(0, 1fr); } }
@@ -467,6 +470,11 @@
   .pill:hover { background: color-mix(in srgb, var(--pill) 26%, var(--plate)); }
   .pill.is-done { --pill: var(--go); }
   .pill.is-blocked { --pill: var(--alarm); }
+  /* Held blocked on purpose: solid red, so it reads as a decision, not a request waiting to be noticed. */
+  .pill.is-held, .ask-held { --held: color-mix(in srgb, var(--alarm) 70%, #000); }
+  .pill.is-held { background: var(--held); border-color: var(--held); color: #fff; }
+  .pill.is-held:hover { background: color-mix(in srgb, var(--held) 85%, #000); }
+  .pill.is-held .pill-time { color: rgb(255 255 255 / 82%); }
   .pill.is-finishing { margin-left: auto; }
   .pill-mark { font-size: 15px; line-height: 1; width: 18px; text-align: center; }
   .pill.is-done .pill-mark { color: var(--go); font-weight: 800; }
@@ -502,13 +510,26 @@
   .md textarea { resize: none; background: transparent; color: transparent; caret-color: var(--ink); outline: none; }
   .md textarea::placeholder { color: var(--ink-soft); }
   .md textarea::selection { background: color-mix(in srgb, var(--focus) 30%, transparent); color: transparent; }
-  .md .h { color: var(--lane-full); font-weight: 700; }
-  .md .b { font-weight: 700; }
-  .md .i { font-style: italic; }
-  .md .c { color: var(--lane-plan); }
-  .md .q, .md .fm { color: var(--ink-soft); }
-  .md .li { color: var(--alarm); }
-  .md .a { color: var(--go); }
+  /* Gruvbox for highlight.js tokens: the light palette by default, the dark one on the dark theme. */
+  .md { --gb-fg: #3c3836; --gb-red: #9d0006; --gb-green: #79740e; --gb-yellow: #b57614; --gb-blue: #076678;
+        --gb-purple: #8f3f71; --gb-aqua: #427b58; --gb-orange: #af3a03; --gb-gray: #928374; }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) .md { --gb-fg: #ebdbb2; --gb-red: #fb4934; --gb-green: #b8bb26; --gb-yellow: #fabd2f;
+      --gb-blue: #83a598; --gb-purple: #d3869b; --gb-aqua: #8ec07c; --gb-orange: #fe8019; --gb-gray: #928374; }
+  }
+  :root[data-theme="dark"] .md { --gb-fg: #ebdbb2; --gb-red: #fb4934; --gb-green: #b8bb26; --gb-yellow: #fabd2f;
+    --gb-blue: #83a598; --gb-purple: #d3869b; --gb-aqua: #8ec07c; --gb-orange: #fe8019; --gb-gray: #928374; }
+  .md pre { color: var(--gb-fg); }
+  .md .hljs-keyword, .md .hljs-selector-tag, .md .hljs-bullet { color: var(--gb-red); }
+  .md .hljs-string, .md .hljs-regexp, .md .hljs-title, .md .hljs-link { color: var(--gb-green); }
+  .md .hljs-title.function_, .md .hljs-section, .md .hljs-strong { font-weight: 700; }
+  .md .hljs-number, .md .hljs-literal, .md .hljs-symbol { color: var(--gb-purple); }
+  .md .hljs-comment, .md .hljs-quote, .md .hljs-meta { color: var(--gb-gray); font-style: italic; }
+  .md .hljs-meta-lang { color: var(--gb-aqua); }
+  .md .hljs-type, .md .hljs-title.class_, .md .hljs-section { color: var(--gb-yellow); }
+  .md .hljs-variable, .md .hljs-attr, .md .hljs-attribute, .md .hljs-params, .md .hljs-template-variable { color: var(--gb-blue); }
+  .md .hljs-built_in, .md .hljs-code, .md .hljs-subst { color: var(--gb-orange); }
+  .md .hljs-emphasis { font-style: italic; }
   /* Frontmatter as controls above the editor (W5): the editor holds only the body of spec.md. */
   .fm-form { display: flex; flex-wrap: wrap; gap: 14px 22px; align-items: flex-end; margin: 0 0 14px; }
   .fm-form fieldset { border: 0; margin: 0; padding: 0; min-width: 0; }
@@ -695,6 +716,7 @@
 </dialog>
 <p class="sr-only" id="announcer" aria-live="polite"></p>
 
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
 <script>
   // Stations come from StateMachine::SPINE and agents/*.md `handles:` in the real build.
   const STATIONS = [
@@ -924,7 +946,8 @@
       el.className = "ask";
       el.dataset.ask = ask.id;
       if (ask.done) { el.classList.add("is-done"); el.innerHTML = `<p class="ask-done">${ask.done}</p>`; return el; }
-      const who = `<p class="ask-who">${ask.plan} — ${ask.agent}</p>`;
+      const who = `<p class="ask-who">${ask.plan} — ${ask.agent}${ask.held ? ` <span class="ask-held">held blocked</span>` : ""}</p>`;
+      el.classList.toggle("is-held", Boolean(ask.held));
       if (ask.kind === "question" && prefix === "u") {
         // The unblock widget spans the board, so the answer gets its whole width as a Markdown editor, with Send beside it.
         el.innerHTML = `${who}<p class="ask-text">${ask.text}</p><div class="unblock-answer"></div>`;
@@ -932,12 +955,16 @@
         ta.addEventListener("input", () => { ask.draft = ta.value; ta.removeAttribute("aria-invalid"); });
         const send = button("Send answer", "btn-primary", () => answer(ask, ta));
         send.setAttribute("aria-keyshortcuts", MAC ? "Meta+Enter" : "Control+Enter");
-        el.querySelector(".unblock-answer").append(box, send);
+        const side = document.createElement("div");
+        side.className = "unblock-buttons";
+        side.append(send, holdButton(ask));
+        el.querySelector(".unblock-answer").append(box, side);
       } else if (ask.kind === "question") {
         el.innerHTML = `${who}<p class="ask-text">${ask.text}</p>
           <label class="sr-only" for="${prefix}-${ask.id}">Your answer</label>
           <textarea id="${prefix}-${ask.id}" placeholder="Your answer. ${SEND_KEYS} sends it."></textarea>
           <div class="ask-actions"><button class="btn btn-primary" type="button" aria-keyshortcuts="${MAC ? "Meta+Enter" : "Control+Enter"}">Send answer</button></div>`;
+        el.querySelector(".ask-actions").append(holdButton(ask));
         const field = el.querySelector("textarea");
         field.value = ask.draft || "";
         field.addEventListener("input", () => { ask.draft = field.value; field.removeAttribute("aria-invalid"); });
@@ -950,6 +977,20 @@
         el.querySelectorAll("button")[1].addEventListener("click", () => resume(ask, `Discarded leah-researcher's work. It starts again.`));
       }
       return el;
+  }
+  // Hold blocked keeps the agent parked on purpose: no timeout or default answer moves it, and its pill turns solid
+  // red. Pressing it again releases the hold; the question still waits for an answer.
+  function holdButton(ask) {
+    const b = button(ask.held ? "Release hold" : "Hold blocked", "btn-quiet", () => {
+      ask.held = !ask.held;
+      log("api", "info", `POST /api/commands ${ask.held ? "hold" : "release"} ${ask.plan}/${ask.agent} accepted`);
+      $("announcer").textContent = ask.held ? `${ask.plan} held blocked.` : `${ask.plan} no longer held.`;
+      paintAsks(); paintPills();
+      if (unblocking?.ask === ask) $("unblock-body").replaceChildren(askCard(ask, "u"));
+      document.querySelector(`[data-ask="${ask.id}"] [aria-pressed]`)?.focus();
+    }, { title: ask.held ? "Let the agent's question go back to waiting normally" : "Keep this agent blocked until you answer; nothing else unblocks it" });
+    b.setAttribute("aria-pressed", String(Boolean(ask.held)));
+    return b;
   }
   // An answer needs words: an empty one would unblock the agent with nothing to go on.
   function answer(ask, field) {
@@ -1475,6 +1516,8 @@
   function pillState(plan) {
     if (plan.at === 6) return { cls: "is-done", mark: "✓", say: "reviewed, ready to merge" };
     if (plan.interrupted) return { cls: "is-blocked", mark: "⭕️", say: "needs a decision: keep or discard the interrupted agent's work" };
+    const held = asks.find(a => !a.done && a.held && a.plan === plan.id);
+    if (held) return { cls: "is-blocked is-held", mark: "⏸", say: `held blocked by you: ${held.text}` };
     const q = plan.cars.find(c => c.blocked);
     if (q) return PRODUCT_QUESTIONS.includes(q.blocked)
       ? { cls: "is-blocked", mark: "🅱️", say: `needs product decision: ${q.blocked}` }
@@ -1555,7 +1598,7 @@
         if (dx) el.animate([{ transform: `translateX(${dx}px)` }, { transform: "none" }], { duration: 450, easing: "cubic-bezier(.2,.7,.2,1)" });
       }
     }
-    const done = plans.filter(p => p.doneAt).length, blocked = plans.filter(p => pillState(p).cls === "is-blocked").length;
+    const done = plans.filter(p => p.doneAt).length, blocked = plans.filter(p => pillState(p).cls.startsWith("is-blocked")).length;
     $("statusbar-sum").textContent = `${done} of ${plans.length} ready to merge, ${blocked} blocked`;
   }
   function finish(plan) {
@@ -1576,22 +1619,41 @@
   let editing = null;      // the plan open in the editor, and its text when it was opened
   let ideaFm = null;       // the frontmatter every plan from this idea starts with
   const esc = t => t.replace(/[&<>]/g, ch => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" })[ch]);
+  // highlight.js does the tokenizing: Markdown for the prose, YAML for the frontmatter, and each fenced block in the
+  // language its fence names. Its output keeps every character in place, which the overlay under the textarea needs.
+  // Colours come from Gruvbox tokens in the stylesheet, so they follow the theme switch.
+  function hl(code, language) {
+    if (!code) return "";
+    if (!window.hljs || !hljs.getLanguage(language)) return esc(code);
+    return hljs.highlight(code, { language, ignoreIllegals: true }).value;
+  }
   function highlight(text) {
-    let fence = false, front = false;
-    return text.split("\n").map((line, n) => {
-      const e = esc(line);
-      if (n === 0 && line === "---") { front = true; return `<span class="fm">${e}</span>`; }
-      if (front) { if (line === "---") front = false; return `<span class="fm">${e}</span>`; }
-      if (/^```/.test(line)) { fence = !fence; return `<span class="c">${e}</span>`; }
-      if (fence) return `<span class="c">${e}</span>`;
-      if (/^#{1,6}\s/.test(line)) return `<span class="h">${e}</span>`;
-      if (/^>\s?/.test(line)) return `<span class="q">${e}</span>`;
-      return e.replace(/^(\s*)([-*+]|\d+\.)(\s)/, '$1<span class="li">$2</span>$3')
-        .replace(/`[^`]+`/g, m => `<span class="c">${m}</span>`)
-        .replace(/\*\*[^*]+\*\*/g, m => `<span class="b">${m}</span>`)
-        .replace(/(^|[^*])\*[^*\s][^*]*\*/g, m => m.replace(/\*[^*]+\*/, x => `<span class="i">${x}</span>`))
-        .replace(/\[[^\]]+\]\([^)]+\)/g, m => `<span class="a">${m}</span>`);
-    }).join("\n") + "\n";
+    const lines = text.split("\n"), out = [];
+    let i = 0, prose = [];
+    const flush = () => { if (prose.length) out.push(hl(prose.join("\n"), "markdown")); prose = []; };
+    if (lines[0] === "---") {
+      const end = lines.indexOf("---", 1);
+      if (end > 0) {
+        const fm = `<span class="hljs-meta">---</span>`;
+        out.push([fm, ...(end > 1 ? [hl(lines.slice(1, end).join("\n"), "yaml")] : []), fm].join("\n"));
+        i = end + 1;
+      }
+    }
+    for (; i < lines.length; i++) {
+      const open = lines[i].match(/^(\s*```+)(\s*)([\w+#-]*)(.*)$/);
+      if (!open) { prose.push(lines[i]); continue; }
+      flush();
+      const close = lines.findIndex((l, k) => k > i && /^\s*```+\s*$/.test(l));
+      const last = close < 0 ? lines.length : close;
+      const lang = open[3].toLowerCase();
+      const body = lines.slice(i + 1, last).join("\n");
+      out.push(`<span class="hljs-meta">${esc(open[1])}</span>${open[2]}<span class="hljs-meta-lang">${esc(open[3])}</span>${esc(open[4])}`
+        + (last > i + 1 ? `\n${window.hljs && hljs.getLanguage(lang) ? hl(body, lang) : `<span class="hljs-code">${esc(body)}</span>`}` : "")
+        + (close < 0 ? "" : `\n<span class="hljs-meta">${esc(lines[close])}</span>`));
+      i = last;
+    }
+    flush();
+    return out.join("\n") + "\n";
   }
   function editor(value, placeholder, label, id = "md-input") {
     const box = document.createElement("div");
