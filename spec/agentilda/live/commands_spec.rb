@@ -486,6 +486,44 @@ RSpec.describe Agentilda::Live::Commands, :tree do
       end
     end
 
+    context "with the idea dialog's form" do
+      before do
+        send_command("create_plans",
+          idea:        "A tic-tac-toe game",
+          frontmatter: { lane: "quick", research: false, frontend: "false", depth: "fast" })
+        apply
+      end
+
+      let(:spec) { Agentilda::Plans::Spec.for(created) }
+
+      it "writes the lane, front end and depth into spec.md, where routing reads them" do
+        aggregate_failures do
+          expect([spec.lane, spec.frontend, spec.depth]).to eq([:quick, false, :fast])
+          expect(spec.problems).to be_empty
+          expect(created.read("spec.md")).to include("A tic-tac-toe game")
+        end
+      end
+    end
+
+    context "when the form leaves everything to the plan" do
+      before do
+        send_command("create_plans",
+          idea:        "A tic-tac-toe game",
+          frontmatter: { lane: "full", research: true, frontend: "auto", depth: "auto" })
+        apply
+      end
+
+      it "writes only the lane, and nothing for auto or research" do
+        expect(created.read("spec.md")).to start_with("---\nlane: full\n---\n\n# ")
+      end
+    end
+
+    it "writes no frontmatter when the command carries no form" do
+      send_command("create_plans", idea: "A tic-tac-toe game")
+      apply
+      expect(created.read("spec.md")).to start_with("# ")
+    end
+
     it "refuses an idea that makes no folder name" do
       send_command("create_plans", idea: "!!!")
       expect(apply.first.reason).to start_with("could not create the plan")

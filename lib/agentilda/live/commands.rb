@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require "json"
+require "yaml"
 
 module Agentilda
   module Live
@@ -434,9 +435,34 @@ module Agentilda
           ->(problem) { raise Refusal, "could not create the plan: #{problem}" }
         )
         feature = Plans::Feature.parse(path)
-        Lifecycle.brief(path:, title: feature.title, root: File.dirname(tree.dir), seed: "#{idea}\n\n#{marker(command)}")
-                 .write_scaffold!
+        spec = Lifecycle.brief(path:, title: feature.title, root: File.dirname(tree.dir), seed: "#{idea}\n\n#{marker(command)}")
+                        .write_scaffold!
+        settings = idea_frontmatter(command.payload["frontmatter"])
+        File.write(spec, "#{YAML.dump(settings)}---\n\n#{File.read(spec)}") unless settings.empty?
         created(feature, dispatcher)
+      end
+
+      # The idea dialog's form (W19) as spec.md frontmatter, in
+      # {Plans::Spec}'s vocabulary. It used to be sent and dropped, so a plan
+      # the page asked for in the quick lane at depth fast ran the full lane
+      # on every agent's default model. `auto` means "let the plan decide",
+      # which is what leaving the key out already says, and `research` has
+      # no key in spec.md to land in, so neither is written. Anything else
+      # is passed through as typed: {Plans::Spec#problems} names a bad
+      # value, the way it does for one typed by hand.
+      #
+      # @param form [Hash, nil] `payload.frontmatter`, as the page sends it
+      # @return [Hash{String => Object}] empty when there is nothing to say
+      def idea_frontmatter(form)
+        return {} unless form.is_a?(Hash)
+
+        form = form.transform_keys(&:to_s)
+        form.slice("lane", "frontend", "depth").each_with_object({}) do |(key, value), out|
+          text = value.to_s.strip
+          next if text.empty? || text == "auto"
+
+          out[key] = key == "frontend" && %w[true false].include?(text) ? text == "true" : text
+        end
       end
 
       # @return [String]
