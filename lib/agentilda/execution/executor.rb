@@ -132,7 +132,30 @@ module Agentilda
         attr_accessor :clock
 
         # @return [String, nil]
-        attr_accessor :control
+        attr_reader :control
+
+        # The control file, once {Executor#call} has registered it. A stop
+        # asked for before then is written the moment it exists, so an agent
+        # still starting up when Stop All came is not left running.
+        #
+        # @param path [String, nil]
+        # @return [void]
+        def control=(path)
+          @mutex.synchronize do
+            @control = path
+            Control.write(path, Control::STOP) if path && @stop_requested
+          end
+        end
+
+        # Stop at the next step, now or as soon as there is a control file.
+        #
+        # @return [void]
+        def request_stop!
+          @mutex.synchronize do
+            @stop_requested = true
+            Control.write(@control, Control::STOP) if @control
+          end
+        end
 
         # @return [Symbol, nil] why the process was killed, once it was
         attr_reader :killed

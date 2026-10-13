@@ -297,4 +297,28 @@ RSpec.describe "A staying run", :tree do
       expect(dispatcher.paused?).to be(false)
     end
   end
+
+  # A Stop All holds the plans there were when it came. One that appears
+  # afterwards by another route than the page was never held.
+  describe "a plan written by hand after Stop All" do
+    let(:agents) { Agentilda::Agents::Registry.new }
+    let(:executor) { HeldExecutor.new(traces) }
+    let(:dispatcher) { Agentilda::Engine::Dispatcher.new(runner:, sleeper: ->(_) {}, stay: true, rescan:) }
+
+    before do
+      building("001.00", "tax-rule-dsl")
+      dispatcher.stop_all
+      building("002.00", "written-by-hand")
+      dispatcher.wake!
+      start_agents
+    end
+
+    it "starts the new plan and leaves the held one alone" do
+      expect(dispatcher.running.map { it.task.subject.feature.ordinal.to_s }.uniq).to eq(%w[002.00])
+    end
+
+    it "is still paused for the plan that was held" do
+      expect(dispatcher.paused?).to be(true)
+    end
+  end
 end

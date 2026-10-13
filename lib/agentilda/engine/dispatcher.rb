@@ -98,6 +98,7 @@ module Agentilda
         @idle_ticks = 0
         @wake = false
         @paused = false
+        @held = []
         @complete = false
         @said = nil
         @holds = []
@@ -192,22 +193,26 @@ module Agentilda
       # @return [void]
       def hold_open(&check) = @holds << check
 
-      # Stop every running agent and start no more, without ending the run:
-      # the page's Stop All under `tilda start`, where the engine and the
-      # page stay up. STOP, not a kill, so each agent leaves its work
-      # written down. The next command that asks for work, an answer, a plan
-      # added or created, a resume, lifts the pause.
+      # Stop every running agent and start no more on the plans there are
+      # now, without ending the run: the page's Stop All under `tilda start`,
+      # where the engine and the page stay up. STOP, not a kill, so each
+      # agent leaves its work written down. The next command that asks for
+      # work, an answer, a plan added or created, a resume, lifts the pause;
+      # a plan that appears later by any other route (`tilda create`, a
+      # folder written by hand) was never held, so a rescan starts it.
       #
       # @return [Integer] how many agents were told to stop
       def stop_all
         @paused = true
-        @running.each { |job| job.handle.control && Execution::Control.write(job.handle.control, Execution::Control::STOP) }
+        @held = @runner.in_scope.map { it.feature.ordinal.to_s }
+        @running.each { it.handle.request_stop! }
         @running.size
       end
 
       # @return [void]
       def unpause!
         @paused = false
+        @held = []
         wake!
       end
 
@@ -637,8 +642,6 @@ module Agentilda
 
       # @return [void]
       def dispatch
-        return @idle = quiet? if @paused
-
         started = 0
         while @running.size < @runner.jobs && (pair = next_dispatchable)
           # Lost to another machine between the check and the claim: the next
@@ -724,6 +727,7 @@ module Agentilda
           state = Lifecycle::Lanes.target(subject) || Lifecycle::Resync::Dirs.target(subject)
           next if Plans::StateMachine::SETTLED.include?(state.key)
           next if @finished_plans.include?(subject.feature.ordinal.to_s)
+          next if @held.include?(subject.feature.ordinal.to_s)
           next if @runner.foreign?(subject) || @discarding.key?(subject.feature.ordinal.to_s)
 
           candidates = Agents::Routing.filter(@runner.agents.for_status(state), subject)
