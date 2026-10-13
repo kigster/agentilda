@@ -265,6 +265,21 @@
   .unblock-head h2 { margin: 0; font-size: 18px; font-weight: 800; letter-spacing: -0.01em; }
   .unblock-head .btn { margin-left: auto; }
   /* The answer takes the widget's full width; Send sits to its right, at the bottom, so the editor can be tall. */
+  .md-preview { height: 180px; min-height: 120px; resize: vertical; overflow: auto; padding: 10px 16px; border: 1px solid var(--hairline);
+                border-radius: 10px; background: var(--enamel); color: var(--ink); font-size: 15px; line-height: 1.55; }
+  .md-preview[hidden] { display: none; }
+  .md-preview:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px; }
+  .md-preview > :first-child { margin-top: 0; }
+  .md-preview h1, .md-preview h2, .md-preview h3 { margin: 14px 0 6px; line-height: 1.25; }
+  .md-preview h1 { font-size: 22px; } .md-preview h2 { font-size: 19px; } .md-preview h3 { font-size: 16px; }
+  .md-preview p, .md-preview ul, .md-preview ol, .md-preview blockquote { margin: 0 0 10px; }
+  .md-preview blockquote { padding-left: 12px; border-left: 3px solid var(--hairline); color: var(--ink-soft); }
+  .md-preview code { font: 13px/1.5 var(--mono); }
+  .md-preview :not(pre) > code { padding: 1px 5px; border-radius: 5px; background: color-mix(in srgb, var(--ink) 8%, transparent); }
+  .md-preview pre { margin: 0 0 10px; padding: 10px 14px; border-radius: 8px; overflow-x: auto; color: var(--gb-fg);
+                    background: color-mix(in srgb, var(--ink) 6%, transparent); }
+  .md-preview a { color: var(--focus); }
+  .md-empty { color: var(--ink-soft); }
   .unblock-buttons { display: flex; flex-direction: column; gap: 8px; }
   .ask-held { margin-left: 6px; padding: 1px 8px; border-radius: 999px; background: var(--held); color: #fff; font-weight: 700; }
   .ask.is-held { border-left-color: var(--alarm); }
@@ -511,25 +526,25 @@
   .md textarea::placeholder { color: var(--ink-soft); }
   .md textarea::selection { background: color-mix(in srgb, var(--focus) 30%, transparent); color: transparent; }
   /* Gruvbox for highlight.js tokens: the light palette by default, the dark one on the dark theme. */
-  .md { --gb-fg: #3c3836; --gb-red: #9d0006; --gb-green: #79740e; --gb-yellow: #b57614; --gb-blue: #076678;
+  .md, .md-preview { --gb-fg: #3c3836; --gb-red: #9d0006; --gb-green: #79740e; --gb-yellow: #b57614; --gb-blue: #076678;
         --gb-purple: #8f3f71; --gb-aqua: #427b58; --gb-orange: #af3a03; --gb-gray: #928374; }
   @media (prefers-color-scheme: dark) {
-    :root:not([data-theme="light"]) .md { --gb-fg: #ebdbb2; --gb-red: #fb4934; --gb-green: #b8bb26; --gb-yellow: #fabd2f;
+    :root:not([data-theme="light"]) :is(.md, .md-preview) { --gb-fg: #ebdbb2; --gb-red: #fb4934; --gb-green: #b8bb26; --gb-yellow: #fabd2f;
       --gb-blue: #83a598; --gb-purple: #d3869b; --gb-aqua: #8ec07c; --gb-orange: #fe8019; --gb-gray: #928374; }
   }
-  :root[data-theme="dark"] .md { --gb-fg: #ebdbb2; --gb-red: #fb4934; --gb-green: #b8bb26; --gb-yellow: #fabd2f;
+  :root[data-theme="dark"] :is(.md, .md-preview) { --gb-fg: #ebdbb2; --gb-red: #fb4934; --gb-green: #b8bb26; --gb-yellow: #fabd2f;
     --gb-blue: #83a598; --gb-purple: #d3869b; --gb-aqua: #8ec07c; --gb-orange: #fe8019; --gb-gray: #928374; }
   .md pre { color: var(--gb-fg); }
-  .md .hljs-keyword, .md .hljs-selector-tag, .md .hljs-bullet { color: var(--gb-red); }
-  .md .hljs-string, .md .hljs-regexp, .md .hljs-title, .md .hljs-link { color: var(--gb-green); }
-  .md .hljs-title.function_, .md .hljs-section, .md .hljs-strong { font-weight: 700; }
-  .md .hljs-number, .md .hljs-literal, .md .hljs-symbol { color: var(--gb-purple); }
-  .md .hljs-comment, .md .hljs-quote, .md .hljs-meta { color: var(--gb-gray); font-style: italic; }
-  .md .hljs-meta-lang { color: var(--gb-aqua); }
-  .md .hljs-type, .md .hljs-title.class_, .md .hljs-section { color: var(--gb-yellow); }
-  .md .hljs-variable, .md .hljs-attr, .md .hljs-attribute, .md .hljs-params, .md .hljs-template-variable { color: var(--gb-blue); }
-  .md .hljs-built_in, .md .hljs-code, .md .hljs-subst { color: var(--gb-orange); }
-  .md .hljs-emphasis { font-style: italic; }
+  :is(.md, .md-preview) .hljs-keyword, :is(.md, .md-preview) .hljs-selector-tag, :is(.md, .md-preview) .hljs-bullet { color: var(--gb-red); }
+  :is(.md, .md-preview) .hljs-string, :is(.md, .md-preview) .hljs-regexp, :is(.md, .md-preview) .hljs-title, :is(.md, .md-preview) .hljs-link { color: var(--gb-green); }
+  :is(.md, .md-preview) .hljs-title.function_, :is(.md, .md-preview) .hljs-section, :is(.md, .md-preview) .hljs-strong { font-weight: 700; }
+  :is(.md, .md-preview) .hljs-number, :is(.md, .md-preview) .hljs-literal, :is(.md, .md-preview) .hljs-symbol { color: var(--gb-purple); }
+  :is(.md, .md-preview) .hljs-comment, :is(.md, .md-preview) .hljs-quote, :is(.md, .md-preview) .hljs-meta { color: var(--gb-gray); font-style: italic; }
+  :is(.md, .md-preview) .hljs-meta-lang { color: var(--gb-aqua); }
+  :is(.md, .md-preview) .hljs-type, :is(.md, .md-preview) .hljs-title.class_, :is(.md, .md-preview) .hljs-section { color: var(--gb-yellow); }
+  :is(.md, .md-preview) .hljs-variable, :is(.md, .md-preview) .hljs-attr, :is(.md, .md-preview) .hljs-attribute, :is(.md, .md-preview) .hljs-params, :is(.md, .md-preview) .hljs-template-variable { color: var(--gb-blue); }
+  :is(.md, .md-preview) .hljs-built_in, :is(.md, .md-preview) .hljs-code, :is(.md, .md-preview) .hljs-subst { color: var(--gb-orange); }
+  :is(.md, .md-preview) .hljs-emphasis { font-style: italic; }
   /* Frontmatter as controls above the editor (W5): the editor holds only the body of spec.md. */
   .fm-form { display: flex; flex-wrap: wrap; gap: 14px 22px; align-items: flex-end; margin: 0 0 14px; }
   .fm-form fieldset { border: 0; margin: 0; padding: 0; min-width: 0; }
@@ -717,6 +732,8 @@
 <p class="sr-only" id="announcer" aria-live="polite"></p>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/marked/12.0.2/marked.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.1.6/purify.min.js"></script>
 <script>
   // Stations come from StateMachine::SPINE and agents/*.md `handles:` in the real build.
   const STATIONS = [
@@ -955,10 +972,25 @@
         ta.addEventListener("input", () => { ask.draft = ta.value; ta.removeAttribute("aria-invalid"); });
         const send = button("Send answer", "btn-primary", () => answer(ask, ta));
         send.setAttribute("aria-keyshortcuts", MAC ? "Meta+Enter" : "Control+Enter");
+        // Preview swaps the editor for the rendered answer, in place and at the same size; Edit swaps it back.
+        const view = document.createElement("div");
+        view.className = "md-preview";
+        view.tabIndex = 0;
+        view.setAttribute("aria-label", "Preview of your answer");
+        const pane = document.createElement("div");
+        pane.append(box, view);
+        const preview = button("Preview", "btn-quiet", () => { ask.previewing = !ask.previewing; show(); (ask.previewing ? view : ta).focus(); });
+        const show = () => {
+          box.hidden = Boolean(ask.previewing); view.hidden = !ask.previewing;
+          preview.textContent = ask.previewing ? "Edit" : "Preview";
+          preview.setAttribute("aria-pressed", String(Boolean(ask.previewing)));
+          if (ask.previewing) renderMarkdown(view, ta.value);
+        };
+        show();
         const side = document.createElement("div");
         side.className = "unblock-buttons";
-        side.append(send, holdButton(ask));
-        el.querySelector(".unblock-answer").append(box, side);
+        side.append(preview, send, holdButton(ask));
+        el.querySelector(".unblock-answer").append(pane, side);
       } else if (ask.kind === "question") {
         el.innerHTML = `${who}<p class="ask-text">${ask.text}</p>
           <label class="sr-only" for="${prefix}-${ask.id}">Your answer</label>
@@ -977,6 +1009,18 @@
         el.querySelectorAll("button")[1].addEventListener("click", () => resume(ask, `Discarded leah-researcher's work. It starts again.`));
       }
       return el;
+  }
+  // marked turns the Markdown into HTML, DOMPurify strips anything that could run, and highlight.js colours each fenced
+  // block in the language its fence names. Without the libraries the text shows as written.
+  function renderMarkdown(into, text) {
+    if (!text.trim()) { into.innerHTML = `<p class="md-empty">Nothing to preview yet.</p>`; return; }
+    if (!window.marked || !window.DOMPurify) { into.innerHTML = `<pre>${esc(text)}</pre>`; return; }
+    into.innerHTML = DOMPurify.sanitize(marked.parse(text));
+    for (const a of into.querySelectorAll("a")) { a.target = "_blank"; a.rel = "noopener noreferrer"; }
+    for (const code of into.querySelectorAll("pre code")) {
+      const lang = [...code.classList].find(c => c.startsWith("language-"))?.slice(9);
+      if (window.hljs && lang && hljs.getLanguage(lang)) code.innerHTML = hljs.highlight(code.textContent, { language: lang, ignoreIllegals: true }).value;
+    }
   }
   // Hold blocked keeps the agent parked on purpose: no timeout or default answer moves it, and its pill turns solid
   // red. Pressing it again releases the hold; the question still waits for an answer.
