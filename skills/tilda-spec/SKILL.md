@@ -12,7 +12,7 @@ The spec is the only thing a human is sure to write. Every agent downstream read
 ## 1. Pick the branch
 
 - **New work**: continue at step 2.
-- **Work that already shipped** (the user names merged PRs): `tilda create --after <NNN> --prs <n,n> <words>`. It writes a retroactive `NNN.MM` plan and drafts its spec from the diff. Skip to step 6.
+- **Work that already shipped** (the user names merged PRs): `tilda create --after <NNN> --prs <n,n> <words>`. It records the pull requests in a retroactive `NNN.MM` plan and has `yoda-writer` write its spec from the diff; the provenance line it must open with is in `tilda-documents`. Skip to step 6.
 - **An existing plan needs more detail**: open its `spec.md` (`fd spec.md .plans | rg '^.plans/<NNN>'`) and go to step 4.
 
 ## 2. Propose the lane and depth
@@ -59,9 +59,9 @@ implementation_suggestions:     # offered to agents, who may take a better route
 implementation_requirements:    # met exactly as written, or the agent blocks and asks
   - The database is PG-strict
 task-completed-when:            # what must be true; copied into plan.md
-  - `tilda create` opens an editor and writes no draft
+  - "`tilda create` opens an editor and writes no draft"
 how-to-verify:                  # commands or checks that prove it
-  - bundle exec rspec spec/agentilda/cli/create_spec.rb
+  - "bundle exec rspec spec/agentilda/cli/create_spec.rb"
 phases:                         # optional per-phase adapter, model, effort
   build: { model: opus }
 ---
@@ -77,7 +77,7 @@ Write each rule out in full. "Follow our postgres-strict skill" means nothing to
 
 ## 5. Fill the body
 
-Keep the four headings `create` scaffolded. Fill them from the conversation and the repository. Where nothing is known, leave the heading with one honest line ("unknown; research should settle") rather than an invented answer, because research reads the gaps as its assignment.
+Keep the four headings `create` scaffolded (the shape is in `tilda-documents`, `references/spec-template.md`). Fill them from the conversation and the repository. Where nothing is known, leave the heading with one honest line ("unknown; research should settle") rather than an invented answer, because research reads the gaps as its assignment.
 
 ## 6. Check it routes
 
@@ -85,6 +85,6 @@ Keep the four headings `create` scaffolded. Fill them from the conversation and 
 tilda run -n --plan <NNN>
 ```
 
-Done when the preview names the expected first agent: `leah-researcher` for full, `palpatine-planner` for plan, `r2d2-mechanic` for quick, `yoda-writer` for retroactive. A wrong agent means the frontmatter did not parse as intended; re-read it.
+Done when the preview names the expected first agent: `leah-researcher` for full, `palpatine-planner` for plan, `r2d2-mechanic` for quick. A retroactive plan has already been through `yoda-writer`, so the preview names whoever handles the state it settled in. A wrong agent means the frontmatter did not parse as intended; re-read it.
 
 Report the folder, lane and depth in two lines, and offer to start the agents (`tilda-run`).

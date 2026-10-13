@@ -27,6 +27,8 @@ Pick flags from the situation, and read `tilda run --help` for the rest:
 | the repository has no git                        | `--isolation shared` (serial; see below) |
 | one agent is misbehaving                         | `--skip <agent>`                     |
 | re-drive one agent with extra guidance           | `--agent <name> --prompt "<text>"`   |
+| no browser (CI, a remote shell), or no page at all | `--no-open`; `--no-web` (`tilda web` can serve it later) |
+| port 4747 taken, or Redis elsewhere              | `--port <n>`, `--redis-url <url>`    |
 
 Keep the defaults (`--isolation worktree`, pushing on) whenever the user wants plans reviewed. `--isolation shared` and `--no-git-push` open no pull request, so every plan stops at 🟢 and the reviewer never starts; `tilda run` warns when that is the case. Use them only when the user asks to keep work local, and say that review waits for a PR they open (`tilda resync prs` then records it).
 
@@ -38,11 +40,13 @@ tilda run --plan <NNN,...>
 
 A run takes minutes to hours: each agent may take up to 15 minutes per round, over several rounds. Start it in the background and wait for it to exit; it prints its progress log path at the start, which is what to read when the user asks how it is going. Avoid polling in a tight loop.
 
+When Redis answers, the run also serves the control room on `http://127.0.0.1:4747` and opens it in the browser: the user watches the board there and can message, interrupt or stop an agent. Without Redis the run warns once and goes on headless; that is not a failure. To get the page, start `redis-server` (or pass `--redis-url`) before the run; `tilda-start` has the details.
+
 A warning about `ANTHROPIC_API_KEY` (or a similar variable) at the start means every agent will authenticate with that key instead of the user's claude.ai login. Stop and ask before running with it; a stale key fails every agent with `401` after minutes each.
 
 ## 3. Read where it stopped
 
-When it exits, `tilda list-plans` shows where each plan stands. Sort them into three groups:
+When it exits, `tilda status` shows where each plan stands. Sort them into three groups:
 
 - **Advanced to a human gate**: at ✅ Approved & Merged the reviewer has approved, and merging and deploying are the human's. Report the PR links (`gh pr list`).
 - **Blocked** ⭕️ / 🅱️: go to step 4.
@@ -54,7 +58,7 @@ For each blocked plan:
 
 1. `tilda unblock <NNN> -n` prints the open questions.
 1. Put them to the human **one at a time**. ⭕️ questions are for an engineer, 🅱️ for product; say which.
-1. Write each answer into the plan's `blocked.md` under `## A<n>`, matching its `## B<n>`. An answer counts only when it names who decided (a role is enough), carries today's date, and settles the question. "Leaning towards B" does not count, and the broker will leave it in place.
+1. Write each answer into the plan's `blocked.md` under `## A<n>`, matching its `## B<n>` (the format is in `tilda-documents`). An answer counts only when it names who decided (a role is enough), carries today's date, and settles the question. "Leaning towards B" does not count, and the broker will leave it in place.
 
    ```markdown
    ## A2

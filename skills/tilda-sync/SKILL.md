@@ -9,7 +9,7 @@ Load the `tilda` skill first if it is not in context. Each of these writes to so
 
 ## Folder names: `tilda resync dirs`
 
-A folder's name is its state, and its contents say which state it has earned (a `plan.md` means at least Ready for Planning). When the two disagree, `resync dirs` renames the folder to match, through `git mv` so history follows. `tilda run` does this itself every round; run it by hand after editing plan files directly.
+A folder's name is its state, and its contents say which state it has earned (a `plan.md` means at least Ready for Planning). When the two disagree, `resync dirs` renames the folder to match, through `git mv` so history follows. `tilda run` does this itself every round; run it by hand after editing plan files directly. A folder that will not move is usually a file in a shape tilda cannot read; `tilda-documents` has the formats.
 
 ## Pull request titles: `tilda resync prs`
 
