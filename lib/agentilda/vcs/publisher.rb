@@ -48,9 +48,12 @@ module Agentilda
       # @param command [TTY::Command]
       # @param base [String] the branch pull requests target
       # @param dry_run [Boolean]
-      def initialize(root:, command: TTY::Command.new(printer: :null), base: "main", dry_run: true)
+      # @param github [Agentilda::Vcs::GitHub] asked which branch an open pull
+      #   request is built from
+      def initialize(root:, command: TTY::Command.new(printer: :null), base: "main", dry_run: true, github: GitHub.new)
         @root = root
         @command = command
+        @github = github
         @base = base
         @dry_run = dry_run
       end
@@ -66,6 +69,13 @@ module Agentilda
       # plan means at most one open pull request per plan, so the open row in
       # `pull-requests.md` is the one to push to.
       #
+      # Only if that pull request is built from this checkout's branch, though.
+      # `pull-requests.md` does not record the head branch, and an adopted or
+      # hand-opened pull request can come from any branch at all; pushing the
+      # worktree branch then reaches no pull request while reporting one as
+      # updated. So the head is asked of GitHub first, and anything other than
+      # the checkout's own branch, or no answer, is a refusal.
+      #
       # @param checkout [Agentilda::Vcs::Worktree::Checkout]
       # @param subject [Agentilda::Plans::Subject]
       # @param letter [String, nil] force a part letter; nil auto-assigns
@@ -79,6 +89,9 @@ module Agentilda
         end
 
         return Publication.new(**base_fields(subject, checkout, title), url: nil, refusal: nil) if @dry_run
+
+        mismatch = open && head_mismatch(open, checkout)
+        return refuse(subject, checkout, title, mismatch) if mismatch
 
         commit(checkout, title)
         push(checkout)
@@ -120,6 +133,22 @@ module Agentilda
       def auto_letter(subject) = LETTERS.fetch(subject.pull_requests.size, LETTERS.last)
 
       private
+
+      # Why the open pull request cannot receive this checkout's push, if it
+      # cannot.
+      #
+      # @param open [Agentilda::Plans::PullRequest]
+      # @param checkout [Agentilda::Vcs::Worktree::Checkout]
+      # @return [String, nil] nil when the pull request is built from the checkout's branch
+      def head_mismatch(open, checkout)
+        head = @github.pull_request(open.number || open.url).fetch(:branch)
+        return if head == checkout.branch
+
+        "publish refused — ##{open.number} is built from #{head.empty? ? "an unknown branch" : head}, " \
+          "not #{checkout.branch}, so a push would not reach it"
+      rescue Error => e
+        "publish refused — could not tell which branch ##{open.number} is built from: #{e.message}"
+      end
 
       # @return [Hash]
       def base_fields(subject, checkout, title)

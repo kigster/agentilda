@@ -79,7 +79,7 @@ module Agentilda
 
       # Fields asked of `gh pr view`, which unlike `pr list` can be told about
       # one pull request in another repository.
-      VIEW_FIELDS = %w[number title url state isDraft mergedAt body].freeze
+      VIEW_FIELDS = %w[number title url headRefName state isDraft mergedAt body].freeze
 
       # A reference to one pull request: a bare number, a `#`-prefixed number,
       # or a full URL to a GitHub pull request or a GitLab merge request.
@@ -107,7 +107,7 @@ module Agentilda
       # One pull request, by number or URL.
       #
       # @param ref [String] "12", "#12" or "https://github.com/o/r/pull/12"
-      # @return [Hash] `{number:, title:, url:, state:, body:}`
+      # @return [Hash] `{number:, title:, url:, branch:, state:, body:}`
       # @raise [Agentilda::Error]
       def pull_request(ref)
         out = @command.run("gh", "pr", "view", ref.to_s, "--json", VIEW_FIELDS.join(",")).out
@@ -118,6 +118,7 @@ module Agentilda
           number: pr["number"],
           title:  pr["title"].to_s,
           url:    pr["url"].to_s,
+          branch: pr["headRefName"].to_s,
           state:  self.class.state_label(pr),
           body:   pr["body"].to_s
         }
