@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require "net/http"
+require "socket"
 require "tmpdir"
 
 module Agentilda
@@ -9,8 +10,12 @@ module Agentilda
     # of its own, in its own process group, so a crash in one never takes the
     # other with it and stopping the run stops the server and nothing else.
     #
+    # A `tilda web` already serving on the port is joined rather than fought
+    # over: the run connects to it, never stops it, and ends when it does.
+    #
     #   web = Web.launcher(root:, plans_dir:, port: 4747, redis_url:).start
-    #   web.ready?   # => true once /healthz answers
+    #   web.ready?    # => true once /healthz answers
+    #   web.serving?  # => false once the server has gone, which ends the run
     #   web.stop
     class Launcher
       # The executable, from this gem rather than whatever is on PATH.
@@ -25,6 +30,10 @@ module Agentilda
 
       # Seconds {#stop} gives the server after TERM before KILL.
       STOP_WITHIN = 5.0
+
+      # Seconds between `/healthz` probes of a joined server. {#serving?} is
+      # asked every tick, and a spawned server answers through `waitpid`.
+      PROBE_EVERY = 5.0
 
       # @param root [String] the checkout the run works in
       # @param plans_dir [String]
@@ -49,6 +58,9 @@ module Agentilda
       # @return [Integer, nil]
       attr_reader :pid
 
+      # @return [Boolean] whether the server was already serving, and joined
+      def joined? = @joined == true
+
       # @return [String]
       def url = "http://#{HOST}:#{@port}"
 
@@ -64,9 +76,23 @@ module Agentilda
       #
       # @return [self]
       def start
+        return join if taken?
+
         @pid = Process.spawn(env, *argv, chdir: @root, pgroup: true, in: File::NULL, %i[out err] => [@log, "a"])
         @ready = wait_until_ready
         self
+      end
+
+      # Whether the server is still there: the spawned one alive, the joined
+      # one still answering. The run that started beside it ends once not.
+      #
+      # @return [Boolean]
+      def serving?
+        return alive? unless joined?
+
+        now = monotonic
+        @probed, @serving = now, @probe.call if @probed.nil? || now - @probed >= PROBE_EVERY
+        @serving
       end
 
       # @return [Boolean] whether `/healthz` answered within the wait
@@ -76,7 +102,7 @@ module Agentilda
       #
       # @return [void]
       def stop
-        return unless @pid
+        return unless @pid && !joined?
 
         signal("TERM")
         deadline = monotonic + STOP_WITHIN
@@ -87,6 +113,27 @@ module Agentilda
       end
 
       private
+
+      # A server of somebody else's, already on the port.
+      #
+      # @return [self]
+      def join
+        @joined = true
+        @ready = @probe.call
+        @probed = monotonic
+        @serving = @ready
+        self
+      end
+
+      # Whether something already listens on the port, found by trying to.
+      #
+      # @return [Boolean]
+      def taken?
+        TCPServer.new(HOST, @port).close
+        false
+      rescue Errno::EADDRINUSE
+        true
+      end
 
       # @return [Boolean]
       def wait_until_ready
@@ -109,6 +156,8 @@ module Agentilda
 
       # @return [Boolean]
       def alive?
+        return false unless @pid
+
         Process.waitpid(@pid, Process::WNOHANG).nil?
       rescue Errno::ECHILD
         false

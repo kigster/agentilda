@@ -41,7 +41,8 @@ export interface StopAllDialogProps extends Openable {
   onCommand: SendCommand;
 }
 
-/** Stop All Local: asks first, with the live counts, then stops every agent on this machine and no other (W26, W29). */
+/** Stop All Local: asks first, with the live counts, then stops every agent on this machine and no other, and with them the engine and
+ * this page's server (W26, W29). */
 export function StopAllDialog({ agents, plans, onCommand, ...openable }: StopAllDialogProps) {
   const [open, setOpen] = useOpen(openable);
   const command = useCommand(onCommand);
@@ -59,7 +60,7 @@ export function StopAllDialog({ agents, plans, onCommand, ...openable }: StopAll
       >
         <div className="help-body">
           <Dialog.Description>
-            Are you sure you want to shut down {agents} agents currently working on {plans} plans? This only affects this machine.
+            Are you sure you want to shut down {agents} agents currently working on {plans} plans? Their engine and this control room stop with them. This only affects this machine.
           </Dialog.Description>
           <Feedback outcome={command.outcome?.tone === "refused" ? command.outcome : null} announced={command.announced} />
         </div>

@@ -64,6 +64,17 @@ RSpec.describe Agentilda::Web::Launcher do
       expect(output).to include("redis: redis://localhost:6379/9")
     end
 
+    it "is serving while the server lives" do
+      expect([launcher.serving?, launcher.joined?]).to eq([true, false])
+    end
+
+    it "is not serving once the server has gone" do
+      Process.kill("TERM", -launcher.pid)
+      deadline = Process.clock_gettime(Process::CLOCK_MONOTONIC) + 2
+      sleep 0.02 while launcher.serving? && Process.clock_gettime(Process::CLOCK_MONOTONIC) < deadline
+      expect(launcher.serving?).to be(false)
+    end
+
     it "stops its process group" do
       pid = launcher.pid
       launcher.stop
@@ -114,6 +125,45 @@ RSpec.describe Agentilda::Web::Launcher do
 
     it "gives up without waiting out the deadline" do
       expect(launcher.ready?).to be(false)
+    end
+  end
+
+  # `tilda web` typed first, then `tilda run`: the run joins that server
+  # rather than spawning one that dies on a taken port.
+  context "when a server already listens on the port" do
+    subject(:launcher) do
+      described_class.new(root: dir,
+        plans_dir: File.join(dir, ".plans"),
+        port:,
+        redis_url: "redis://localhost:6379/9",
+        log: File.join(dir, "web.log"),
+        probe: -> { answers.first })
+    end
+
+    let(:listener) { TCPServer.new(Agentilda::Web::HOST, 0) }
+    let(:port) { listener.addr[1] }
+    let(:answers) { [true] }
+
+    before do
+      stub_const("#{described_class}::PROBE_EVERY", 0)
+      launcher.start
+    end
+
+    after { listener.close }
+
+    it "joins it, spawning nothing" do
+      expect([launcher.joined?, launcher.ready?, launcher.pid]).to eq([true, true, nil])
+    end
+
+    it "never stops it" do
+      launcher.stop
+      expect(listener.closed?).to be(false)
+    end
+
+    it "is serving while it answers, and not once it stops" do
+      first = launcher.serving?
+      answers.replace([false])
+      expect([first, launcher.serving?]).to eq([true, false])
     end
   end
 

@@ -18,7 +18,13 @@ RSpec.describe Agentilda::CLI::Run, :tree do
   # The control room is a process of its own; the suite never spawns it, and
   # never opens a browser.
   let(:web) do
-    instance_double(Agentilda::Web::Launcher, ready?: true, url: "http://127.0.0.1:4747", log: "/tmp/web.log", stop: nil)
+    instance_double(Agentilda::Web::Launcher,
+      ready?:   true,
+      url:      "http://127.0.0.1:4747",
+      log:      "/tmp/web.log",
+      stop:     nil,
+      joined?:  false,
+      serving?: false)
   end
 
   before do
@@ -30,6 +36,10 @@ RSpec.describe Agentilda::CLI::Run, :tree do
     allow(Agentilda::Web).to receive(:launcher).and_return(web)
     allow(Agentilda::Web).to receive(:open)
   end
+
+  # A run whose page goes quits the way Stop All does; the next example
+  # must not start out quitting.
+  after { Agentilda::Execution::Control.reset! }
 
   # The loop sleeps a second between ticks. Every example hands the runner
   # the no-op sleeper runner_spec uses, or each real-run example is two
@@ -422,6 +432,8 @@ RSpec.describe Agentilda::CLI::Run, :tree do
     end
   end
 
+  # Headless, so each run ends at its fixed point: with its control room up,
+  # a run stays until the page goes or Stop All (see "the control room").
   describe "without --dry-run" do
     before { building_plan }
 
@@ -431,7 +443,7 @@ RSpec.describe Agentilda::CLI::Run, :tree do
     # which is why one plan makes two invocations and two failures.
     it "reports each attempt, prints the bill, and exits non-zero when nothing was signed" do
       with_executor
-      out, err, status = run(dry_run: false, rounds: 1)
+      out, err, status = run(dry_run: false, rounds: 1, web: false)
 
       expect(out).to include("001.00  luke-backend")
       # A committed run spent something, so the tally belongs with the
@@ -451,7 +463,7 @@ RSpec.describe Agentilda::CLI::Run, :tree do
         File.write(File.join(subject.feature.path, "pull-requests.md"), "| Pull Request Number | Pull Request Name | Status |\n| --: | :-- | --: |\n| 1 | [x](https://github.com/example/repo/pull/1) | Open 🟡 |\n")
         [true, "completed"]
       }
-      out, _err, status = run(dry_run: false, agent: "luke-backend")
+      out, _err, status = run(dry_run: false, agent: "luke-backend", web: false)
       expect(out).to include("building -> ready_for_review")
       expect(status).to eq(0)
     end
@@ -466,7 +478,7 @@ RSpec.describe Agentilda::CLI::Run, :tree do
           "> [2026-09-04 11:29:20 AM PDT] [ agent: #{agent.name}   status: Almost completed, round 1 ]\n")
         [true, "paused"]
       }
-      out, err, = run(dry_run: false)
+      out, err, = run(dry_run: false, web: false)
 
       expect(out).to include("planned -> building")
       expect(unwrapped(err)).to include("1 advanced")
@@ -474,7 +486,7 @@ RSpec.describe Agentilda::CLI::Run, :tree do
 
     it "exits non-zero and names the failure when an agent fails" do
       with_executor { [false, "claude exited 1: 401 API key is invalid"] }
-      out, err, status = run(dry_run: false, rounds: 1)
+      out, err, status = run(dry_run: false, rounds: 1, web: false)
 
       expect(out).to include("FAIL")
       expect(unwrapped(err)).to include("001.00 luke-backend: claude exited 1: 401 API key is invalid")
@@ -486,7 +498,7 @@ RSpec.describe Agentilda::CLI::Run, :tree do
     it "warns up front when a credential in the shell will shadow the login" do
       with_executor
       allow(Agentilda::Execution::Executor).to receive(:foreign_credentials).and_return(["ANTHROPIC_API_KEY"])
-      _out, err, = run(dry_run: false, rounds: 1)
+      _out, err, = run(dry_run: false, rounds: 1, web: false)
 
       expect(unwrapped(err)).to include("ANTHROPIC_API_KEY is set in this shell", "401 API key is invalid")
     end
@@ -668,6 +680,34 @@ RSpec.describe Agentilda::CLI::Run, :tree do
     it "stops it when the run ends" do
       result
       expect(web).to have_received(:stop)
+    end
+
+    context "when it keeps serving for a while" do
+      # The page answers for a few ticks, then goes, as a closed `tilda web` does.
+      before do
+        ticks = 0
+        allow(web).to receive(:serving?) { (ticks += 1) <= 5 }
+      end
+
+      it "stays past the fixed point, and ends once the page goes" do
+        aggregate_failures do
+          result
+          expect(web).to have_received(:serving?).at_least(6).times
+          expect(Agentilda::Execution::Control.quit?).to be(true)
+        end
+      end
+    end
+
+    context "when it was already serving" do
+      before { allow(web).to receive(:joined?).and_return(true) }
+
+      it "says it joined, and opens no second tab" do
+        result
+        aggregate_failures do
+          expect(stderr).to include("joined the tilda web already serving there")
+          expect(Agentilda::Web).not_to have_received(:open)
+        end
+      end
     end
 
     context "with --no-open" do

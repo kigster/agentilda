@@ -4,9 +4,10 @@ require "tmpdir"
 
 module Agentilda
   module CLI
-    # `agentilda run` — drive the specialist agents until the tree settles.
+    # `agentilda run` — drive the specialist agents until the tree settles,
+    # or, with the control room up, until Stop All or the page goes.
     class Run < Base
-      desc "Run specialist agents over the plans until nothing changes"
+      desc "Run specialist agents over the plans: headless until nothing changes, with the control room until Stop All"
 
       dry_run_option "Invoke no agent; print which agent would take which plan"
       option :rounds,
@@ -157,7 +158,7 @@ module Agentilda
           publisher: publisher_for(root, isolation, options),
           on_board:  live&.on_board,
           claims:    live&.claims,
-          **staying(options)
+          **staying(options, web)
         )
 
         started  = UI.monotonic
@@ -172,12 +173,15 @@ module Agentilda
 
       private
 
-      # What the runner is told about idling past its fixed points. `run`
-      # ends at one; {Start} stays.
+      # What the runner is told about idling past its fixed points. Headless,
+      # `run` ends at one. Connected to its control room, it stays, as
+      # {Start} does: a question on the page needs an engine to answer to.
+      # It then ends only on Stop All, Ctrl-C, or the page going away.
       #
       # @param _options [Hash]
-      # @return [Hash] `stay:` and `rescan:` for {Engine::Runner}, or nothing
-      def staying(_options) = {}
+      # @param web [Agentilda::Web::Launcher, nil] the control room, when connected
+      # @return [Hash] `stay:`, `rescan:` and `lifeline:` for {Engine::Runner}, or nothing
+      def staying(_options, web) = web ? { stay: true, lifeline: web.method(:serving?) } : {}
 
       # Signals that stop the run gracefully, the way the first Ctrl-C does.
       #
@@ -280,8 +284,9 @@ module Agentilda
           return without_web(web, live, options)
         end
 
-        info("Control room: #{web.url}") unless quiet?(options)
-        Agentilda::Web.open(browser_url(web, tree)) unless options[:open] == false
+        info("Control room: #{web.url}#{" (joined the tilda web already serving there)" if web.joined?}") unless quiet?(options)
+        # A joined server's page is open already: that is how it was found.
+        Agentilda::Web.open(browser_url(web, tree)) unless options[:open] == false || web.joined?
         web
       end
 
