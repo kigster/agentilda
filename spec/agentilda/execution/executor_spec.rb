@@ -11,7 +11,7 @@ RSpec.describe Agentilda::Execution::Executor, :tree do
   let(:stream) { [] }
   let(:exit_status) { instance_double(Process::Status, success?: true) }
   let(:fake_child) do
-    child = instance_double(Agentilda::Execution::Child, pid: 4242, alive?: false, kill: nil, wait: exit_status)
+    child = instance_double(Agentilda::Execution::Child, pid: 4242, alive?: false, kill: nil, terminate: nil, wait: exit_status)
     allow(child).to receive(:each_chunk) { |&block| stream.each { |chunk| block.call(chunk) } }
     child
   end
@@ -190,8 +190,8 @@ RSpec.describe Agentilda::Execution::Executor, :tree do
     end
 
     it "does not hand a timeout to the process; the clock is advisory" do
-      argv = executor.invocation(agent, subject_plan)
-      expect(argv.join(" ")).not_to include("timeout")
+      # A flag, not the word: the checkout's own path may say "timeout".
+      expect(executor.invocation(agent, subject_plan).grep(/\A-.*timeout/)).to be_empty
     end
   end
 
@@ -264,7 +264,7 @@ RSpec.describe Agentilda::Execution::Executor, :tree do
       aggregate_failures do
         expect(result.killed).to eq(:key)
         expect(result.ok).to be(false)
-        expect(fake_child).to have_received(:kill).with("KILL")
+        expect(fake_child).to have_received(:terminate)
       end
     end
 
@@ -442,7 +442,7 @@ RSpec.describe Agentilda::Execution::Executor, :tree do
         aggregate_failures do
           expect(result).to have_attributes(ok: false, killed: :budget, up: 90, down: 40)
           expect(result.note).to include("token budget of 100 exceeded")
-          expect(fake_child).to have_received(:kill).with("KILL")
+          expect(fake_child).to have_received(:terminate)
         end
       end
 
@@ -505,7 +505,7 @@ RSpec.describe Agentilda::Execution::Executor, :tree do
         aggregate_failures do
           expect(result).to have_attributes(ok: false, killed: :quit)
           expect(result.note).to include("after q")
-          expect(fake_child).to have_received(:kill).with("KILL")
+          expect(fake_child).to have_received(:terminate)
         end
       end
     end

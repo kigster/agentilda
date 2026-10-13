@@ -82,10 +82,15 @@ module Agentilda
         self
       end
 
+      # Waits out an expiry under way before killing the thread. {#tick}
+      # holds the mutex while {#on_expire} runs, and that is the kill: a
+      # thread killed inside it, between TERM and KILL, once left a
+      # grandchild that ignored TERM running after the attempt had ended.
+      #
       # @return [void]
       def stop
-        @thread&.kill
-        @thread = nil
+        thread = @mutex.synchronize { @thread.tap { @thread = nil } }
+        thread&.kill
       end
 
       # Ten more minutes, or however many. The file is emptied so the next poll

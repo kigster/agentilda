@@ -169,7 +169,9 @@ module Agentilda
         # @return [Symbol, nil]
         def phase = clock&.phase
 
-        # STOP, a grace period, then SIGKILL if it is still there. The grace is
+        # STOP, a grace period, then {Child#terminate}: TERM and KILL to the
+        # agent's whole process group, and its pipe closed, so the invocation
+        # ends even when a tool the agent started is what hangs. The grace is
         # what lets an agent mid-write finish the line.
         #
         # @param grace [Integer] seconds
@@ -179,7 +181,7 @@ module Agentilda
           @killed ||= reason
           Control.write(control, Control::STOP) if control
           sleep(grace) if grace.positive?
-          child&.kill("KILL") if child&.alive?
+          child&.terminate
         end
 
         # @param seconds [Integer]
@@ -241,7 +243,7 @@ module Agentilda
 
           Thread.new do
             sleep(grace) if grace.positive?
-            process.kill("KILL") if process.equal?(child) && process.alive?
+            process.terminate if process.equal?(child)
           end
         end
       end
