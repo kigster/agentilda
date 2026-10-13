@@ -60,7 +60,7 @@ button, textarea { font: inherit; color: inherit; }
 .tabs { display: flex; align-items: center; gap: 8px; padding: 14px 24px 2px; overflow-x: auto; scrollbar-width: thin; }
 .tab { --pill-tint: 4%; border: 1px solid color-mix(in srgb, var(--ink) 9%, transparent); border-radius: 999px;
        background: color-mix(in srgb, var(--ink) var(--pill-tint), transparent); }
-.tab { display: inline-flex; align-items: center; min-height: 40px; padding: 6px 16px; cursor: pointer; font-weight: 600; color: var(--ink-soft); flex: none; white-space: nowrap; }
+.tab { display: inline-flex; align-items: center; min-height: 40px; padding: 6px 16px; cursor: pointer; font-weight: 600; color: color-mix(in srgb, var(--ink) 30%, var(--ink-soft)); flex: none; white-space: nowrap; }
 .tab:hover { --pill-tint: 8%; color: var(--ink); }
 .tab[aria-selected="true"] { --pill-tint: 14%; color: var(--ink); border-color: color-mix(in srgb, var(--ink) 22%, transparent); }
 .tab:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
