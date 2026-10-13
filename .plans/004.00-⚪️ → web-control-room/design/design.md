@@ -119,7 +119,7 @@ The review labels keep the colours of plan 005 (L1).
 
 ## Stop All Local and the help pill
 
-- **Stop All Local**, formerly Stop run, stops every agent on this machine. Other machines keep running; nothing here can stop them (W26, W29).
+- **Stop All Local**, formerly Stop run, asks first in a dialog with the live counts: "Are you sure you want to shut down N agents currently working on M plans? This only affects this machine." Cancel has focus; Stop them is red. Then it stops every agent on this machine. Other machines keep running; nothing here can stop them (W26, W29).
 - A round **?** pill to its right opens the help dialog: a native `<dialog>`, closed by Got it, Esc or a click outside, returning focus to the pill.
 
 ### Help dialog
@@ -132,3 +132,11 @@ What it has to say:
 - You join by sharing `$REDIS_URL`. There is no other mechanism.
 - Anyone connecting from a clone of the same GitHub repository is in. Nobody can be kept out or kicked out.
 - It is not a policy enforcement system. It assumes everyone around is friendly.
+
+## Merged pull requests
+
+- An approved plan waits at Pull request with its PR link, CI passing and an **approved** chip. Its status-bar pill is light green with ✓: ready to merge, not finished.
+- **Purple means merged on GitHub, and nothing less.** Approval, a green CI or a ready-to-merge label never turns anything purple. Only when GitHub reports the PR merged do the PR link and a **merged** chip take GitHub's merged purple (`--merged`, #8250DF light, #A371F7 dark), CI drops away, and the plan is complete (its folder moves to the done state). Its pill turns **solid green with ✅**, the one pill that means finished.
+- The summary reads "N merged, N ready to merge, N blocked".
+- **Merged pills leave the bar when it runs out of room**, oldest merge first, each only after it has been shown at least five minutes (30 s in the mockup), with a short fade. Approved, working and blocked pills never leave.
+- Other machines' merged plans show the same way, in their tab and their pills.
