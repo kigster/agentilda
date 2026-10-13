@@ -93,7 +93,7 @@ describe("under ?fixture", () => {
   it("toggles the unblock widget from a red pill and returns focus to it", async () => {
     const user = userEvent.setup();
     renderApp();
-    const pill = await screen.findByRole("button", { name: /^001, needs technical decision/ });
+    const pill = await screen.findByRole("button", { name: /^001 [^,]*, needs technical decision/ });
     await user.click(pill);
     expect(pill).toHaveAttribute("aria-expanded", "true");
     expect(screen.getByRole("region", { name: /Unblock 001/ })).toBeInTheDocument();
@@ -108,7 +108,7 @@ describe("under ?fixture", () => {
     const user = userEvent.setup();
     renderApp();
     await user.click(await screen.findByRole("tab", { name: /Logs/ }));
-    await user.click(pills().getByRole("button", { name: /^005, working/ }));
+    await user.click(pills().getByRole("button", { name: /^005 [^,]*, working/ }));
     expect(screen.getByRole("tab", { name: "Board" })).toHaveAttribute("aria-selected", "true");
     const hansolo = screen.getByRole("button", { name: "hansolo-reviewer" });
     expect(hansolo).toHaveFocus();
@@ -178,7 +178,7 @@ describe("live", () => {
     next.me.plans[0].questions = [];
     next.me.seq += 1;
     act(() => stream.onBoard(structuredClone(next)));
-    await userEvent.click(pills().getByRole("button", { name: /^001,/ }));
+    await userEvent.click(pills().getByRole("button", { name: /^001 / }));
     expect(screen.getByRole("button", { name: "luke-backend" })).toHaveAttribute("aria-expanded", "true");
   });
 
@@ -216,6 +216,14 @@ describe("live", () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+
+  it("waits for the engine to publish when the server has no board yet, then draws it", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(json({ me: null, others: [] })));
+    renderApp();
+    expect(await screen.findByText("Waiting for the engine to publish…")).toHaveAttribute("aria-busy", "true");
+    act(() => streams.at(-1)!.onBoard(sampleBoard()));
+    expect(await screen.findByRole("tab", { name: "Board" })).toBeInTheDocument();
   });
 
   it("says when the board cannot be loaded", async () => {

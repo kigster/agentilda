@@ -29,7 +29,8 @@ recipes:
 install:
     bin/setup
 
-build: install
+# Sync dependencies and build the page the gem ships (web/dist)
+build: install web-build
 
 # Install the page's dependencies
 web-install:
@@ -38,6 +39,29 @@ web-install:
 # Build the page into web/dist, which the gem ships and the API server serves
 web-build:
     cd web && npm run build
+
+# The page's dev server beside `agentilda web --demo`; Vite proxies /api to it
+web-dev:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    eval "$(rbenv init - bash 2>/dev/null || true)"
+    bundle exec exe/agentilda web --demo --no-open &
+    trap 'kill %1 2>/dev/null || true' EXIT
+    cd web && npm run dev
+
+# The API server over the demo engine, serving the built page on 127.0.0.1:4747
+web-demo *args:
+    {{ rbenv }} exe/agentilda web --demo {{ args }}
+
+# Cypress against the demo server; run `just web-build` first
+web-e2e:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    eval "$(rbenv init - bash 2>/dev/null || true)"
+    bundle exec exe/agentilda web --demo --no-open --redis-url "${E2E_REDIS_URL:-redis://localhost:6379/14}" &
+    trap 'kill %1 2>/dev/null || true' EXIT
+    until curl -sf http://127.0.0.1:4747/healthz >/dev/null; do sleep 0.2; done
+    cd web && npx cypress run
 
 # Lint, type-check and unit-test the page, with coverage
 web-test:

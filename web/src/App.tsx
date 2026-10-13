@@ -261,7 +261,7 @@ function ControlRoom({ board, connection, fixture }: { board: BoardData; connect
 
 /** The control room. Needs a QueryClientProvider above it (main.tsx). */
 export default function App() {
-  const { board, error, connection, fixture } = useBoard();
+  const { board, waiting, error, connection, fixture } = useBoard();
   return (
     <MotionConfig reducedMotion="user">
       <AnnouncerProvider>
@@ -272,8 +272,10 @@ export default function App() {
             Could not load the board: {error.message}. Is tilda run (or tilda web --demo) running?
           </main>
         ) : (
+          // The server answered with no engine on the board yet (`tilda web` before `tilda run`): the stream brings
+          // the first snapshot, and the page draws itself then.
           <main className="loading" aria-busy="true">
-            Connecting to the engine…
+            {waiting ? "Waiting for the engine to publish…" : "Connecting to the engine…"}
           </main>
         )}
       </AnnouncerProvider>

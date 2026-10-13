@@ -90,7 +90,7 @@ describe("reconcile", () => {
     const old = at(10, [5, 7]);
     const next = at(9, [6, 3]);
     const merged = reconcile(old, next);
-    expect(merged.me.seq).toBe(10);
+    expect(merged.me?.seq).toBe(10);
     expect(merged.others.map(s => s.seq)).toEqual([6, 7]);
   });
 
@@ -101,8 +101,25 @@ describe("reconcile", () => {
     expect(reconcile(undefined, old)).toBe(old);
     const elsewhere = at(1);
     elsewhere.me.node.id = "another";
-    expect(reconcile(old, elsewhere).me.seq).toBe(1);
+    expect(reconcile(old, elsewhere).me?.seq).toBe(1);
   });
+
+  it("takes this machine's first snapshot over an empty board, and an empty one when the engine leaves", () => {
+    const empty = { me: null, others: [] };
+    const first = at(3);
+    expect(reconcile(empty, first).me).toBe(first.me);
+    expect(reconcile(first, empty).me).toBeNull();
+  });
+});
+
+it("waits, with no board, until the engine publishes its first snapshot", async () => {
+  fetchMock.mockResolvedValue(json({ me: null, others: [] }));
+  const { result } = renderHook(() => useBoard(), { wrapper });
+  await waitFor(() => expect(result.current.waiting).toBe(true));
+  expect(result.current.board).toBeUndefined();
+  act(() => streams[0].onBoard(loadFixtureBoard()));
+  await waitFor(() => expect(result.current.board?.me.node.id).toBe(loadFixtureBoard().me.node.id));
+  expect(result.current.waiting).toBe(false);
 });
 
 it("does not roll the board back when a reconnect GET lands after a newer streamed board", async () => {
