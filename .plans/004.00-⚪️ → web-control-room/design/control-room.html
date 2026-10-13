@@ -1441,7 +1441,10 @@
   }
   document.querySelector(".tabs").addEventListener("click", e => {
     const tab = e.target.closest('[role="tab"]');
-    if (tab) selectTab(tab);
+    if (!tab) return;
+    // A machine tab toggles: the first press shows just that machine, the second shows all of them on the Board.
+    if (tab.classList.contains("tab-machine") && tab.getAttribute("aria-selected") === "true") { setMerged(true); return; }
+    selectTab(tab);
   });
   document.querySelector(".tabs").addEventListener("keydown", e => {
     if (e.key !== "ArrowRight" && e.key !== "ArrowLeft") return;
@@ -2404,7 +2407,7 @@
     const tab = document.createElement("button");
     Object.assign(tab, { className: "tab tab-machine", type: "button", id: `tab-node-${id}`, tabIndex: -1, textContent: who(n) });
     tab.setAttribute("role", "tab"); tab.setAttribute("aria-selected", "false"); tab.setAttribute("aria-controls", `panel-node-${id}`);
-    tab.title = `Read only: what ${who(n)} is working on`;
+    tab.title = `Read only: what ${who(n)} is working on. Press again to see every machine.`;
     document.querySelector(".tabs").append(tab);
     const panel = document.createElement("section");
     Object.assign(panel, { className: "board", id: `panel-node-${id}`, hidden: true });

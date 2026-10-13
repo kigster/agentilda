@@ -172,3 +172,5 @@ The mockup carries pieces that exist only to make it demonstrable. None of them 
   - **Compact**: run `/compact` now, ahead of the 40% autocompact (W28), for a context that is cluttered before it is full. The item shows how much of the context is used; the context bar drops as it runs.
   - **Stop agent**, in red: stop now, with 60 seconds to leave a resume note.
 - Each is a command through the API (W9): `hold`, `wrap_up`, `compact`, `stop`.
+
+- **Machine tabs toggle.** The first press shows just that machine; pressing it again switches to the Board with All machines on.
