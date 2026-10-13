@@ -90,7 +90,7 @@ A direct bidirectional socket was considered. Streams won because they keep what
 
 - The engine reads `commands` through a consumer group, so a command sent while the engine was restarting is executed when it comes back, and it is acked only once it has been applied.
 - In the engine, the web view is a `View` like the TUI (W2): its `draw(board)` appends to `board`, and its command reader feeds the same `Console` gate the keyboard uses.
-- Key names include the checkout, as plan `003.00` D4 requires, so two checkouts never read each other's streams: `agentilda:<checkout>:board`, where `<checkout>` is a hash of the checkout's absolute path (D4 has the format).
+- Key names carry the host (W16) and the checkout (plan `003.00` D4), so two machines or two checkouts never read each other's streams: `agentilda:<host>:<checkout>:board`.
 
 ### W14. One logging library, one log directory
 
@@ -107,15 +107,18 @@ A direct bidirectional socket was considered. Streams won because they keep what
 - **Why a tee:** stream-json reports a Bash call's output only once the call has finished, so the engine cannot watch a test run live by reading the transcript. Agents run tests through `agentilda test -- <command>`, which tees the output to `.agentilda/log/tests/<plan>-<agent>.log` and appends progress to a Redis stream. The prompt asks for this, and **(proposed)** a `PreToolUse` hook rewrites known test commands (`rspec`, `just test`, `npm test`, `pytest`, `cypress run`) to go through the wrapper. Whether hooks can rewrite a tool's input is one of plan 004's research questions.
 - Pass and fail counts come from the runner's structured output where one exists (RSpec's JSON formatter, JUnit XML), not from parsing human-readable text.
 
-### W16. Agentilda never reads `REDIS_URL`
+### W16. Redis is found the way agent-lock finds it, and every key carries the host
 
-Agentilda runs inside other people's projects, and there `REDIS_URL` usually belongs to the application, often pointing at a shared or production Redis. Writing agentilda's streams into it would be a quiet, damaging mistake. So the Redis address comes from three places, in this order, and nowhere else:
+Revised by the author on 2026-10-12, reversing the first version of this decision, which ruled `REDIS_URL` out. Agentilda and `agent-lock` (W20) are installed and run together, so they find Redis the same way, in this order:
 
 1. `--redis-url` on the command line.
 2. `redis_url:` in agentilda's configuration file.
-3. `AGENTILDA_REDIS_URL`.
+3. `$REDIS_URL`, when it is set, as agent-lock reads it.
+4. `redis://localhost:6379/0`.
 
-Without any of them, agentilda uses `redis://localhost:6379/0`. On startup, the engine and the API server each log the address they use, with any password masked. This supersedes the `$REDIS_URL` fallback in plan `003.00` D4.
+The risk the first version guarded against, writing into an application's shared Redis, is now handled by namespacing rather than by refusing the variable. **Every key agentilda writes starts with `agentilda:<host>:`**, where `<host>` is the first 4 hex digits of the SHA-256 of the machine's hostname (`Socket.gethostname`). The checkout follows it (plan `003.00` D4), so a full key reads `agentilda:3f9a:<checkout>:<plan>:<stream>`. Two machines sharing one Redis never see each other's runs, and a `SCAN` for `agentilda:*` finds everything agentilda ever wrote, so it can be cleared without touching the application's keys. Four hex digits are 65,536 values: plenty to tell a handful of machines apart, which is all the prefix is for, while the checkout digest carries the uniqueness. The hostname itself is stored in `agentilda:<host>:meta`, beside each checkout's path, so a person reading keys can tell which machine wrote them.
+
+On startup, the engine and the API server each log the address they use, with any password masked, and the namespace they write under.
 
 ### W17. A copilot to talk to about the run: c3po-operator
 
@@ -157,7 +160,7 @@ A sub-plan is an ordinary plan with its own number. Its frontmatter names its pa
 
 ### W20. `tilda init` ends in `tilda start`
 
-`tilda init` is new: it prepares a project for agentilda (the `.plans` directory, the configuration file, a check that Redis answers) and then runs `tilda start`, so a new project goes straight from setup to the idea dialog. `--no-start` stops after setup, for scripts and CI.
+`tilda init` is new: it prepares a project for agentilda (the `.plans` directory, the configuration file, a check that Redis answers) and installs the `agent-lock` gem when `alock` is missing or older than the version agentilda needs, so the two always arrive together (settled by the author, 2026-10-12). It then runs `tilda start`, so a new project goes straight from setup to the idea dialog. `--no-start` stops after setup, for scripts and CI.
 
 ### W21. Plan numbers are plain `NNN`
 
