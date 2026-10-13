@@ -1,0 +1,154 @@
+/* The page frame, ported from design/control-room.html: top bar, buttons, layout, tabs, logs, test tabs, status bar.
+   The board's own rules are in src/board/board.css; the panels (rail, drawer, menus, dialogs) style themselves. */
+button, textarea { font: inherit; color: inherit; }
+:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+
+/* Top bar */
+.topbar {
+  display: flex; align-items: center; flex-wrap: wrap; gap: 8px 28px;
+  padding: 14px 24px; background: var(--plate); border-bottom: 1px solid var(--hairline);
+}
+/* The logo without its tagline, which is unreadable at this height. Light letters on the dark theme, ink letters on
+   the light one; the theme can be set by the OS or the toggle. */
+.logo { display: flex; align-items: center; align-self: stretch; padding-right: 20px; border-right: 1px solid var(--hairline); }
+.logo img { height: 30px; width: auto; display: block; }
+.logo .on-dark { display: none; }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .logo .on-dark { display: block; }
+  :root:not([data-theme="light"]) .logo .on-light { display: none; }
+}
+:root[data-theme="dark"] .logo .on-dark { display: block; }
+:root[data-theme="dark"] .logo .on-light { display: none; }
+/* The project being worked on is the page's title; agentilda is only the tool showing it. */
+.project { min-width: 0; max-width: 52ch; }
+.project-title { margin: 0; font-size: 22px; font-weight: 800; letter-spacing: -0.02em; line-height: 1.15; }
+.project-meta { margin: 0; font-size: 13px; color: var(--ink-soft); display: flex; flex-wrap: wrap; gap: 0 12px; }
+.project-path { font-size: 12px; }
+.topbar-stat { color: var(--ink-soft); }
+.topbar-stat strong { color: var(--ink); font-weight: 600; }
+.topbar-spacer { flex: 1; }
+.sample { font-size: 13px; color: var(--ink-soft); border: 1px dashed var(--road); padding: 2px 8px; border-radius: 999px; }
+.conn { font-size: 13px; color: var(--ink-soft); }
+.conn.is-offline { color: var(--alarm); font-weight: 600; }
+.node { font-size: 12px; color: var(--ink-soft); }
+.node strong { color: var(--ink); font-weight: 700; }
+
+.btn {
+  min-height: 40px; padding: 8px 16px; border-radius: 8px; cursor: pointer;
+  border: 1px solid var(--hairline); background: var(--plate); font-weight: 600;
+}
+.btn:hover { border-color: var(--ink-soft); }
+.btn-primary { background: var(--ink); color: var(--plate); border-color: var(--ink); }
+.btn-primary:hover { opacity: .9; }
+.btn-alarm { color: var(--alarm); border-color: color-mix(in srgb, var(--alarm) 45%, transparent); }
+.btn-alarm:hover { border-color: var(--alarm); }
+.btn-quiet { border-color: transparent; background: transparent; }
+.btn:disabled { opacity: .45; cursor: not-allowed; }
+.btn-icon { display: inline-grid; place-items: center; width: 44px; padding: 0; }
+.btn[aria-pressed="true"] { background: var(--ink); color: var(--plate); border-color: var(--ink); }
+.help-pill { min-width: 40px; padding-inline: 0; border: 1px solid color-mix(in srgb, var(--ink) 30%, transparent); border-radius: 999px; font-weight: 800; }
+
+/* Layout */
+.tabs-root { display: contents; }
+.layout { display: grid; grid-template-columns: minmax(0, 1fr) 360px; gap: 20px; padding: 20px 24px; align-items: start; }
+@media (max-width: 960px) { .layout { grid-template-columns: minmax(0, 1fr); padding: 16px; } }
+.loading { padding: 40px 24px; color: var(--ink-soft); }
+.loading.is-error { color: var(--alarm); }
+
+/* Tabs are very faint pills: a whisper of ink, a little more when hovered, more again when selected. */
+.tabs { display: flex; align-items: center; gap: 8px; padding: 14px 24px 2px; overflow-x: auto; scrollbar-width: thin; }
+.tab { --pill-tint: 4%; border: 1px solid color-mix(in srgb, var(--ink) 9%, transparent); border-radius: 999px;
+       background: color-mix(in srgb, var(--ink) var(--pill-tint), transparent); }
+.tab { display: inline-flex; align-items: center; min-height: 40px; padding: 6px 16px; cursor: pointer; font-weight: 600; color: var(--ink-soft); flex: none; white-space: nowrap; }
+.tab:hover { --pill-tint: 8%; color: var(--ink); }
+.tab[aria-selected="true"] { --pill-tint: 14%; color: var(--ink); border-color: color-mix(in srgb, var(--ink) 22%, transparent); }
+.tab:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.tab-count { margin-left: 6px; padding: 0 7px; border-radius: 999px; font-size: 12px;
+             background: color-mix(in srgb, var(--alarm) 16%, transparent); color: var(--alarm); }
+.tab-count:empty { display: none; }
+.tab-machine::before { content: "🖥️"; margin-right: 6px; font-size: 13px; }
+/* Other machines sit at the far right of the tab bar, away from this machine's own views. */
+.tabs > :not(.tab-machine) + .tab-machine { margin-left: auto; }
+.run-chip { margin-left: 8px; padding: 0 8px; border-radius: 999px; font-size: 12px; font-weight: 600;
+            background: var(--hairline); color: var(--ink-soft); }
+@media (max-width: 960px) { .tabs { padding: 8px 16px 0; } }
+
+/* Logs */
+.logs { background: var(--plate); border: 1px solid var(--hairline); border-radius: var(--radius-plate); }
+.logs[hidden] { display: none; }
+.log-tools { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; padding: 12px 16px; border-bottom: 1px solid var(--hairline); }
+.log-tools fieldset { border: 0; margin: 0; padding: 0; display: flex; gap: 6px; align-items: center; }
+.log-tools legend { float: left; margin-right: 6px; font-size: 13px; color: var(--ink-soft); }
+.toggle { min-height: 36px; padding: 4px 12px; border-radius: 999px; border: 1px solid var(--hairline); background: transparent; cursor: pointer; font-size: 13px; font-weight: 600; color: var(--ink-soft); }
+.toggle[aria-pressed="true"] { background: var(--ink); border-color: var(--ink); color: var(--plate); }
+.log-search { min-height: 36px; padding: 4px 10px; border-radius: 8px; border: 1px solid var(--hairline); background: var(--enamel); min-width: 180px; flex: 1; max-width: 320px; }
+.log-follow { margin-left: auto; }
+.log { list-style: none; margin: 0; padding: 8px 0; height: calc(100vh - 230px); min-height: 320px; overflow-y: auto;
+       font: 12.5px/1.6 var(--mono); }
+.log li { display: grid; grid-template-columns: 76px 44px 132px minmax(0, 1fr); gap: 12px; padding: 1px 16px; }
+.log time, .log .lvl, .log .src { color: var(--ink-soft); }
+.log .msg { overflow-wrap: anywhere; }
+.log .is-warn { background: color-mix(in srgb, var(--lane-plan) 16%, transparent); }
+.log .is-warn .lvl { color: var(--lane-plan); }
+.log .is-error { background: color-mix(in srgb, var(--alarm) 13%, transparent); }
+.log .is-error .lvl { color: var(--alarm); font-weight: 600; }
+.log .is-debug .msg { color: var(--ink-soft); }
+.log .log-empty { display: block; padding: 16px; color: var(--ink-soft); font-family: var(--sans); }
+.log-path { margin: 0; font-size: 13px; color: var(--ink-soft); padding: 8px 16px 12px; border-top: 1px solid var(--hairline); }
+@media (max-width: 700px) { .log li { grid-template-columns: 64px minmax(0, 1fr); } .log .lvl, .log .src { display: none; } }
+
+/* Test-run tabs */
+.tests { background: var(--plate); border: 1px solid var(--hairline); border-radius: var(--radius-plate); padding-bottom: 8px; }
+.tests[hidden] { display: none; }
+.tests-head { padding: 18px 20px 4px; }
+.tests-head h2 { margin: 0; font-size: 20px; font-weight: 800; letter-spacing: -0.01em; }
+.tests-head p { margin: 4px 0 0; color: var(--ink-soft); font-size: 14px; }
+.tests-head code { font: 13px var(--mono); color: var(--ink); }
+.tests-stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; padding: 14px 20px 10px; }
+.tests-stats div { font-size: 13px; color: var(--ink-soft); }
+.tests-stats strong { display: block; font-size: 26px; font-weight: 800; color: var(--ink); }
+.bar { display: flex; height: 10px; margin: 0 20px 16px; border-radius: 999px; overflow: hidden; background: var(--hairline); }
+.bar span { height: 100%; transition: width 300ms; }
+.bar .run { background: var(--ink-soft); }
+@media (prefers-reduced-motion: reduce) { .bar span { transition: none; } }
+@media (max-width: 700px) { .tests-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+
+/* Status bar: one pill per plan. Working and blocked plans first, in plan order; finished ones stack on the right in the order they finished. */
+.statusbar { position: fixed; left: 0; right: 0; bottom: 0; z-index: 15; height: var(--statusbar-h);
+             display: flex; align-items: center; gap: 16px; padding: 0 16px;
+             background: var(--plate); border-top: 1px solid var(--hairline); }
+.statusbar h2 { margin: 0; font-size: 13px; font-weight: 800; white-space: nowrap; }
+.pills { flex: 1; min-width: 0; display: flex; gap: 6px; list-style: none; margin: 0; padding: 4px 0; overflow-x: auto; scrollbar-width: thin; }
+.pills > li { flex: none; display: flex; }
+.pill { --pill: var(--lane-plan); display: flex; align-items: center; gap: 7px; min-height: 44px; padding: 3px 12px 3px 8px; border-radius: 999px;
+        border: 1px solid color-mix(in srgb, var(--pill) 55%, transparent); background: color-mix(in srgb, var(--pill) 16%, var(--plate));
+        color: var(--ink); cursor: pointer; font: inherit; text-align: left; white-space: nowrap; }
+.pill:hover { background: color-mix(in srgb, var(--pill) 26%, var(--plate)); }
+.pill.is-done { --pill: var(--go); }
+.pill.is-blocked { --pill: var(--alarm); }
+/* Held blocked on purpose: solid red, so it reads as a decision, not a request waiting to be noticed. */
+.pill.is-held { --held: color-mix(in srgb, var(--alarm) 70%, #000); }
+.pill.is-held { background: var(--held); border-color: var(--held); color: #fff; }
+.pill.is-held:hover { background: color-mix(in srgb, var(--held) 85%, #000); }
+.pill.is-held .pill-time { color: rgb(255 255 255 / 82%); }
+.pill-mark { font-size: 15px; line-height: 1; width: 18px; text-align: center; }
+/* Merged: solid green with a checkbox, the one state that means the plan is finished. */
+.pill.is-merged { background: var(--go); border-color: var(--go); color: #fff; }
+.pill.is-merged .pill-time { color: rgb(255 255 255 / 85%); }
+.pill.is-merged:hover { background: color-mix(in srgb, var(--go) 85%, #000); }
+/* Its row has left the board: the pill takes GitHub's merged purple, keeping the checkbox. */
+.pill.is-gone { background: var(--merged); border-color: var(--merged); color: #fff; }
+.pill.is-gone .pill-time { color: rgb(255 255 255 / 85%); }
+.pill.is-gone:hover { background: color-mix(in srgb, var(--merged) 85%, #000); }
+.pill.is-done .pill-mark { color: var(--go); font-weight: 800; }
+.pill-text { display: flex; flex-direction: column; line-height: 1.15; }
+.pill-id { font-size: 13px; font-weight: 800; }
+.pill-time { font-size: 11px; color: var(--ink-soft); }
+.pills .divider { width: 1px; align-self: stretch; margin: 4px 6px; background: var(--hairline); flex: none; }
+/* Other machines' plans sit at the right end, as their tabs do at the top: read only, faded like their rows. */
+.pills-theirs { flex: none; max-width: 40%; padding-left: 10px; border-left: 1px solid var(--hairline); }
+.pills-theirs:empty { display: none; }
+.pills-theirs .pill { opacity: .85; }
+.statusbar-sum { margin: 0; font-size: 13px; color: var(--ink-soft); white-space: nowrap; }
+@media (max-width: 720px) { .statusbar h2, .statusbar-sum { display: none; } }

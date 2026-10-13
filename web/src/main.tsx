@@ -1,10 +1,21 @@
-import { StrictMode } from 'react'
-import { createRoot } from 'react-dom/client'
-import './index.css'
-import App from './App.tsx'
+import { StrictMode } from "react";
+import { createRoot } from "react-dom/client";
+import { QueryClientProvider } from "@tanstack/react-query";
+import "./index.css";
+import App from "./App.tsx";
+import { createQueryClient } from "./api/queryClient";
+import favicon from "./assets/favicon.png";
 
-createRoot(document.getElementById('root')!).render(
+// The favicon is docs/logos/square-large.png, bundled like the header's logos.
+const icon = document.querySelector<HTMLLinkElement>("link[rel~='icon']") ?? document.head.appendChild(document.createElement("link"));
+icon.rel = "icon";
+icon.type = "image/png";
+icon.href = favicon;
+
+createRoot(document.getElementById("root")!).render(
   <StrictMode>
-    <App />
+    <QueryClientProvider client={createQueryClient()}>
+      <App />
+    </QueryClientProvider>
   </StrictMode>,
-)
+);

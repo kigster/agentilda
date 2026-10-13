@@ -1,0 +1,121 @@
+import type { ReactNode } from "react";
+import { QueryClientProvider } from "@tanstack/react-query";
+import { act, renderHook, waitFor } from "@testing-library/react";
+import { createQueryClient } from "./queryClient";
+import { reconcile, useBoard } from "./useBoard";
+import { replies } from "./replies";
+import type { StreamHandlers } from "./events";
+import { loadFixtureBoard } from "./client";
+
+const streams: StreamHandlers[] = [];
+const closed = vi.fn();
+vi.mock("./events", () => ({
+  openStream: (h: StreamHandlers) => {
+    streams.push(h);
+    return closed;
+  },
+}));
+
+const wrapper = ({ children }: { children: ReactNode }) => <QueryClientProvider client={createQueryClient()}>{children}</QueryClientProvider>;
+const json = (body: unknown) => new Response(JSON.stringify(body), { status: 200 });
+
+let fetchMock: ReturnType<typeof vi.fn>;
+beforeEach(() => {
+  streams.length = 0;
+  fetchMock = vi.fn();
+  vi.stubGlobal("fetch", fetchMock);
+});
+afterEach(() => {
+  vi.unstubAllGlobals();
+  window.history.replaceState(null, "", "/");
+});
+
+it("loads the board, follows the stream, and refetches on reconnect", async () => {
+  const first = loadFixtureBoard();
+  fetchMock.mockResolvedValue(json(first));
+  const { result, unmount } = renderHook(() => useBoard(), { wrapper });
+  expect(result.current.isLoading).toBe(true);
+  expect(result.current.connection).toBe("reconnecting");
+  await waitFor(() => expect(result.current.board?.me.seq).toBe(first.me.seq));
+  expect(result.current.fixture).toBe(false);
+
+  const stream = streams[0];
+  const next = { ...first, me: { ...first.me, seq: 99 } };
+  act(() => {
+    stream.onState("live");
+    stream.onBoard(next);
+  });
+  expect(result.current.connection).toBe("live");
+  expect(result.current.board?.me.seq).toBe(99);
+
+  const deliver = vi.spyOn(replies, "deliver");
+  stream.onReply({ id: "x", status: "done", reason: null, at: "t" });
+  expect(deliver).toHaveBeenCalled();
+
+  act(() => stream.onReconnect());
+  await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
+  unmount();
+  expect(closed).toHaveBeenCalled();
+});
+
+it("reports a failed first load", async () => {
+  fetchMock.mockResolvedValue(new Response("{}", { status: 500 }));
+  const client = createQueryClient();
+  client.setDefaultOptions({ queries: { retry: false } });
+  const { result } = renderHook(() => useBoard(), {
+    wrapper: ({ children }: { children: ReactNode }) => <QueryClientProvider client={client}>{children}</QueryClientProvider>,
+  });
+  await waitFor(() => expect(result.current.error).toBeTruthy());
+});
+
+it("serves the fixture under ?fixture without a stream or a fetch", async () => {
+  window.history.replaceState(null, "", "/?fixture");
+  const { result } = renderHook(() => useBoard(), { wrapper });
+  await waitFor(() => expect(result.current.board).toBeDefined());
+  expect(result.current.fixture).toBe(true);
+  expect(result.current.connection).toBe("live");
+  expect(streams).toHaveLength(0);
+  expect(fetchMock).not.toHaveBeenCalled();
+});
+
+describe("reconcile", () => {
+  const at = (seq: number, others: number[] = []) => {
+    const b = loadFixtureBoard();
+    b.me.seq = seq;
+    b.others = others.map((s, i) => ({ ...structuredClone(b.others[0]), seq: s, node: { ...b.others[0].node, id: `node-${i}` } }));
+    return b;
+  };
+
+  it("never lets a lower seq replace a node's snapshot", () => {
+    const old = at(10, [5, 7]);
+    const next = at(9, [6, 3]);
+    const merged = reconcile(old, next);
+    expect(merged.me.seq).toBe(10);
+    expect(merged.others.map(s => s.seq)).toEqual([6, 7]);
+  });
+
+  it("keeps the old board when nothing is newer, drops nodes that left, and takes a different machine's board", () => {
+    const old = at(10, [5]);
+    expect(reconcile(old, at(10, [5]))).toBe(old);
+    expect(reconcile(old, at(10, [])).others).toEqual([]);
+    expect(reconcile(undefined, old)).toBe(old);
+    const elsewhere = at(1);
+    elsewhere.me.node.id = "another";
+    expect(reconcile(old, elsewhere).me.seq).toBe(1);
+  });
+});
+
+it("does not roll the board back when a reconnect GET lands after a newer streamed board", async () => {
+  const first = loadFixtureBoard();
+  first.me.seq = 40;
+  let release: (r: Response) => void = () => {};
+  fetchMock.mockResolvedValueOnce(json(first)).mockImplementationOnce(() => new Promise<Response>(r => (release = r)));
+  const { result } = renderHook(() => useBoard(), { wrapper });
+  await waitFor(() => expect(result.current.board?.me.seq).toBe(40));
+  const stream = streams[0];
+  act(() => stream.onReconnect()); // the GET leaves now, carrying seq 41
+  act(() => stream.onBoard({ ...first, me: { ...first.me, seq: 42 } }));
+  await act(async () => release(json({ ...first, me: { ...first.me, seq: 41 } })));
+  await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
+  expect(result.current.board?.me.seq).toBe(42);
+});
