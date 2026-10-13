@@ -8,6 +8,7 @@ module Agentilda
     # nothing and runs in CI. `--live` runs the real agents and is never the
     # default, because it spends tokens.
     class Eval < Base
+      standalone!
       desc "Score agents against evals/cases: recorded folders by default, real runs with --live"
 
       option :agent, aliases: ["-a"], desc: "Only this agent's cases"

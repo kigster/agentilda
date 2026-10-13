@@ -29,7 +29,7 @@ module Agentilda
           return
         end
 
-        path = index.write(options[:output])
+        path = index.write(typed_path(options[:output]))
         puts path
         return if quiet?(options)
 

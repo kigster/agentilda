@@ -102,7 +102,7 @@ module Agentilda
       # @return [Array(Array<String>, String, nil)] the slug words, and the
       #   seed body when a file supplied them
       def resolve_seed(words, options)
-        file = options[:from]
+        file = typed_path(options[:from])
         return words, nil unless file
 
         unless words.empty?
@@ -319,7 +319,7 @@ module Agentilda
       def warn_about(note)
         error(
           "The folder was created, but spec.md was not written:\n#{note}\n\n" \
-          "The pull requests are recorded. Run `agentilda run --commit` to retry."
+          "The pull requests are recorded. Run `agentilda run` to retry."
         )
       end
 

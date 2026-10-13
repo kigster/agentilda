@@ -14,7 +14,7 @@ RSpec.describe Agentilda::CLI::Unblock, :tree do
     original_out, original_err = $stdout, $stderr
     $stdout, $stderr = out, err
     begin
-      command.call(plans:, dir: plans_root, **)
+      command.call(plans:, dir: plans_root, dry_run: true, **)
     rescue SystemExit => e
       status = e.status
     ensure

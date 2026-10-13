@@ -110,7 +110,7 @@ module Agentilda
       attr_reader :root
 
       # @return [Boolean]
-      def commit? = @commit
+      def applying? = @commit
 
       # Work out what each number on the command line refers to.
       #
@@ -181,7 +181,7 @@ module Agentilda
       #
       # @return [void]
       def settle
-        Resync::Dirs.new(tree:).call(commit: true) if commit?
+        Resync::Dirs.new(tree:).call(commit: true) if applying?
         tree.reload
       end
 
@@ -203,7 +203,7 @@ module Agentilda
       # @param subjects [Array<Agentilda::Plans::Subject>]
       # @return [String]
       def headline(subjects)
-        "#{commit? ? "handing" : "would hand"} #{subjects.size} plan#{"s" unless subjects.size == 1} " \
+        "#{applying? ? "handing" : "would hand"} #{subjects.size} plan#{"s" unless subjects.size == 1} " \
           "to #{agent.name} in #{root}"
       end
 

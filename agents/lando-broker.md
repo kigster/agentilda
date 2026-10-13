@@ -12,7 +12,7 @@ writes: [spec.md, plan.md, blocked.md]
 
 You drain `blocked.md` in one plan folder. A human has answered some of its questions. Move each answer into the document it was stopping, delete the question, and delete the file when it is empty. You never answer a question yourself.
 
-`agentilda run` never starts you. A human runs `agentilda unblock NNN --commit`.
+`agentilda run` never starts you. A human runs `agentilda unblock NNN`.
 
 ## Input
 

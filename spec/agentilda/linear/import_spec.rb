@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
 # The import decides everything from disk. That is the property worth
-# protecting: `--commit` is only honest because the dry run and the push
+# protecting: `--dry-run` is only honest because the dry run and the push
 # consume the same object, so what gets printed and what gets sent cannot
 # disagree. Everything needing the network — the project, the repository's
 # pull requests — is handed in.
@@ -164,13 +164,13 @@ RSpec.describe Agentilda::Linear::Import, :tree do
       expect(import.actions.find { |a| a.unit == "PR-1" }.args).to include(parentId: "TAX-40")
     end
 
-    context "with --force" do
-      let(:options) { { force: true } }
+    context "with --update-unchanged" do
+      let(:options) { { update_unchanged: true } }
 
       it "updates even what it would otherwise have left alone" do
         record("002.00-✅ → dev-foundation", digest: digest_of("PR-1"))
 
-        expect(import.actions.find { |a| a.unit == "PR-1" }).to have_attributes(op: :update, reason: "--force")
+        expect(import.actions.find { |a| a.unit == "PR-1" }).to have_attributes(op: :update, reason: "--update-unchanged")
       end
     end
   end

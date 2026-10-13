@@ -100,7 +100,7 @@ Questions are numbered `B1`, `B2`, and that numbering is how the file gets refer
 Which is how a block drains, in pieces:
 
 1. A human writes each answer under `## Answers` as it arrives, dated and attributed to whoever decided.
-1. `agentilda unblock NNN --commit` hands the folder to `lando-broker`. Nothing else reaches it: answers arriving is not a fact the tool can observe, so a human running the command *is* the signal.
+1. `agentilda unblock NNN` hands the folder to `lando-broker`. Nothing else reaches it: answers arriving is not a fact the tool can observe, so a human running the command *is* the signal.
 1. `lando-broker` folds each answered question into the document that question was stopping — `spec.md` when the answer changes what we are building or why, `plan.md` when it changes how or in what order — and deletes the question and its answer from `blocked.md`.
 1. When the last question goes, the file goes with it, and the folder leaves ⭕️ on the resync that follows.
 

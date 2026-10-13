@@ -8,10 +8,7 @@ module Agentilda
       class Prs < Base
         desc "Add missing [NNN.MM] prefixes to pull request titles"
 
-        option :commit,
-          type:    :boolean,
-          default: false,
-          desc:    "Actually retitle the pull requests (default: dry run)"
+        dry_run_option "Retitle nothing; print what would be retitled and adopted"
         option :state,
           default: "all",
           values:  %w[open closed merged all],
@@ -22,10 +19,10 @@ module Agentilda
           desc:    "Mint a retroactive plan folder for every pull request that resolves to none. --no-adopt flags them for a human instead"
 
         example [
-          "                # show what would be retitled, and what would be adopted",
+          "-n              # show what would be retitled, and what would be adopted",
           "--state open    # only open pull requests",
           "--no-adopt      # never create a folder; flag the unresolvable ones",
-          "--commit        # do it"
+          "                # do it"
         ]
 
         # @param options [Hash]
@@ -37,7 +34,7 @@ module Agentilda
             github:,
             adopt: options.fetch(:adopt, true),
             root: File.dirname(tree.dir))
-                                        .call(commit: commit?(options))
+                                        .call(commit: !dry_run?(options))
 
           if changes.empty?
             success("Every pull request title already carries a prefix.") unless quiet?(options)
@@ -77,10 +74,10 @@ module Agentilda
 
           flagged.each { |c| say("##{c.number}  #{paint("SKIPPED", :red)} — #{c.reason}", bullet: "!") }
 
-          if commit?(options)
-            success("Retitled #{applicable.size} pull request#{"s" unless applicable.size == 1}.")
-          else
+          if dry_run?(options)
             dry_run_footer(applicable.size, "retitle#{"s" unless applicable.size == 1}")
+          else
+            success("Retitled #{applicable.size} pull request#{"s" unless applicable.size == 1}.")
           end
 
           return if assumed.empty?
@@ -101,11 +98,11 @@ module Agentilda
         def report_adoptions(adopted, options)
           return if adopted.empty?
 
-          verb = commit?(options) ? "Created" : "Would create"
+          verb = dry_run?(options) ? "Would create" : "Created"
           info("#{verb} #{adopted.size} plan folder#{"s" unless adopted.size == 1} for pull " \
                "requests that resolved to no plan:\n\n" \
                "#{adopted.map { |c| "  #{c.ordinal}  ##{c.number}  #{c.title}" }.join("\n")}\n\n" \
-               "Each holds its pull request and nothing else. Run `agentilda run --commit`\n" \
+               "Each holds its pull request and nothing else. Run `agentilda run`\n" \
                "to have the specification written from what the pull request actually did.")
         end
       end

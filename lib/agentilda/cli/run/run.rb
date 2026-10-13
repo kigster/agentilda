@@ -8,10 +8,7 @@ module Agentilda
     class Run < Base
       desc "Run specialist agents over the plans until nothing changes"
 
-      option :commit,
-        type:    :boolean,
-        default: false,
-        desc:    "Actually invoke the agents (default: dry run, prints the plan of work)"
+      dry_run_option "Invoke no agent; print which agent would take which plan"
       option :rounds,
         desc: "Cap on rounds per agent per plan; each agent declares its own, at most 5 " \
               "(default: the agent's own)"
@@ -54,33 +51,26 @@ module Agentilda
       option :git_push,
         type:    :boolean,
         default: true,
-        desc:    "With --commit and --isolation worktree, a finished branch is pushed and its pull request " \
+        desc:    "With --isolation worktree, a finished branch is pushed and its pull request " \
                  "opened as soon as it lands, titled [NNN.MM](X). --no-git-push turns that off and leaves it uncommitted."
       option :log, desc: "Append progress to this file (default: a per-project file under the system temp dir)"
 
       example [
-        "                       # show which agent would take which plan",
-        "--commit               # run them, one worktree per plan, in parallel",
-        "--commit -j 4          # …with four at a time",
+        "-n                     # show which agent would take which plan",
+        "                       # run them, one worktree per plan, in parallel",
+        "-j 4                   # …with four at a time",
         "--isolation shared     # one tree, serial — no git required",
-        "--commit --rounds 3    # …capping every agent at three rounds per plan",
-        "--commit --plan 005,006,007  # only the plans a batch step just created"
+        "--rounds 3             # …capping every agent at three rounds per plan",
+        "--plan 005,006,007     # only the plans a batch step just created"
       ]
 
       # Option precedence, quietest to loudest: the built-in default, then
-      # `~/.local/config/agentilda.json` under its `"run"` key, then the flag
-      # actually typed. The config never supplies `--commit`: an agent run
-      # that writes is something a person asks for each time.
+      # `.tilda.yml` (`jobs`, and the `commands.run` section), then the flag
+      # actually typed. {Base.default_params} has already folded the file in.
       #
       # @param options [Hash]
       # @return [void]
       def call(**options)
-        config = begin
-          Agentilda::Config.for(:run)
-        rescue Agentilda::Error => e
-          refuse(e.message, 66)
-        end
-
         if options[:prompt] && !options[:agent]
           refuse("--prompt only works with --agent: it speaks to one agent, and without " \
                  "that restriction every agent in the round would hear it.",
@@ -96,8 +86,8 @@ module Agentilda
         assignable!(agents, tree, plans, options[:agent]) if options[:agent]
 
         isolation = options.fetch(:isolation, "worktree").to_sym
-        jobs      = (options[:jobs] || config[:jobs] || UI.default_jobs).to_i
-        timeout   = (options[:timeout] || config[:timeout])&.to_i
+        jobs      = (options[:jobs] || UI.default_jobs).to_i
+        timeout   = options[:timeout]&.to_i
 
         if isolation == :worktree && !Agentilda::Vcs.worktree(root:).repository?
           refuse("#{root} is not a git repository, so plans cannot be isolated.\n\n" \
@@ -109,10 +99,11 @@ module Agentilda
         # whether a round prints anything at all) is read the whole time the
         # loop runs, not just when `report` prints its closing summary.
         quiet?(options)
-        UI.log_path = options[:log] || config[:log] ||
+        UI.log_path = options[:log] ||
                       File.join(Dir.tmpdir, "agentilda-#{File.basename(root)}.log")
         info("Progress: #{UI.log_path}") unless quiet?(options)
-        credentials_warning if commit?(options) && !quiet?(options)
+        credentials_warning if !dry_run?(options) && !quiet?(options)
+        spec_warning(tree, plans) unless quiet?(options)
 
         # The state file is what a harness that dies leaves for the next one.
         # It sits in .plans/ so a reboot keeps it, and it is ignored by name
@@ -120,7 +111,7 @@ module Agentilda
         # is announced, the once it happens. The runner drops the file on a
         # dry run, which is why it can be built unconditionally.
         state = Engine.state_file(tree)
-        if commit?(options) && Engine::StateFile.ensure_ignored!(root) && !quiet?(options)
+        if !dry_run?(options) && Engine::StateFile.ensure_ignored!(root) && !quiet?(options)
           info("Added #{Engine::StateFile::IGNORE.join(" and ")} to .gitignore: the run keeps its state there.")
         end
 
@@ -137,15 +128,15 @@ module Agentilda
           plans:,
           state:,
           worktree:  (Agentilda::Vcs.worktree(root:) if isolation == :worktree),
-          rounds:    (options[:rounds] || config[:rounds])&.to_i,
+          rounds:    options[:rounds]&.to_i,
           executor:  Execution.executor(root:,
             timeout:,
-            dry_run:      !commit?(options),
+            dry_run:      dry_run?(options),
             instructions: instructions_from(options[:prompt]),
             model:        options[:model],
-            max_tokens:   (options[:max_tokens] || config[:max_tokens])&.to_i,
+            max_tokens:   options[:max_tokens]&.to_i,
             lean:         !options[:user_config]),
-          dry_run:   !commit?(options),
+          dry_run:   dry_run?(options),
           publisher: publisher_for(root, isolation, options)
         )
 
@@ -197,9 +188,9 @@ module Agentilda
       # @param prompt [String, nil]
       # @return [String, nil]
       def instructions_from(prompt)
-        return prompt unless prompt && prompt.length < PROMPT_PATH_LIMIT && File.file?(prompt)
+        return prompt unless prompt && prompt.length < PROMPT_PATH_LIMIT && File.file?(typed_path(prompt))
 
-        File.read(prompt)
+        File.read(typed_path(prompt))
       end
 
       # @param agents [Agentilda::Agents::Registry]
@@ -234,6 +225,28 @@ module Agentilda
             64)
         end
         agents.without(*names)
+      end
+
+      # A spec.md whose frontmatter does not parse routes as if it had none:
+      # lane full, every override dropped. An eval agent's unquoted backtick
+      # sent a quick-lane rename to research that way, and said nothing.
+      # {Plans::Spec#problems} already knew; say it before agents are assigned.
+      #
+      # @param tree [Agentilda::Plans::Tree]
+      # @param plans [Array<Agentilda::Plans::Ordinal>, nil] the --plan ordinals, nil for all
+      # @return [void]
+      def spec_warning(tree, plans)
+        lines = tree.subjects.filter_map { |subject|
+          ordinal = subject.feature.ordinal
+          next if plans && !plans.include?(ordinal)
+
+          problems = Plans::Spec.for(subject).problems
+          "#{ordinal}: #{problems.join("; ")}" unless problems.empty?
+        }
+        return if lines.empty?
+
+        warn("spec.md frontmatter ignored in part, so these plans route on defaults:\n" \
+             "#{lines.join("\n")}")
       end
 
       # `--plan` names the whole point of scoping: a skill that just minted
@@ -296,7 +309,7 @@ module Agentilda
 
       # The one thing this harness does that leaves the machine — pushing a
       # branch and opening its pull request — so it takes one more thing to
-      # turn on than everything else here: `--commit` alone is not enough,
+      # turn on than everything else here: not being a dry run is not enough,
       # isolation has to actually give each plan a branch of its own too.
       #
       # `nil` is how {Runner} is told to leave a finished worktree alone; it
@@ -308,9 +321,15 @@ module Agentilda
       # @param options [Hash]
       # @return [Agentilda::Vcs::Publisher, nil]
       def publisher_for(root, isolation, options)
-        return nil if isolation != :worktree || options[:git_push] == false
+        if isolation != :worktree || options[:git_push] == false
+          unless quiet?(options)
+            warn("No pull request will be opened (#{isolation == :worktree ? "--no-git-push" : "--isolation shared"}), " \
+                 "so plans stop at 🟢 Ready for Review:\nhansolo-reviewer reviews a pull request, and waits until one is open.")
+          end
+          return nil
+        end
 
-        Vcs.publisher(root:, dry_run: !commit?(options))
+        Vcs.publisher(root:, dry_run: dry_run?(options))
       end
 
       # One line per attempt: the plan, who ran, which of that agent's rounds
@@ -335,7 +354,7 @@ module Agentilda
         # redirected to a file keeps its bill. A dry run spent nothing and gets
         # none of this.
         tally = Engine.tally(attempts:, seconds:)
-        puts("", tally.render) if commit?(options)
+        puts("", tally.render) unless dry_run?(options)
 
         return if quiet?(options)
 
@@ -351,8 +370,8 @@ module Agentilda
         summary << "#{blocked.size} blocked" unless blocked.empty?
         summary << "#{failures(attempts).size} failed" unless failures(attempts).empty?
 
-        if !commit?(options)
-          warn("Dry run — no agent was invoked.\n#{summary.join(" · ")}\n\nRe-run with --commit.")
+        if dry_run?(options)
+          warn("Dry run — no agent was invoked.\n#{summary.join(" · ")}\n\nRe-run without --dry-run.")
         elsif failures(attempts).empty?
           success("#{summary.join(" · ")}#{"\n\nEvery plan is done or deliberately parked." if runner.settled?}")
         else
@@ -364,7 +383,7 @@ module Agentilda
         warn("#{blocked.size} plan#{"s" unless blocked.size == 1} need a human decision:\n" +
                blocked.map { |b| "  #{b.feature.ordinal} #{b.status.emoji} #{b.feature.title} — see blocked.md" }.join("\n") +
                "\n\nWrite the answers into blocked.md, then: agentilda unblock " \
-               "#{blocked.map { |b| b.feature.ordinal }.join(",")} --commit")
+               "#{blocked.map { |b| b.feature.ordinal }.join(",")}")
       end
     end
   end

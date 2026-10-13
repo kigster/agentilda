@@ -49,7 +49,6 @@ require "tmpdir"
 # Forcing it off makes every content assertion test content. The coloured path
 # is still covered — deliberately, by examples that stub `UI.color?` — rather
 # than by accident, differently, on each machine.
-ENV.delete("AGENTILDA_AUTOCOMMIT") # a developer shell must not turn every dry-run example into a commit
 ENV["NO_COLOR"] = "1"
 ENV["GIT_CONFIG_COUNT"] = "1"
 ENV["GIT_CONFIG_KEY_0"] = "commit.gpgsign"
@@ -83,6 +82,15 @@ RSpec.configure do |config|
   # Pastel memoizes `enabled:` at construction, so an example that stubs
   # `tty?` or `color?` would otherwise poison every example that ran after it.
   config.before { Agentilda::UI.reset! }
+
+  # Project commands chdir to the root they find. Put the suite back where it
+  # was, or one example's root becomes the next example's working directory.
+  config.around do |example|
+    pwd = Dir.pwd
+    example.run
+  ensure
+    Dir.chdir(pwd)
+  end
 
   # Every example tagged `:tree` gets its own throwaway `.plans` directory, so
   # the suite never reads or writes a real project.

@@ -28,17 +28,14 @@ module Agentilda
         required: true,
         desc:     "Which plans to drain: NNN or NNN.MM, e.g. 003 005.01"
 
-      option :commit,
-        type:    :boolean,
-        default: false,
-        desc:    "Actually invoke the agent (default: dry run, prints the questions still open)"
+      dry_run_option "Invoke no agent; print the questions still open"
       option :agent, default: DEFAULT_AGENT, desc: "Hand the folder to a different agent"
       option :root, desc: "Repository root the agent works in (default: the .plans parent)"
 
       example [
-        "003                # what 003 is still waiting on",
-        "003 --commit       # fold in whatever has been answered",
-        "003,005 --commit   # both"
+        "003 -n             # what 003 is still waiting on",
+        "003                # fold in whatever has been answered",
+        "003,005            # both"
       ]
 
       # @param plans [Array<String>]
@@ -50,16 +47,16 @@ module Agentilda
         unblocker = Lifecycle.unblocker(tree:,
           agent: agent_for(options),
           root: options[:root],
-          commit: commit?(options),
+          commit: !dry_run?(options),
           executor: Execution.executor(root: options[:root] || File.dirname(tree.dir),
-            dry_run: !commit?(options)))
+            dry_run: dry_run?(options)))
 
         targets = unblocker.resolve(plans)
         refused(targets, tree, options)
         subjects = targets.select(&:drainable?).map(&:subject)
         exit(worst(targets, [])) if subjects.empty?
 
-        credentials_warning if commit?(options) && !quiet?(options)
+        credentials_warning if !dry_run?(options) && !quiet?(options)
         preflight(subjects, unblocker, options)
 
         outcomes = Execution.on_interrupt { unblocker.call(subjects) }
@@ -108,7 +105,7 @@ module Agentilda
 
       # What each folder is waiting on, said BEFORE the agent is invoked.
       #
-      # This is the half that was missing. `--commit` hands the folder to an
+      # This is the half that was missing. A real run hands the folder to an
       # agent that can take a quarter of an hour, and until it came back the
       # terminal showed nothing at all — a run that had found nothing to do and
       # a run still working looked exactly alike.
@@ -161,13 +158,13 @@ module Agentilda
       # @param options [Hash]
       # @return [void]
       def report(outcome, options)
-        moved = movement(outcome, commit?(options))
+        moved = movement(outcome, !dry_run?(options))
         puts "#{outcome.ordinal}\t#{outcome.ok ? outcome.subject.status.key : "failed"}\t" \
              "#{outcome.after.size} open\t#{moved}\t#{outcome.note}"
         # A dry run changed nothing, so the preflight above it is still the
         # whole truth. Printing the same three lines again reads as a second
         # pass that found the same thing, which is not what happened.
-        return if quiet?(options) || !commit?(options)
+        return if quiet?(options) || dry_run?(options)
 
         say("#{paint(outcome.ordinal.to_s, :bright_black)} #{outcome.subject.status.emoji} " \
             "#{outcome.subject.feature.title} — #{paint(moved, outcome.ok ? :green : :red)}")
@@ -195,10 +192,10 @@ module Agentilda
       def footer(outcomes, options)
         failed = outcomes.reject(&:ok)
 
-        unless commit?(options)
+        if dry_run?(options)
           warn("Dry run: no agent was invoked, and #{outcomes.size} " \
                "plan#{"s" unless outcomes.size == 1} #{outcomes.size == 1 ? "is" : "are"} unchanged.\n" \
-               "Re-run with --commit to fold in whatever has been answered.")
+               "Re-run without --dry-run to fold in whatever has been answered.")
           return
         end
 

@@ -42,7 +42,7 @@ evals/               starter evaluation cases, currently no runner
 
 Folder names encode lifecycle state. Preserve one definition of invariants in `status.rb` and topology in `state_machine.rb`; regenerate documentation with `just update-workflow`. Agents supply roles through frontmatter. Network seams are injected in tests; filesystem tests use actual temporary directories.
 
-Commands generally preview changes until `--commit`; configuration can affect effective behavior, so inspect CLI help before executing runs. Worker agents cannot merge. The publisher, not the worker, owns pushing.
+Commands do the work they are named for and preview with `-n` / `--dry-run`; configuration can affect effective behavior, so inspect CLI help before executing runs. Worker agents cannot merge. The publisher, not the worker, owns pushing.
 
 `CLAUDE.md` contains useful design history but stale setup and repository-status claims. Read current files before relying on those claims. For the proposed scheduler, Jev, independent review, Braintrust and eval changes, read [the factory proposal](docs/software-factory-proposal.md). Those changes are not implemented yet.
 

@@ -164,7 +164,7 @@ RSpec.describe Agentilda::Lifecycle::Unblocker, :tree do
       end
     end
 
-    it "changes nothing without --commit" do
+    it "changes nothing when not committing" do
       subject_plan = blocked_plan
       described_class.new(tree:, agent:, executor: folding(1, 2), commit: false).call([subject_plan])
 

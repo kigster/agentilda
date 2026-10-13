@@ -65,7 +65,7 @@ module Agentilda
           | :--- | :---- | :---- | ----: | :----- |
           #{rows.join("\n")}
 
-          <!-- Written by `agentilda linear import --commit`. Do not hand-edit the
+          <!-- Written by `agentilda linear import`. Do not hand-edit the
                Synced column: it fingerprints what was last pushed, and a row whose
                fingerprint no longer matches the plan is what triggers an update. -->
         MARKDOWN

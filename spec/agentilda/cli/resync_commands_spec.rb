@@ -13,7 +13,7 @@ RSpec.describe "agentilda resync", :tree do
     original_out, original_err = $stdout, $stderr
     $stdout, $stderr = out, err
     begin
-      command.call(dir: plans_root, **)
+      command.call(dir: plans_root, dry_run: true, **)
     rescue SystemExit => e
       status = e.status
     ensure
@@ -45,11 +45,11 @@ RSpec.describe "agentilda resync", :tree do
 
         expect(out).to include("001.00-⚪️ → outgrown\t001.00-⭐️ → outgrown")
         expect(Dir.children(plans_root)).to include("001.00-⚪️ → outgrown")
-        expect(unwrapped(err)).to include("1 rename pending", "--commit")
+        expect(unwrapped(err)).to include("1 rename pending", "without --dry-run")
       end
 
-      it "renames under --commit and says how many folders moved" do
-        _out, err, = run(command, commit: true)
+      it "renames without --dry-run and says how many folders moved" do
+        _out, err, = run(command, dry_run: false)
 
         expect(Dir.children(plans_root)).to include("001.00-⭐️ → outgrown")
         expect(unwrapped(err)).to include("Renamed 1 folder")
@@ -108,9 +108,9 @@ RSpec.describe "agentilda resync", :tree do
         expect(unwrapped(err)).to include("would get [dev] because no plan resolved", "2 retitles pending")
       end
 
-      it "retitles through the seam under --commit and reports the count" do
+      it "retitles through the seam without --dry-run and reports the count" do
         allow(github).to receive(:retitle)
-        _out, err, = run(command, adopt: false, commit: true)
+        _out, err, = run(command, adopt: false, dry_run: false)
 
         expect(github).to have_received(:retitle).with(number: 7, title: "[001.00] Add the DSL")
         expect(unwrapped(err)).to include("Retitled 2 pull requests")
@@ -137,7 +137,7 @@ RSpec.describe "agentilda resync", :tree do
         out, err, = run(command)
 
         expect(out).to include("adopted into")
-        expect(unwrapped(err)).to include("Would create 1 plan folder", "agentilda run --commit")
+        expect(unwrapped(err)).to include("Would create 1 plan folder", "agentilda run`")
       end
     end
 
