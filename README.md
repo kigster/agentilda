@@ -50,20 +50,6 @@ It copies rather than links, so re-run it with `--overwrite` after upgrading the
 
 ![help-screen](./.img/help-screen.avif)
 
-### What it compiles
-
-The dashboard is drawn by [`ratatui_ruby`](https://github.com/kigster/ratatui_ruby), a Rust extension, so installing needs a Rust toolchain (`cargo`) and `clang` with `libclang` on the machine. On a Mac, `brew install rust` and the Command Line Tools are enough; on Debian or Ubuntu, `rustup` plus `clang libclang-dev`. Without `libclang`, `rb-sys`'s bindgen step stops at "Unable to find libclang", and `gcc` is not a substitute.
-
-#### Building on a jemalloc-linked Ruby
-
-If `bundle install` fails compiling `ratatui_ruby` with `fatal error: 'jemalloc/jemalloc.h' file not found`, your Ruby was built `--with-jemalloc` and `rb-sys`'s bindgen step is not inheriting your compiler's include path:
-
-```bash
-BINDGEN_EXTRA_CLANG_ARGS="-I$(brew --prefix jemalloc)/include" bundle install
-```
-
-Put it in `.envrc` if you hit it more than once.
-
 ## Quick start
 
 Run these anywhere inside your project:
@@ -266,7 +252,6 @@ tilda run --skip hansolo-reviewer          # everyone but the reviewer; its plan
 tilda run --model opus                     # one model for every agent
 tilda run --user-config                    # agents load your personal plugins and skills too
 tilda run --timeout 600                    # at most ten minutes per agent
-tilda run --scroll-height 5                # each agent's last five statuses under its row
 tilda run --agent luke-backend --prompt steer.md  # a short --prompt naming a file is read
 tilda run --rounds 1                       # at most one round per agent per plan
 tilda run --max-tokens 200000              # token budget per agent invocation
@@ -303,27 +288,11 @@ As its time runs out, the agent is warned at 10, 5 and 1 minute left, then asked
 
 Defaults for `run` live in the project's `.tilda.yml`, under `jobs` and `commands.run` (see [Project settings](#project-settings-tildayml)). A typed flag beats the file, and the file beats the built-in default.
 
-### The dashboard, and the keys during a run
+### Following a run, and stopping it
 
-On a terminal, every command that runs agents draws the same ratatui dashboard and listens for the same keys: `run`, `unblock` and `create`. A cyan status bar runs the full width at the top and another at the bottom, and each running agent is one table row — plan, agent, file, elapsed and remaining — with its latest statuses printed under it, newest first. `run --scroll-height N` (`-s N`) keeps the last N of them; the default is three. Off a terminal (a pipe, a dry run, cron) there is no screen, and progress goes to the log instead.
+Every command that runs agents (`run`, `unblock` and `create`) shows each agent as a spinner line on STDERR on a terminal, and writes the same progress to its log everywhere else (a pipe, a dry run, cron). A web control room, from which a person can watch the board and message, interrupt, kill or extend an agent, is planned in `.plans/004.00-⚪️ → web-control-room/`; the terminal UI that used to do part of this has been removed.
 
-| Key      | What it does                                                                   |
-| :------- | :----------------------------------------------------------------------------- |
-| `h`      | show or hide this help                                                         |
-| `?`      | about agentilda                                                                |
-| `s`, `↓` | select the next running agent; `↑` moves back                                  |
-| `k`      | mark the selected agent to be killed (STOP, 15 seconds, then `kill -9`)        |
-| `x`      | give the selected agent 10 more minutes, per press                             |
-| `ENTER`  | apply the pending kills and extensions                                         |
-| `ESC`    | discard the pending changes, then clear the selection                          |
-| `w`      | ask every running agent to wrap up as fast as possible                         |
-| `n`      | ask agents to save their work and stop; the loop continues with the next agent |
-| `q`      | save, stop everything and quit, after a 60-second grace period                 |
-| `ctrl-c` | agents leave a resume note and stop, then quit; press again to abort at once   |
-
-`k` and `x` do nothing until you press `ENTER`, so a slip of the finger cannot kill an agent.
-
-Ctrl-C once asks each running agent to write a `RESUME:` note into its plan's `mailbox.md` and sign `Interrupted`; every agent reads its mail before it starts, so a later run picks up where this one stopped instead of redoing the work. A second press aborts immediately. It works without a dashboard too, through a `SIGINT` handler.
+Ctrl-C once asks each running agent to write a `RESUME:` note into its plan's `mailbox.md` and sign `Interrupted`; every agent reads its mail before it starts, so a later run picks up where this one stopped instead of redoing the work. A second press aborts immediately. It works through a `SIGINT` handler.
 
 ### How agents hand off
 

@@ -53,10 +53,6 @@ module Agentilda
         default: true,
         desc:    "With --isolation worktree, a finished branch is pushed and its pull request " \
                  "opened as soon as it lands, titled [NNN.MM](X). --no-git-push turns that off and leaves it uncommitted."
-      option :scroll_height,
-        aliases: ["-s"],
-        desc:    "Lines of each agent's latest statuses shown under its row, newest first " \
-                 "(default: #{Presentation::Screen::Ratatui::SCROLL_HEIGHT})"
       option :log, desc: "Append progress to this file (default: a per-project file under the system temp dir)"
 
       example [
@@ -65,8 +61,7 @@ module Agentilda
         "-j 4                   # …with four at a time",
         "--isolation shared     # one tree, serial — no git required",
         "--rounds 3             # …capping every agent at three rounds per plan",
-        "--plan 005,006,007     # only the plans a batch step just created",
-        "-s 5                   # …each agent's last five statuses under its row"
+        "--plan 005,006,007     # only the plans a batch step just created"
       ]
 
       # Option precedence, quietest to loudest: the built-in default, then
@@ -120,27 +115,10 @@ module Agentilda
           info("Added #{Engine::StateFile::IGNORE.join(" and ")} to .gitignore: the run keeps its state there.")
         end
 
-        # The screen only on a terminal that is actually running agents: a dry
-        # run has nothing to draw and a pipe has nowhere to draw it. Without a
-        # screen the keys still work, so the one line says which.
-        # With a screen, ratatui owns the terminal's input, so the keyboard is
-        # fed from its loop rather than started on STDIN of its own.
+        # Control files from a previous run would otherwise be read as orders
+        # to this one. Progress goes to STDERR as lines; the web view (plan 004)
+        # is what will draw the board and take kill, extend and stop.
         Execution::Control.reset!
-        scroll_height = options.fetch(:scroll_height, Presentation::Screen::Ratatui::SCROLL_HEIGHT)
-        unless scroll_height.to_s.match?(/\A[1-9]\d*\z/)
-          refuse("--scroll-height must be a whole number of lines, 1 or more, not #{scroll_height.inspect}.", 64)
-        end
-        screen   = (Presentation::Screen::Ratatui.new(scroll_height: scroll_height.to_i) if UI.animate? && !dry_run?(options))
-        console  = (Presentation::Console.new(screen:) if screen)
-        # A dry run gets no keyboard at all: every key it offers speaks to a
-        # running agent, and listening costs the terminal's raw mode, whose
-        # output post-processing the report below needs left alone.
-        keyboard = if screen
-                     Presentation::Keyboard.new(sink: console).tap { |kb| screen.attach_keyboard(kb) }
-                   elsif !dry_run?(options)
-                     Presentation::Keyboard.listen(sink: console)
-                   end
-        UI.line("keys: h for help - s select, k kill, x extend, w wrap up, n stop, q quit") if keyboard && console.nil? && !quiet?(options)
 
         runner = Engine.runner(
           tree:,
@@ -157,23 +135,13 @@ module Agentilda
             instructions: instructions_from(options[:prompt]),
             model:        options[:model],
             max_tokens:   options[:max_tokens]&.to_i,
-            interactive:  !keyboard.nil? && !dry_run?(options),
             lean:         !options[:user_config]),
           dry_run:   dry_run?(options),
-          publisher: publisher_for(root, isolation, options),
-          on_board:  console&.method(:paint)
+          publisher: publisher_for(root, isolation, options)
         )
 
-        # The dispatcher exists only once the run starts, so the console is
-        # introduced to it through the block rather than up front.
         started  = UI.monotonic
-        attempts = begin
-          screen&.open
-          Execution.on_interrupt { runner.call { |dispatcher| console&.attach(dispatcher) } }
-        ensure
-          screen&.close
-          keyboard&.stop
-        end
+        attempts = Execution.on_interrupt { runner.call }
         report(runner, attempts, options, seconds: UI.monotonic - started)
         exit(failures(attempts).empty? ? 0 : 1)
       end

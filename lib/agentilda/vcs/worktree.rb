@@ -111,9 +111,8 @@ module Agentilda
       # carries on.
       #
       # The note goes to the progress log, never the terminal: this runs while
-      # the ratatui dashboard owns the screen, and a line written to STDERR
-      # lands on top of an agent's row. The seeder's own output is silenced for
-      # the same reason. A suite that later dies on a missing key is explained
+      # agents' spinner lines are live on STDERR, and a stray line lands in the
+      # middle of them. The seeder's own output is silenced for the same reason. A suite that later dies on a missing key is explained
       # by the log line.
       #
       # @param path [String] the worktree to seed

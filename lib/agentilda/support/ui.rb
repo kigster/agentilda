@@ -58,9 +58,6 @@ module Agentilda
     # Longest phrase a spinner line can carry without wrapping into the next.
     SAID_LIMIT = 56
 
-    # No document to name on a dashboard row.
-    NO_FILE = ->(_item) { "" }
-
     # One item's line on the screen, and the same news written to the log.
     #
     # These are two readers of one story and used to be told it separately:
@@ -423,19 +420,15 @@ module Agentilda
       # @param header [Hash] log columns for the header line itself, so the
       #   line announcing a round carries the same round number as the agent
       #   lines under it rather than a blank cell
-      # @param file [Proc] item -> the document the dashboard row names
-      # @param root [String] the directory the dashboard's bottom bar names
       # @yieldparam item [Object]
-      # @yieldparam line [Line] a {Dashboard::Tracker} on a terminal, whose
-      #   `handle` a caller may pass to {Executor#call}
+      # @yieldparam line [Line]
       # @return [Array] one result per item, in input order
       def concurrently(items, message, jobs:, label: :to_s.to_proc, fields: NO_FIELDS,
-        failure: NO_FAILURE, header: {}, timeout: NO_TIMEOUT, file: NO_FILE, root: Dir.pwd, &)
+        failure: NO_FAILURE, header: {}, timeout: NO_TIMEOUT, &)
         list = items.to_a
         return [] if list.empty?
 
         log(message, **header)
-        return on_dashboard(list, jobs:, label:, fields:, failure:, timeout:, file:, root:, &) if animate?
 
         if jobs <= 1 || list.size <= 1
           report_line(message) unless animate?
@@ -454,44 +447,6 @@ module Agentilda
           end
         end
         list.each_index.map { |i| results[i] }
-      end
-
-      # Agent work a person waits on, drawn on the ratatui dashboard: one
-      # row per item, at most `jobs` running at once. As with the task list,
-      # one item's failure is its own result when several run; a lone item's
-      # exception propagates, as {.once} lets it.
-      #
-      # @return [Array] one result per item, in input order
-      def on_dashboard(list, jobs:, label:, fields:, failure:, timeout:, file:, root:, &)
-        Presentation::Dashboard.open(root:) do |dashboard|
-          # Tracked when it starts, not when it is queued: a row's clock is
-          # the agent's clock, and a queued plan has no agent yet.
-          run = lambda do |item|
-            tracker = dashboard.track(key: label.call(item),
-              fields: fields.call(item),
-              file: file.call(item),
-              timeout: timeout.call(item))
-            attempt(item, tracker, failure, &)
-          end
-          next list.map(&run) if jobs <= 1 || list.size <= 1
-
-          results = Concurrent::Hash.new
-          queue = Queue.new
-          list.each_index { |i| queue << i }
-          queue.close
-          Array.new([jobs, list.size].min) {
-            Thread.new do
-              while (i = queue.pop)
-                results[i] = begin
-                  run.call(list[i])
-                rescue StandardError => e
-                  e
-                end
-              end
-            end
-          }.each(&:join)
-          list.each_index.map { |i| results[i] }
-        end
       end
 
       # The same news, with no spinner to put it on. A piped or CI run still

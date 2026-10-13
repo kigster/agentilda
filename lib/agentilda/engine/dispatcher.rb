@@ -98,7 +98,7 @@ module Agentilda
       # @return [Boolean]
       def done? = @running.empty? && (Execution::Control.quit? || next_dispatchable.nil?)
 
-      # `k` from the console: STOP, {KILL_GRACE} seconds, SIGKILL, on a thread
+      # Kill from a view: STOP, {KILL_GRACE} seconds, SIGKILL, on a thread
       # so the tick is not held for fifteen seconds.
       #
       # @param key [String] a row's key
@@ -108,7 +108,7 @@ module Agentilda
         Thread.new { job.handle.kill!(grace: KILL_GRACE) }
       end
 
-      # `x` from the console.
+      # More time, from a view.
       #
       # @param key [String]
       # @param seconds [Integer]

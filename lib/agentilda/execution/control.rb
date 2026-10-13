@@ -122,8 +122,7 @@ module Agentilda
         # @return [Boolean] whether Ctrl-C has been pressed
         def interrupted? = @mutex.synchronize { @interrupted }
 
-        # Ctrl-C where no keyboard reads it: a run with no terminal to put in
-        # raw mode still gets the graceful first press and the hard second.
+        # Ctrl-C: the graceful first press and the hard second.
         #
         # A trap handler may not take a mutex, so the first press hands
         # {#interrupt!} to a thread; the second raises, as Ctrl-C always has.

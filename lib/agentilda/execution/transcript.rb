@@ -67,8 +67,7 @@ module Agentilda
       DELTA_NOISE = '"content_block_delta"'
 
       # Longest phrase kept. A sanity cap, not a layout rule: each place that
-      # draws a phrase cuts it to the room it has, and the dashboard has most
-      # of a terminal's width.
+      # draws a phrase cuts it to the room it has.
       LIMIT = 300
 
       # How each tool reads as something being done, rather than as a tool name.

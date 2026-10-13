@@ -20,12 +20,6 @@ Lint/EmptyBlock:
   Exclude:
     - 'spec/agentilda/execution/transcript_spec.rb'
 
-# Offense count: 1
-# This cop supports unsafe autocorrection (--autocorrect-all).
-Lint/IncompatibleIoSelectWithFiberScheduler:
-  Exclude:
-    - 'lib/agentilda/presentation/keyboard.rb'
-
 # Offense count: 2
 Lint/NoReturnInBeginEndBlocks:
   Exclude:
