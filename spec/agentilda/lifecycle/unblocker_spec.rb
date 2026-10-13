@@ -175,4 +175,26 @@ RSpec.describe Agentilda::Lifecycle::Unblocker, :tree do
       expect(unblocker.call([])).to eq([])
     end
   end
+
+  describe "#drain, as the run loop calls it" do
+    let(:subject_plan) { blocked_plan(body: "## B1. Which vendor\n\n## A1. Ours\n\nDecided by the CTO, 2026-10-13.\n") }
+
+    let(:drained) { described_class.new(tree:, agent:, executor: folding(1), commit: applying).drain(subject_plan) }
+    let(:applying) { true }
+
+    it "hands one folder to the agent and counts what it folded, leaving the rename to the loop" do
+      aggregate_failures do
+        expect([drained.ok, drained.folded, drained.cleared?]).to eq([true, [1], true])
+        expect(tree.reload.find("001.00").status.key).to eq(:blocked)
+      end
+    end
+
+    context "with a dry run" do
+      let(:applying) { false }
+
+      it "invokes nobody" do
+        expect([drained.ok, drained.note]).to eq([false, "not attempted: a dry run"])
+      end
+    end
+  end
 end

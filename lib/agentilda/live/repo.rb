@@ -1,5 +1,6 @@
 # frozen_string_literal: true
 
+require "digest"
 require "open3"
 
 module Agentilda
@@ -30,16 +31,29 @@ module Agentilda
       end
 
       # The repository of the checkout at +root+: its `origin`, normalised,
-      # or, with no remote to share, the checkout's directory name, which
-      # shares with nobody who did not name their clone the same.
+      # or, with no remote to share, `local/<name>-<12 hex>`, the directory's
+      # name and a digest of its real path. The name alone collided: two
+      # unrelated clones both called `app` on one Redis would have read each
+      # other's boards and taken each other's claims.
       #
       # @param root [String]
       # @return [String]
       def for(root)
         out, status = Open3.capture2("git", "-C", root, "remote", "get-url", "origin", err: File::NULL)
-        (status.success? && normalise(out)) || File.basename(File.realpath(root))
+        (status.success? && normalise(out)) || local(root)
       rescue SystemCallError
-        File.basename(root)
+        local(root)
+      end
+
+      # @param root [String]
+      # @return [String] `local/<basename>-<12 hex of SHA-256 of the real path>`
+      def local(root)
+        path = begin
+          File.realpath(root)
+        rescue SystemCallError
+          File.expand_path(root)
+        end
+        "local/#{File.basename(path)}-#{Digest::SHA256.hexdigest(path)[0, 12]}"
       end
     end
   end

@@ -50,7 +50,7 @@ RSpec.describe Agentilda::Live do
 
   it "builds this checkout's keys" do
     Dir.mktmpdir("agentilda-keys") do |root|
-      expect(described_class.keys(root:).repo).to eq(File.basename(root))
+      expect(described_class.keys(root:).repo).to start_with("local/#{File.basename(root)}-")
     end
   end
 
@@ -66,6 +66,11 @@ RSpec.describe Agentilda::Live do
     it "is our snapshot and every other live node's, theirs never marked as ours" do
       expect(described_class.board(store:, keys:)).to eq(me: { "seq" => 1, "node" => { "host" => "a", "me" => true } },
         others: [{ "seq" => 7, "node" => { "host" => "b", "me" => false } }])
+    end
+
+    it "forgets nodes whose snapshot has expired, so the registry does not grow forever" do
+      described_class.board(store:, keys:)
+      expect(store.hgetall(keys.nodes).keys).to eq(%w[me:1 them:2])
     end
 
     it "has no snapshot of ours while our engine is down" do

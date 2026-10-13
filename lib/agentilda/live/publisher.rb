@@ -48,6 +48,16 @@ module Agentilda
         @log_mutex = Mutex.new
         @seq = nil
         @warned = false
+        @on_lost = nil
+      end
+
+      # What to do with plans whose claim lapsed and went to another node:
+      # the session stops their agents, so two machines never work one plan.
+      #
+      # @yieldparam ordinals [Array<String>]
+      # @return [void]
+      def on_lost(&block)
+        @on_lost = block
       end
 
       # @return [Agentilda::Live::Meter]
@@ -72,7 +82,11 @@ module Agentilda
           tx.xadd(@keys.board, { seq: snapshot[:seq], json: }, maxlen: Keys::BOARD_LENGTH)
           tx.hset(@keys.nodes, @node.name, JSON.generate(@node.wire(heartbeat_at: now)))
         end
-        @claims&.renew
+        lost = @claims&.renew || []
+        unless lost.empty?
+          UI.log("claims lost to another machine: #{lost.join(", ")}; stopping their agents")
+          @on_lost&.call(lost)
+        end
         @warned = false
         snapshot
       rescue Unavailable => e

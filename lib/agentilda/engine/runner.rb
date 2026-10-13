@@ -64,6 +64,7 @@ module Agentilda
         @on_board = on_board
         @claims = claims
         @attempts = []
+        @dropped = []
         @jobs = isolated? ? jobs : 1
       end
 
@@ -80,7 +81,16 @@ module Agentilda
 
       # @param subject [Agentilda::Plans::Subject]
       # @return [Boolean]
-      def in_scope?(subject) = @plans.nil? || @plans.include?(subject.feature.ordinal)
+      def in_scope?(subject)
+        ordinal = subject.feature.ordinal
+        !@dropped.include?(ordinal.to_s) && (@plans.nil? || @plans.include?(ordinal))
+      end
+
+      # Take a plan out of this run, as when another machine now holds it.
+      #
+      # @param ordinal [#to_s]
+      # @return [void]
+      def drop_plan(ordinal) = @dropped |= [ordinal.to_s]
 
       # @return [Array<Agentilda::Plans::Subject>]
       def in_scope = tree.subjects.select { |s| in_scope?(s) }
@@ -91,6 +101,7 @@ module Agentilda
       # @param ordinal [Agentilda::Plans::Ordinal]
       # @return [Boolean] whether the scope grew
       def add_plan(ordinal)
+        @dropped.delete(ordinal.to_s)
         return false if @plans.nil? || @plans.include?(ordinal)
 
         @plans << ordinal

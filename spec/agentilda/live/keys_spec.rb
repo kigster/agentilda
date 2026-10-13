@@ -11,6 +11,10 @@ RSpec.describe Agentilda::Live::Keys do
                 agentilda:github.com/o/n:claim:004.00])
   end
 
+  it "keeps the run state in a hash of its own, per node" do
+    expect([keys.run, keys.run("x:y")]).to eq(%w[agentilda:github.com/o/n:abc:def:run agentilda:github.com/o/n:x:y:run])
+  end
+
   it "names another node's keys through the same methods" do
     expect([keys.snapshot("x:y"), keys.board("x:y")]).to eq(%w[agentilda:github.com/o/n:x:y:snapshot agentilda:github.com/o/n:x:y:board])
   end

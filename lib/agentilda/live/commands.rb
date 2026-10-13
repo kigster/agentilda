@@ -54,17 +54,21 @@ module Agentilda
       # @param keys [Agentilda::Live::Keys]
       # @param node [Agentilda::Live::Node]
       # @param run_state [Agentilda::Live::RunState]
+      # @param record [Agentilda::Live::RunRecord, nil] writes the run state
+      #   in the same `MULTI` as each reply
       # @param claims [Agentilda::Live::Claims, nil]
       # @param clock [Proc] wall time
-      def initialize(store:, keys:, node:, run_state: RunState.new, claims: nil, clock: -> { Time.now })
+      def initialize(store:, keys:, node:, run_state: RunState.new, record: nil, claims: nil, clock: -> { Time.now })
         @store = store
         @keys = keys
         @node = node
         @run_state = run_state
+        @record = record
         @claims = claims
         @clock = clock
         @ready = false
         @swept_at = nil
+        @pending = {}
       end
 
       # Apply everything waiting: this consumer's unacknowledged commands
@@ -74,9 +78,10 @@ module Agentilda
       # @return [Array<Agentilda::Live::Reply>] what was answered
       def call(dispatcher)
         prepare
-        entries = read("0")
+        replies = collect
+        entries = read("0").reject { @pending.key?(it.id) }
         entries += read(">") if entries.size < BATCH
-        replies = entries.map { |entry| handle(entry, dispatcher) }
+        replies += entries.filter_map { |entry| handle(entry, dispatcher) }
         sweep
         replies
       rescue Unavailable => e
@@ -101,23 +106,42 @@ module Agentilda
       # @return [Array<Agentilda::Live::Store::Entry>]
       def read(id) = @store.xreadgroup(@keys.commands, Keys::GROUP, @node.name, id:, count: BATCH)
 
+      # Answer the commands whose work finished since the last tick. A
+      # command still at work is neither answered nor acknowledged, so an
+      # engine that dies meanwhile gets it again.
+      #
+      # @return [Array<Agentilda::Live::Reply>]
+      def collect
+        @pending.select { |_, (_, _, work)| work.finished? }.map do |entry_id, (entry, id, work)|
+          @pending.delete(entry_id)
+          reply(entry, id, work.status, work.reason)
+        end
+      end
+
       # @param entry [Agentilda::Live::Store::Entry]
       # @param dispatcher [Agentilda::Engine::Dispatcher]
-      # @return [Agentilda::Live::Reply]
+      # @return [Agentilda::Live::Reply, nil] nil while the command is still at work
       def handle(entry, dispatcher)
         command = Command.parse(entry.fields["json"].to_s)
         if (first = @store.hget(@keys.done, command.id))
           return answer_again(entry, first)
         end
 
-        reply(entry, command.id, *apply(command, dispatcher))
+        status, reason = apply(command, dispatcher)
+        return reply(entry, command.id, status, reason) unless status == :pending
+
+        @pending[entry.id] = [entry, command.id, reason]
+        nil
       rescue Command::Invalid => e
         reply(entry, invalid_id(entry), "refused", e.message)
       end
 
-      # @return [Array(String, String)] status and reason
+      # @return [Array(String, String)] status and reason, or `:pending` and
+      #   the work still under way
       def apply(command, dispatcher)
         reason = send(HANDLERS.fetch(command.kind), command, dispatcher)
+        return [:pending, reason] if reason.respond_to?(:finished?)
+
         ["done", reason.is_a?(String) ? reason : nil]
       rescue Refusal, Agentilda::Error => e
         ["refused", e.message]
@@ -134,6 +158,7 @@ module Agentilda
           tx.hset(@keys.done, id, json)
           tx.xadd(@keys.replies, { json: }, maxlen: Keys::REPLIES_LENGTH)
           tx.xack(@keys.commands, Keys::GROUP, entry.id)
+          @record&.write(tx)
         end
         reply
       end
@@ -168,25 +193,37 @@ module Agentilda
         return if @swept_at && now - @swept_at < SWEEP_EVERY
 
         @swept_at = now
-        stale = @store.hgetall(@keys.done).select { |_, json| now - Time.iso8601(JSON.parse(json)["at"]) > Keys::DONE_TTL }
+        stale = @store.hgetall(@keys.done).reject { |_, json| (at = reply_time(json)) && now - at <= Keys::DONE_TTL }
         @store.hdel(@keys.done, *stale.keys)
-      rescue JSON::ParserError, ArgumentError
+      end
+
+      # @param json [String] a reply in `done`
+      # @return [Time, nil] when it was answered; nil for an entry nothing can
+      #   read, which the sweep removes rather than letting it stop the sweep
+      def reply_time(json)
+        Time.iso8601(JSON.parse(json).fetch("at"))
+      rescue JSON::ParserError, ArgumentError, TypeError, KeyError, NoMethodError
         nil
       end
 
       # ---- questions --------------------------------------------------------
 
       # `## A<n>` under the question, signed, for `lando-broker` to fold in
-      # (W10). The plan leaves ⭕️ when the broker has drained the file.
+      # (W10). The dispatcher hands the plan to the broker once every
+      # question has an answer, and the plan leaves ⭕️ when the file is
+      # drained. The answer carries the command's id in a comment, so a
+      # command applied again after a crash finds it and writes nothing.
       #
       # @return [String, nil]
       def answer(command, dispatcher)
         subject, question = question!(command, dispatcher)
+        path = File.join(subject.feature.path, "blocked.md")
+        return nil if File.read(path).include?(marker(command))
         return "B#{question.number} already has an answer waiting" if question.answered
 
-        File.open(File.join(subject.feature.path, "blocked.md"), "a") do |file|
+        File.open(path, "a") do |file|
           file.write("\n## A#{question.number}\n\n#{command["text"]}\n\n" \
-                     "Answered by #{@node.user} on #{@clock.call.strftime("%Y-%m-%d")}\n")
+                     "Answered by #{@node.user} on #{@clock.call.strftime("%Y-%m-%d")}\n#{marker(command)}\n")
         end
         @run_state.hold_question(question_id(subject, question), held: false)
         nil
@@ -230,22 +267,28 @@ module Agentilda
         raise Refusal, "#{command.plan} has no interrupted agent to resume" unless agent
 
         note = command["note"].empty? ? "carry on from your last resume note" : command["note"]
-        Plans::Mailbox.new(dir: subject.feature.path).append(from: "human", to: agent, body: "RESUME: #{note}")
+        Plans::Mailbox.new(dir: subject.feature.path).append(from: "human",
+          to: agent,
+          body: "RESUME: #{note}",
+          command: command.id)
         dispatcher.resume(subject.feature.ordinal, agent)
         dispatcher.runner.add_plan(subject.feature.ordinal)
         "#{agent} resumes on #{command.plan} at its next turn"
       end
 
-      # @return [void]
-      # @raise [Refusal] always, until the engine can undo a state
-      def discard(command, _dispatcher)
-        raise Refusal,
-          "discard is not built yet: resetting #{command.plan}'s worktree and sending it back one " \
-          "state need an undo the engine does not have. Use stop on each agent instead."
+      # Plan-wide (W9): every agent on the plan stops, its worktree is reset,
+      # and the folder goes back one state. The reply waits for all three.
+      #
+      # @return [Agentilda::Engine::Dispatcher::Discard] still at work
+      def discard(command, dispatcher)
+        subject = subject!(command, dispatcher)
+        dispatcher.discard(subject.feature.ordinal)
       end
 
       # A person's message, into the plan's mailbox, from `human` (W10). To
-      # the agent named, or every agent working the plan when none is.
+      # the agent named, or every agent working the plan when none is. Each
+      # entry carries the command's id, so a command redelivered after the
+      # engine died between the append and its reply appends nothing (W13).
       #
       # @return [nil]
       def message(command, dispatcher)
@@ -255,7 +298,7 @@ module Agentilda
 
         mailbox = Plans::Mailbox.new(dir: subject.feature.path)
         to.each do |agent|
-          mailbox.append(from: "human", to: agent, body: command["text"])
+          mailbox.append(from: "human", to: agent, body: command["text"], command: command.id)
           @run_state.hold_car("#{command.plan}/#{agent}", held: false)
         end
         nil
@@ -309,7 +352,9 @@ module Agentilda
         return command["model"] if adapter.models.empty?
 
         entry = adapter.model_entry(command["model"]) or raise Refusal, "#{adapter.name} offers no model #{command["model"]}"
-        entry.id
+        # What the CLI will actually be asked for, after any ceiling, so the
+        # reply and the run state never name a model that will not run.
+        adapter.model(entry.id)
       end
 
       # ---- plans ------------------------------------------------------------
@@ -331,16 +376,33 @@ module Agentilda
       def create_plans(command, dispatcher)
         tree = dispatcher.runner.tree
         idea = command["idea"]
+        if (made = tree.reload.subjects.find { it.read("spec.md").to_s.include?(marker(command)) })
+          return created(made.feature, dispatcher)
+        end
+
         path = Lifecycle.create(dir: tree.dir, words: idea.split.first(8)).either(
           ->(created) { created },
           ->(problem) { raise Refusal, "could not create the plan: #{problem}" }
         )
         feature = Plans::Feature.parse(path)
-        Lifecycle.brief(path:, title: feature.title, root: File.dirname(tree.dir), seed: idea).write_scaffold!
+        Lifecycle.brief(path:, title: feature.title, root: File.dirname(tree.dir), seed: "#{idea}\n\n#{marker(command)}")
+                 .write_scaffold!
+        created(feature, dispatcher)
+      end
+
+      # @return [String]
+      def created(feature, dispatcher)
         claim!(feature.ordinal)
         dispatcher.runner.add_plan(feature.ordinal)
         "created #{feature.ordinal} #{feature.slug}"
       end
+
+      # What a file written by a command carries, so the command applied a
+      # second time finds its own work and does not repeat it (W13).
+      #
+      # @param command [Agentilda::Live::Command]
+      # @return [String]
+      def marker(command) = "<!-- cmd:#{command.id} -->"
 
       # @return [void]
       def claim!(ordinal)

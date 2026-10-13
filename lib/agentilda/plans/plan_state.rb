@@ -179,12 +179,21 @@ module Agentilda
       # @param at [Time]
       # @param after [Integer] numbers already taken elsewhere, so a plan
       #   whose older messages are in mailbox.md keeps counting from there
+      # @param command [String, nil] the id of the page's command that sent
+      #   it. A command is applied at least once (W13), so a second append
+      #   under the same id, to the same reader, returns the first and adds
+      #   nothing: an engine that died between the append and recording the
+      #   reply does not say the same thing twice.
       # @return [Hash]
-      def message!(from:, to:, body:, at: Time.now, after: 0)
+      def message!(from:, to:, body:, at: Time.now, after: 0, command: nil)
         message = nil
         update do |data|
+          message = command && data["messages"].find { |m| m["command"] == command && m["to"] == to }
+          next if message
+
           number = [data["messages"].map { |m| m["number"] }.max.to_i, after].max + 1
           message = { "number" => number, "at" => at.iso8601, "from" => from, "to" => to, "body" => body }
+          message["command"] = command if command
           data["messages"] << message
         end
         message

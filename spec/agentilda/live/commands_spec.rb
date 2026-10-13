@@ -106,7 +106,21 @@ RSpec.describe Agentilda::Live::Commands, :tree do
       send_command("answer", plan: "002.00", question: "B1", text: "yes")
       apply
       expect(File.read(File.join(path_of("002.00"), "blocked.md")))
-        .to end_with("Should I rebase?\n\n## A1\n\nyes\n\nAnswered by dana on 2026-10-13\n")
+        .to end_with("Should I rebase?\n\n## A1\n\nyes\n\nAnswered by dana on 2026-10-13\n<!-- cmd:C1 -->\n")
+    end
+
+    # A Redis that fails after the answer is written leaves the command
+    # unacknowledged; applied again, it must find its own answer.
+    it "writes nothing the second time the same command is applied" do
+      send_command("answer", plan: "002.00", question: "B1", text: "yes", id: "01JX")
+      allow(store).to receive(:multi).and_raise(Agentilda::Live::Unavailable, "gone")
+      allow(Agentilda::UI).to receive(:log)
+      apply
+      allow(store).to receive(:multi).and_call_original
+      aggregate_failures do
+        expect(apply.map { [it.id, it.status, it.reason] }).to eq([["01JX", "done", nil]])
+        expect(File.read(File.join(path_of("002.00"), "blocked.md")).scan("## A1").size).to eq(1)
+      end
     end
 
     it "does not answer twice" do
@@ -132,11 +146,11 @@ RSpec.describe Agentilda::Live::Commands, :tree do
       apply
     end
 
-    it "mark the question held in the run state" do
+    it "marks the question held in the run state" do
       expect(run_state.question_held?("002.00/B1")).to be(true)
     end
 
-    it "and unmark it" do
+    it "unmarks it when released" do
       send_command("release_hold", plan: "002.00", question: "B1")
       apply
       expect(run_state.question_held?("002.00/B1")).to be(false)
@@ -170,12 +184,12 @@ RSpec.describe Agentilda::Live::Commands, :tree do
     end
   end
 
-  describe "discard" do
+  describe "discard in a shared checkout" do
     before { building("001.00", "tax-rule-dsl") }
 
-    it "is refused, saying what is missing, rather than half done" do
+    it "is refused before any agent is stopped, saying why" do
       send_command("discard", plan: "001.00")
-      expect(apply.first.reason).to start_with("discard is not built yet")
+      expect(apply.first.reason).to include("this run has none: under --isolation shared")
     end
   end
 
@@ -234,6 +248,24 @@ RSpec.describe Agentilda::Live::Commands, :tree do
         expect(executor.preferred).to eq(["001.00", agent] => "claude-haiku-5-5")
         expect(run_state.model_for(car)).to eq("claude-haiku-5-5")
       end
+    end
+
+    it "refuses a model above the ceiling rather than promising one that will not run" do
+      send_command("set_model", plan: "001.00", agent:, model: "fable")
+      aggregate_failures do
+        expect(apply.map(&:reason)).to eq(["claude offers no model fable"])
+        expect(run_state.model_for(car)).to be_nil
+      end
+    end
+
+    it "appends a message once, however often its command is applied" do
+      send_command("message", plan: "001.00", agent:, text: "once", id: "01JM")
+      allow(store).to receive(:multi).and_raise(Agentilda::Live::Unavailable, "gone")
+      allow(Agentilda::UI).to receive(:log)
+      apply
+      allow(store).to receive(:multi).and_call_original
+      apply
+      expect(mailbox("001.00").map(&:body)).to eq(%w[once])
     end
 
     it "refuses a model the adapter does not offer, and an agent that does not exist" do
@@ -342,6 +374,18 @@ RSpec.describe Agentilda::Live::Commands, :tree do
       end
     end
 
+    it "creates one plan however often its command is applied" do
+      send_command("create_plans", idea: "Export the ledger as CSV", id: "01JC")
+      allow(store).to receive(:multi).and_raise(Agentilda::Live::Unavailable, "gone")
+      allow(Agentilda::UI).to receive(:log)
+      apply
+      allow(store).to receive(:multi).and_call_original
+      aggregate_failures do
+        expect(apply.map(&:reason)).to eq(["created 002.00 export-the-ledger-as-csv"])
+        expect(tree.reload.ordinals.map(&:to_s)).to eq(%w[001.00 002.00])
+      end
+    end
+
     it "refuses an idea that makes no folder name" do
       send_command("create_plans", idea: "!!!")
       expect(apply.first.reason).to start_with("could not create the plan")
@@ -371,10 +415,12 @@ RSpec.describe Agentilda::Live::Commands, :tree do
       expect(store.hgetall(keys.done).keys).to eq(%w[new])
     end
 
-    it "is left alone when it holds something unreadable" do
+    it "drops what it cannot read, one entry at a time, and keeps the rest" do
       store.hset(keys.done, "bad", "{")
+      store.hset(keys.done, "numeric", JSON.generate(id: "numeric", at: 12))
+      store.hset(keys.done, "new", JSON.generate(id: "new", status: "done", reason: nil, at: "2026-10-13T08:00:00Z"))
       apply
-      expect(store.hgetall(keys.done).keys).to eq(%w[bad])
+      expect(store.hgetall(keys.done).keys).to eq(%w[new])
     end
   end
 end

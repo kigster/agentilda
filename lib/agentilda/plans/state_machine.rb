@@ -50,6 +50,18 @@ module Agentilda
         shit:               :planned
       }.freeze
 
+      # One step back along the spine, for the one move that goes backwards: a
+      # person discarding an interrupted round (W9) sends the plan back to the
+      # state the work started from. Derived from {SPINE}, walking it from ⚪️:
+      # each state on that path steps back to the one before it, as far as 👀,
+      # the last state an agent works in. States off the path (🔴 💩 ⏪ and
+      # the birth state) have no single state behind them and step back
+      # nowhere.
+      RETREAT = Enumerator.produce(:new) { SPINE.fetch(it) { raise StopIteration } }
+                          .take_while { it != :approved }
+                          .each_cons(2).to_h { |before, after| [after, before] }
+                          .freeze
+
       # Preference order when several states fit a folder's contents at once.
       # Read top to bottom: the loudest fact wins. A discard outranks everything,
       # a block outranks progress, and `retroactive` is last because it is the
@@ -207,6 +219,15 @@ module Agentilda
           transitions from: Agentilda::Plans::STATUSES.map(&:key) - %i[discarded], to: :discarded
         end
 
+        # Back one step, fired only by {#retreat!}. It is the one event with
+        # several destinations, and it is left out of {inbound}, {outbound}
+        # and {event_for}: those describe how work moves on, which is what
+        # the documentation, the diagram and {#may?} are about, and a person
+        # sending work back is not a way for it to move on.
+        event :step_back, guard: :justified? do
+          RETREAT.each { |from, to| transitions from:, to: }
+        end
+
         # A transition is not a bookkeeping entry: it is the folder moving.
         after_all_transitions :rename!
       end
@@ -218,7 +239,7 @@ module Agentilda
         #
         # @return [Hash{Symbol => Symbol}]
         def event_for
-          @event_for ||= aasm.events.each_with_object({}) { |event, map|
+          @event_for ||= forward_events.each_with_object({}) { |event, map|
             event.transitions.each { |t| map[t.to] ||= event.name }
           }.freeze
         end
@@ -230,7 +251,7 @@ module Agentilda
         #
         # @return [Hash{Symbol => Array<Symbol>}]
         def inbound
-          @inbound ||= aasm.events.each_with_object({}) { |event, map|
+          @inbound ||= forward_events.each_with_object({}) { |event, map|
             event.transitions.each { |t| (map[t.to] ||= []).concat(Array(t.from)) }
           }.transform_values { |froms| froms.uniq.freeze }.freeze
         end
@@ -252,6 +273,11 @@ module Agentilda
         # @param to [Symbol]
         # @return [Boolean] whether the topology permits this edge at all
         def edge?(from, to) = outbound(from).include?(to)
+
+        # Every event but {RETREAT}'s.
+        #
+        # @return [Array<AASM::Core::Event>]
+        def forward_events = aasm.events.reject { it.name == :step_back }
 
         # @param key [Symbol]
         # @return [Array<Symbol>] the family +key+ belongs to, empty when it has none
@@ -288,10 +314,11 @@ module Agentilda
         true
       end
 
-      # States reachable right now, guards applied.
+      # States reachable right now, guards applied. A step back is not among
+      # them: only {#retreat!} takes it.
       #
       # @return [Array<Symbol>]
-      def allowed = aasm.states(permitted: true).map(&:name)
+      def allowed = aasm.states(permitted: true).map(&:name) & self.class.outbound(key)
 
       # @param to [Symbol]
       # @return [Boolean] whether that move is permitted right now
@@ -317,6 +344,29 @@ module Agentilda
 
         aasm.fire!(self.class.event_for.fetch(to))
         status
+      end
+
+      # @return [Symbol, nil] the state one step back, nil when there is none
+      def previous = RETREAT[key]
+
+      # Move the folder one step back along the spine (W9).
+      #
+      # @return [Agentilda::Plans::Status] the state now occupied
+      # @raise [Agentilda::Plans::StateMachine::Refused] when nothing is
+      #   behind this state, or the folder's contents do not justify it
+      def retreat!
+        refusal = retreat_refusal and raise Refused, refusal
+
+        aasm.fire!(:step_back)
+        status
+      end
+
+      # @return [String, nil] why {#retreat!} would be refused, nil when it would not
+      def retreat_refusal
+        to = previous or return "#{describe(key)} has no state behind it to go back to"
+        return nil if aasm.may_fire_event?(:step_back)
+
+        STATUS_BY_KEY.fetch(to).violation(subject) || "#{describe(key)} cannot go back to #{describe(to)}"
       end
 
       # The state a folder's contents justify — the answer to "well, what should

@@ -111,7 +111,8 @@
             "context_limit": 200000,
             "elapsed": 229,
             "remaining": 971,
-            "held": false
+            "held": false,
+            "next_model": null
           },
           {
             "key": "001.00/rey-frontend",
@@ -133,7 +134,8 @@
             "context_limit": 200000,
             "elapsed": 229,
             "remaining": 971,
-            "held": false
+            "held": false,
+            "next_model": null
           }
         ],
         "pr": null,
@@ -190,7 +192,8 @@
             "context_limit": 200000,
             "elapsed": 229,
             "remaining": 971,
-            "held": false
+            "held": false,
+            "next_model": null
           }
         ],
         "pr": {
@@ -241,7 +244,8 @@
             "context_limit": 200000,
             "elapsed": 229,
             "remaining": 971,
-            "held": false
+            "held": false,
+            "next_model": null
           }
         ],
         "pr": null,
@@ -437,7 +441,8 @@
               "context_limit": 200000,
               "elapsed": 229,
               "remaining": 971,
-              "held": false
+              "held": false,
+              "next_model": null
             }
           ],
           "pr": {

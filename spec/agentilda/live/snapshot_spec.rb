@@ -151,8 +151,8 @@ RSpec.describe Agentilda::Live::Snapshot, :tree do
 
     it "prices what each plan spent at its models' rates" do
       aggregate_failures do
-        expect(by_ordinal["005.00"].slice(:up, :down, :cost)).to eq(up: 1_000_000, down: 100_000, cost: 4.5)
-        expect(by_ordinal["001.00"][:cost]).to eq(((374_000 * 5) + (26_400 * 25) + (1_000_000 * 3) + (100_000 * 15)) / 1e6)
+        expect(by_ordinal["005.00"].slice(:up, :down, :cost)).to eq(up: 1_000_000, down: 100_000, cost: 3.0)
+        expect(by_ordinal["001.00"][:cost]).to eq(((374_000 * 4) + (26_400 * 20) + (1_000_000 * 2) + (100_000 * 10)) / 1e6)
         expect(snapshot[:run][:cost]).to eq((by_ordinal["005.00"][:cost] + by_ordinal["001.00"][:cost]).round(4))
         expect(by_ordinal["005.00"][:elapsed]).to eq(30)
       end
@@ -171,7 +171,7 @@ RSpec.describe Agentilda::Live::Snapshot, :tree do
       aggregate_failures do
         expect(snapshot[:run]).to include(status: "running", started_at: "2026-10-13T08:59:00Z", agents_working: 3)
         expect(snapshot[:node]).to include(user: "dana", me: true, heartbeat_at: "2026-10-13T09:00:00Z")
-        expect(snapshot[:models].map { it[:id] }).to eq(%w[claude-fable-5-1 claude-opus-5-5 claude-sonnet-5-5 claude-haiku-5-5])
+        expect(snapshot[:models].map { it[:id] }).to eq(%w[claude-opus-5-5 claude-opus-5 claude-sonnet-5-5 claude-sonnet-5 claude-haiku-5-5])
         expect(snapshot[:autocompact]).to eq(0.4)
       end
     end
@@ -221,6 +221,42 @@ RSpec.describe Agentilda::Live::Snapshot, :tree do
     end
   end
 
+  describe "a car's context and next model" do
+    before { building("001.00", "tax-rule-dsl") }
+
+    let(:rows) { [row("001.00", "luke-backend", model: "opus", context: 54_100)] }
+    let(:car) { snapshot[:plans].first[:cars].first }
+
+    it "carries the context the stream reported, against the model's window" do
+      expect(car.slice(:context, :context_limit)).to eq(context: 54_100, context_limit: 200_000)
+    end
+
+    it "has no window for a model the catalogue does not know" do
+      rows.replace([row("001.00", "luke-backend", model: "codex:gpt-5-codex")])
+      expect(car.slice(:context, :context_limit)).to eq(context: nil, context_limit: nil)
+    end
+
+    it "names the model queued for the next round" do
+      run_state.choose_model("001.00/luke-backend", "claude-haiku-5-5")
+      expect(car[:next_model]).to eq("claude-haiku-5-5")
+    end
+
+    it "names none once a round runs on it" do
+      run_state.choose_model("001.00/luke-backend", "claude-opus-5-5")
+      expect(car[:next_model]).to be_nil
+    end
+  end
+
+  describe "an unclaimed plan" do
+    before { building("001.00", "tax-rule-dsl") }
+
+    let(:rows) { [row("001.00", "luke-backend")] }
+
+    it "is claimed by nobody, not by an empty name" do
+      expect(snapshot[:plans].first[:claimed_by]).to be_nil
+    end
+  end
+
   describe "pull requests in their other states" do
     before do
       plans do |t|
@@ -246,7 +282,7 @@ RSpec.describe Agentilda::Live::Snapshot, :tree do
 
     let(:rows) { [row("001.00", "luke-backend", model: "codex:gpt-5-codex"), row("001.00", "rey-frontend", model: "zz:odd")] }
 
-    it "keep their own names, and cost nothing on the meter" do
+    it "keeps each model's own name, and costs nothing on the meter" do
       expect([snapshot[:plans].first[:cars].map { it[:model] }, snapshot[:plans].first[:cost]]).to eq([%w[gpt-5-codex odd], 0.0])
     end
   end

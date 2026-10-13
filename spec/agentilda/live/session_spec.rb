@@ -40,9 +40,13 @@ RSpec.describe Agentilda::Live::Session, :tree do
       expect(claims.held).to eq(%w[001.00])
     end
 
-    it "gives the claim back on close" do
+    it "gives the claim back on close, and takes itself out of the node registry" do
+      session.publisher.call(dispatcher.board)
       session.close
-      expect(store.get(session.keys.claim("001.00"))).to be_nil
+      aggregate_failures do
+        expect(store.get(session.keys.claim("001.00"))).to be_nil
+        expect(store.hget(session.keys.nodes, node.name)).to be_nil
+      end
     end
   end
 

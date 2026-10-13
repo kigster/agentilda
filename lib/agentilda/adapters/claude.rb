@@ -12,16 +12,27 @@ module Agentilda
       # The most expensive model any agent may run on.
       CEILING = "opus"
 
-      # Every Claude model the page offers, most capable first, with its
-      # price. The one place a model id, its label and its rates are
-      # written: the dropdown, the cost meter and alias resolution all read
-      # this list. Rates are dollars per million tokens, in and out.
-      MODELS = [
-        Model.new(id: "claude-fable-5-1", label: "Fable 5.1", rate_in: 15, rate_out: 75),
-        Model.new(id: "claude-opus-5-5", label: "Opus 5.5", rate_in: 5, rate_out: 25),
-        Model.new(id: "claude-sonnet-5-5", label: "Sonnet 5.5", rate_in: 3, rate_out: 15),
-        Model.new(id: "claude-haiku-5-5", label: "Haiku 5.5", rate_in: 1, rate_out: 5)
+      # Every Claude model priced, most capable first, newest first within a
+      # tier. The one place a model id, its label and its rates are written:
+      # the dropdown, the cost meter and alias resolution all read it, through
+      # {#models}, which offers only what {CEILING} lets run. Rates are base
+      # dollars per million tokens, in and out, from
+      # https://platform.claude.com/docs/en/about-claude/pricing as read on
+      # 2026-10-13. Haiku 5.5 is priced for prompts up to 100k tokens; above
+      # that it is $0.50 in and $2.50 out, which this table does not model.
+      CATALOGUE = [
+        Model.new(id: "claude-fable-5-1", label: "Fable 5.1", rate_in: 10, rate_out: 50),
+        Model.new(id: "claude-opus-5-5", label: "Opus 5.5", rate_in: 4, rate_out: 20),
+        Model.new(id: "claude-opus-5", label: "Opus 5", rate_in: 5, rate_out: 25),
+        Model.new(id: "claude-sonnet-5-5", label: "Sonnet 5.5", rate_in: 2, rate_out: 10),
+        Model.new(id: "claude-sonnet-5", label: "Sonnet 5", rate_in: 2, rate_out: 10),
+        Model.new(id: "claude-haiku-5-5", label: "Haiku 5.5", rate_in: 0.10, rate_out: 0.50)
       ].freeze
+
+      # What an agent may actually run on: the catalogue below {CEILING}. A
+      # model the CLI would be asked for as something cheaper is not offered,
+      # so the page never shows a choice that will not happen.
+      MODELS = CATALOGUE.select { |m| LADDER.index { |tier| m.id.include?(tier) } <= LADDER.index(CEILING) }.freeze
 
       # The tier `claude` runs when an agent names no model, so an unnamed
       # model is still priced rather than shown as free.
@@ -81,17 +92,19 @@ module Agentilda
       # @return [Array<Agentilda::Adapters::Model>]
       def models = MODELS
 
-      # A full id as itself; an alias (`opus`) as the newest model of that
-      # tier, which is the first in {MODELS} to carry its name; no name as
-      # {UNNAMED}.
+      # A full id as itself; an alias that is exactly a tier (`opus`) as the
+      # newest model of that tier, the first in {MODELS} to carry its name;
+      # no name as {UNNAMED}. Anything else, `not-opus` or `sonnet-old`
+      # included, is no model at all.
       #
       # @param name [String, nil]
       # @return [Agentilda::Adapters::Model, nil]
       def model_entry(name)
         text = name.to_s
         text = UNNAMED if text.empty? || text == "default"
+        return MODELS.find { |m| m.id.match?(/\Aclaude-#{text}-/) } if LADDER.include?(text)
 
-        MODELS.find { |m| m.id == text } || LADDER.filter_map { |tier| MODELS.find { |m| m.id.include?(tier) } if text.include?(tier) }.first
+        MODELS.find { |m| m.id == text }
       end
     end
   end

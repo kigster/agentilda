@@ -4,11 +4,20 @@ RSpec.describe "The adapters' models" do
   describe Agentilda::Adapters::Claude do
     subject(:adapter) { described_class.new }
 
-    it "offers its models most capable first, priced" do
+    it "offers only what may run, most capable first, priced as the pricing page says" do
       expect(adapter.models.map(&:wire).first(2)).to eq([
-                                                          { id: "claude-fable-5-1", label: "Fable 5.1", rates: { in: 15, out: 75 } },
-                                                          { id: "claude-opus-5-5", label: "Opus 5.5", rates: { in: 5, out: 25 } }
+                                                          { id: "claude-opus-5-5", label: "Opus 5.5", rates: { in: 4, out: 20 } },
+                                                          { id: "claude-opus-5", label: "Opus 5", rates: { in: 5, out: 25 } }
                                                         ])
+    end
+
+    it "keeps Fable priced, but off the menu while Opus is the ceiling" do
+      expect([described_class::CATALOGUE.first.id, adapter.model_entry("fable"), adapter.model_entry("claude-fable-5-1")])
+        .to eq(["claude-fable-5-1", nil, nil])
+    end
+
+    it "gives every model a context window" do
+      expect(adapter.models.map(&:context).uniq).to eq([200_000])
     end
 
     it "resolves a full id, an alias, and no name to a model" do
@@ -17,12 +26,16 @@ RSpec.describe "The adapters' models" do
         .to eq(["claude-haiku-5-5", "claude-opus-5-5", "claude-sonnet-5-5", "claude-sonnet-5-5", nil])
     end
 
+    it "takes an alias only when it is exactly a tier" do
+      expect(%w[not-opus sonnet-old claude-opus].map { adapter.model_entry(it) }).to eq([nil, nil, nil])
+    end
+
     it "sets its autocompact threshold for the child" do
       expect(adapter.environment).to eq("CLAUDE_AUTOCOMPACT_PCT_OVERRIDE" => "40")
     end
 
     it "prices tokens per million" do
-      expect(adapter.model_entry("sonnet").cost(1_000_000, 100_000)).to eq(4.5)
+      expect(adapter.model_entry("sonnet").cost(1_000_000, 100_000)).to eq(3.0)
     end
   end
 

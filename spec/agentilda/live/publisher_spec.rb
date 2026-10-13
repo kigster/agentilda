@@ -48,6 +48,25 @@ RSpec.describe Agentilda::Live::Publisher, :tree do
     expect(store.ttl(keys.claim("001.00"))).to be > 80
   end
 
+  describe "a claim another machine took" do
+    let(:lost) { [] }
+
+    before do
+      claims.claim("001.00")
+      store.set(keys.claim("001.00"), "ffffffffffffffffffffffff:000000000000")
+      publisher.on_lost { lost.concat(it) }
+      allow(Agentilda::UI).to receive(:log)
+      publisher.call(dispatcher.board)
+    end
+
+    it "is handed to whoever stops its agents, and logged" do
+      aggregate_failures do
+        expect(lost).to eq(%w[001.00])
+        expect(Agentilda::UI).to have_received(:log).with("claims lost to another machine: 001.00; stopping their agents")
+      end
+    end
+  end
+
   it "reports a missing Redis once, and carries on" do
     allow(store).to receive(:multi).and_raise(Agentilda::Live::Unavailable, "gone")
     allow(Agentilda::UI).to receive(:log)

@@ -295,4 +295,71 @@ RSpec.describe Agentilda::Vcs::Worktree do
       end
     end
   end
+
+  # The reset behind a person's discard (W9): it must take the round's work
+  # out of the plan's own checkout and touch nothing else.
+  describe "#reset" do
+    let(:checkout) { worktrees.checkout_for(feature) }
+
+    def status_of(path) = `git -C #{path} status --porcelain`.strip
+
+    context "with a round's work left in the plan's checkout" do
+      before do
+        File.write(File.join(checkout.path, "README.md"), "# rewritten by an agent\n")
+        File.write(File.join(checkout.path, "half-done.rb"), "class HalfDone; end\n")
+        File.write(File.join(repo, "mine.txt"), "a person's own work in the main checkout\n")
+      end
+
+      it "puts tracked files back and removes untracked ones, there and only there" do
+        aggregate_failures do
+          expect(worktrees.reset(feature)).to be(true)
+          expect(status_of(checkout.path)).to eq("")
+          expect(File.read(File.join(checkout.path, "README.md"))).to eq("# project\n")
+          expect(File.read(File.join(repo, "mine.txt"))).to include("own work")
+        end
+      end
+    end
+
+    it "keeps files git ignores, which the seeder put there" do
+      File.write(File.join(checkout.path, ".gitignore"), ".env\n")
+      system("git", "-C", checkout.path, "add", ".gitignore", out: File::NULL, err: File::NULL)
+      system("git", "-C", checkout.path, "commit", "-qm", "ignore", out: File::NULL, err: File::NULL)
+      File.write(File.join(checkout.path, ".env"), "SECRET=1\n")
+      worktrees.reset(feature)
+      expect(File.exist?(File.join(checkout.path, ".env"))).to be(true)
+    end
+
+    it "has nothing to do for a plan with no checkout" do
+      expect(worktrees.reset(feature)).to be(false)
+    end
+
+    it "refuses a directory that is not one of its worktrees" do
+      FileUtils.mkdir_p(worktrees.path_for(feature))
+      expect { worktrees.reset(feature) }.to raise_error(Agentilda::Error, /not a worktree agentilda made/)
+    end
+
+    context "when the path is the main checkout" do
+      let(:main) { described_class.new(root: repo, dir: File.dirname(repo), user: "tester") }
+
+      before { allow(main).to receive(:path_for).and_return(repo) }
+
+      it "refuses it, even where a worktree would sit" do
+        expect { main.reset(feature) }.to raise_error(Agentilda::Error, /not a worktree agentilda made/)
+      end
+    end
+
+    context "when git refuses" do
+      let(:refusing) { described_class.new(root: repo, dir: worktree_dir, user: "tester") }
+
+      before do
+        checkout
+        allow(refusing).to receive(:system).and_call_original
+        allow(refusing).to receive(:system).with("git", "-C", checkout.path, "reset", "--hard", "--quiet", any_args).and_return(false)
+      end
+
+      it "says so" do
+        expect { refusing.reset(feature) }.to raise_error(Agentilda::Error, "git reset failed in #{checkout.path}")
+      end
+    end
+  end
 end

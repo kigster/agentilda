@@ -25,6 +25,7 @@ module Agentilda
         @node = node
         @keys = Keys.new(repo:, node: node.name)
         @run_state = RunState.new
+        @record = RunRecord.new(store:, keys: @keys, run_state: @run_state)
         @claims = Claims.new(store:, keys: @keys)
         @publisher = Publisher.new(store:,
           keys: @keys,
@@ -35,7 +36,13 @@ module Agentilda
           run_state: @run_state,
           project: project || File.basename(root),
           clock:)
-        @commands = Commands.new(store:, keys: @keys, node:, run_state: @run_state, claims: @claims, clock:)
+        @commands = Commands.new(store:,
+          keys: @keys,
+          node:,
+          run_state: @run_state,
+          record: @record,
+          claims: @claims,
+          clock:)
       end
 
       # @return [Agentilda::Live::Store, Agentilda::Live::MemoryStore]
@@ -59,27 +66,36 @@ module Agentilda
       # @return [Agentilda::Live::RunState]
       attr_reader :run_state
 
+      # @return [Agentilda::Live::RunRecord]
+      attr_reader :record
+
       # @return [Proc] the runner's `on_board:`
       def on_board = @publisher.to_proc
 
-      # Wire the run in: commands are applied at the top of each tick, and
+      # Wire the run in: the run state a previous engine left is taken back
+      # on the first tick, commands are applied at the top of each tick, and
       # the log is heard from now on.
       #
       # @param dispatcher [Agentilda::Engine::Dispatcher]
       # @return [void]
       def attach(dispatcher)
         @publisher.listen
+        @publisher.on_lost { |ordinals| dispatcher.fence(ordinals) }
+        dispatcher.before_tick(&@record)
         dispatcher.before_tick(&@commands)
       end
 
-      # The run is over: claims go back, and this node's snapshot goes at
-      # once rather than when it expires, so other pages stop showing it.
+      # The run is over: the run state is written down, claims go back, and
+      # this node's snapshot goes at once rather than when it expires, so
+      # other pages stop showing it.
       #
       # @return [void]
       def close
+        @record.close
         @publisher.close
         @claims.release_all
         @store.del(@keys.snapshot)
+        @store.hdel(@keys.nodes, @node.name)
       rescue Unavailable
         nil
       end

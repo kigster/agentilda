@@ -89,6 +89,25 @@ RSpec.describe Agentilda::Plans::PlanState, :tree do
       state.message!(from: "b", to: "a", body: "two")
       expect(state.messages.map { |m| m["number"] }).to eq([5, 6])
     end
+
+    # A page command is applied at least once (W13): the second time it must
+    # find its own message rather than say the same thing again.
+    context "when one command's message is appended twice" do
+      before do
+        state.message!(from: "human", to: "luke-backend", body: "one", command: "01JM")
+        state.message!(from: "human", to: "rey-frontend", body: "one", command: "01JM")
+      end
+
+      let!(:again) { state.message!(from: "human", to: "luke-backend", body: "one", command: "01JM") }
+
+      it "appends nothing the second time to the same reader, and answers with the first" do
+        aggregate_failures do
+          expect(state.messages.map { |m| [m["to"], m["command"]] }).to eq([%w[luke-backend 01JM], %w[rey-frontend 01JM]])
+          expect(again["number"]).to eq(1)
+          expect(schema.validate(written).map { |e| e["error"] }).to eq([])
+        end
+      end
+    end
   end
 
   describe "#state!" do

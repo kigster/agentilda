@@ -36,12 +36,19 @@ RSpec.describe Agentilda::Live::Repo do
       expect(described_class.for(root)).to eq("github.com/example/thing")
     end
 
-    it "falls back to the directory's name with no remote to share" do
-      expect(described_class.for(root)).to eq("my-clone")
+    it "falls back to the directory's name and a digest of its path with no remote to share" do
+      expect(described_class.for(root)).to eq("local/my-clone-#{Digest::SHA256.hexdigest(File.realpath(root))[0, 12]}")
     end
 
-    it "falls back to the name it was given when the directory is not there" do
-      expect(described_class.for(File.join(root, "gone"))).to eq("gone")
+    it "tells apart two clones with the same name" do
+      other = File.join(Dir.mktmpdir("agentilda-repo"), "my-clone")
+      FileUtils.mkdir_p(other)
+      expect(described_class.for(other)).not_to eq(described_class.for(root))
+    end
+
+    it "falls back to the path it was given when the directory is not there" do
+      gone = File.join(root, "gone")
+      expect(described_class.for(gone)).to eq("local/gone-#{Digest::SHA256.hexdigest(gone)[0, 12]}")
     end
   end
 end

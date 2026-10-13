@@ -24,6 +24,12 @@ RSpec.describe Agentilda::Engine::StateFile, :tree do
     end
   end
 
+  it "keeps the live run's record beside the stages, and loads it back" do
+    state.live = { "seq" => 3, "held_cars" => ["001.00/luke-backend"] }
+    state.save
+    expect(described_class.new(path:, pid: 4242).load.live).to eq("seq" => 3, "held_cars" => ["001.00/luke-backend"])
+  end
+
   it "merges later fields into the same stage rather than adding a second one" do
     state.record("001.00", agent: "leah-researcher", round: 1, status: "Started")
     state.record("001.00", agent: "leah-researcher", round: 1, status: "Completed", up: 12)

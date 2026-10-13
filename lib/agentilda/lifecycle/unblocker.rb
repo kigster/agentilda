@@ -164,6 +164,23 @@ module Agentilda
         subjects.zip(results).map { |subject, result| outcome(subject, result, before) }
       end
 
+      # One folder, with no spinner and no rename: what the run loop does when
+      # a person has answered every question a blocked plan asked (plan 004).
+      # The loop owns the screen, so nothing here draws on it, and the loop
+      # owns renames, so the folder's name is left to its next `resync dirs`,
+      # which sees `blocked.md` gone. Everything else is {#call}'s: the same
+      # agent, the same invocation, the same count of questions off disk.
+      #
+      # @param subject [Agentilda::Plans::Subject]
+      # @yieldparam progress [Object] whatever the executor reports
+      # @return [Outcome]
+      def drain(subject, &progress)
+        before = { subject.feature.ordinal.to_s => self.class.questions(subject) }
+        result = applying? ? invoke(subject, progress || proc {}) : [false, "not attempted: a dry run"]
+        tree.reload
+        outcome(subject, result, before)
+      end
+
       private
 
       # @param subject [Agentilda::Plans::Subject]

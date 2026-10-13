@@ -13,7 +13,12 @@ module Agentilda
     #   @return [Numeric] dollars per million tokens sent
     # @!attribute [r] rate_out
     #   @return [Numeric] dollars per million tokens generated
-    Model = Data.define(:id, :label, :rate_in, :rate_out) do
+    # @!attribute [r] context
+    #   @return [Integer] tokens the model's context window holds, the
+    #     ceiling a car's context meter is drawn against
+    Model = Data.define(:id, :label, :rate_in, :rate_out, :context) do
+      def initialize(context: Model::WINDOW, **rest) = super
+
       # @param up [Integer] tokens in
       # @param down [Integer] tokens out
       # @return [Float] dollars
@@ -24,5 +29,9 @@ module Agentilda
       # @return [Hash]
       def wire = { id:, label:, rates: { in: rate_in, out: rate_out } }
     end
+
+    # The context window a model gets when its entry names none: every
+    # model the adapters price today holds this many tokens.
+    Model::WINDOW = 200_000
   end
 end

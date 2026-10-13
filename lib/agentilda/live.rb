@@ -71,8 +71,11 @@ module Agentilda
     # @param keys [Agentilda::Live::Keys]
     # @return [Hash] `{me: Hash or nil, others: Array<Hash>}`, parsed JSON
     def board(store:, keys:)
-      names = store.hgetall(keys.nodes).keys | [keys.node]
-      snapshots = names.to_h { |name| [name, store.get(keys.snapshot(name))] }.compact
+      registered = store.hgetall(keys.nodes).keys
+      snapshots = (registered | [keys.node]).to_h { |name| [name, store.get(keys.snapshot(name))] }.compact
+      # A node is in the registry for as long as it heartbeats; one that died
+      # without closing never takes itself out, so whoever reads prunes it.
+      store.hdel(keys.nodes, *(registered - snapshots.keys))
       others = snapshots.except(keys.node).values.map { JSON.parse(it) }
       others.each { |snapshot| snapshot["node"]["me"] = false }
       { me: snapshots[keys.node]&.then { JSON.parse(it) }, others: others.sort_by { it.dig("node", "host").to_s } }

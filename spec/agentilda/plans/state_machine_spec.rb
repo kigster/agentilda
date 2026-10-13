@@ -220,6 +220,45 @@ RSpec.describe Agentilda::Plans::StateMachine do
     end
   end
 
+  # The one move backwards, behind a person's discard (W9).
+  describe "#retreat!" do
+    let(:planned_files) { { "spec.md" => "x", "plan.md" => "# Plan\n\n## Unit 1\n" } }
+    let(:building) { folder(:building, files: planned_files) }
+
+    it "steps back one state along the spine, and renames the folder" do
+      aggregate_failures do
+        expect(described_class.new(building).retreat!.key).to eq(:planned)
+        expect(building.renames).to eq([:planned])
+      end
+    end
+
+    it "derives every step back from the spine, as far as review" do
+      expect(described_class::RETREAT).to eq(researched: :new,
+        ready_for_planning: :researched,
+        planned: :ready_for_planning,
+        building: :planned,
+        building_ui: :building,
+        ready_for_review: :building_ui,
+        in_review: :ready_for_review)
+    end
+
+    it "refuses with the earlier state's own violation when the folder does not fit it" do
+      expect { described_class.new(built(:building, prs: ["Open 🟡"])).retreat! }
+        .to raise_error(described_class::Refused, /Planned, but 1 pull request/)
+    end
+
+    it "refuses a state with nothing behind it" do
+      expect(machine_for(:rejected).retreat_refusal).to eq("🔴 Changes Requested has no state behind it to go back to")
+    end
+
+    it "is not a way forward: may? and the derived topology never see it" do
+      aggregate_failures do
+        expect(described_class.new(building).may?(:planned)).to be(false)
+        expect(described_class.inbound.fetch(:planned)).not_to include(:building)
+      end
+    end
+  end
+
   describe "#spine_next" do
     it "walks spec → plan → build → review → merge → ship" do
       expected = {

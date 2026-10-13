@@ -53,6 +53,15 @@ module Agentilda
       # @return [String]
       def done(of = node) = "#{base}:#{of}:done"
 
+      # Hash: `seq` and `json`, the run state a person set from the page
+      # (held questions and cars, queued models), so a restarted engine
+      # gets it back (W6). {RunRecord} writes it; the engine flushes it to
+      # `.plans/agentilda-state.json` as well.
+      #
+      # @param of [String]
+      # @return [String]
+      def run(of = node) = "#{base}:#{of}:run"
+
       # String: the node name holding a plan, `SET NX EX`.
       #
       # @param ordinal [#to_s] e.g. "004.00"

@@ -178,11 +178,22 @@ module Agentilda
           history:       Array(row.history).first(Engine::Board::Row::HISTORY),
           up:            row.up.to_i,
           down:          row.down.to_i,
-          context:       nil,
-          context_limit: nil,
+          context:       row.context,
+          context_limit: price(row.model)&.context,
           elapsed:       row.elapsed.to_i,
           remaining:     row.remaining,
-          held:          @run_state.car_held?(row.key) }
+          held:          @run_state.car_held?(row.key),
+          next_model:    next_model(row) }
+      end
+
+      # The model a person queued for the agent's next round, until a round
+      # runs on it: from then on it is the model, not the next one.
+      #
+      # @param row [Agentilda::Engine::Board::Row]
+      # @return [String, nil]
+      def next_model(row)
+        queued = @run_state.model_for(row.key)
+        queued unless queued == model_id(row.model)
       end
 
       # A running agent on a plan that has stopped for a question is stuck,
@@ -202,6 +213,8 @@ module Agentilda
         adapter_for(label)&.model_entry(name)&.id || name
       end
 
+      # The catalogue's entry for a model: its prices, and its context window.
+      #
       # @param label [String, nil]
       # @return [Agentilda::Adapters::Model, nil]
       def price(label) = adapter_for(label)&.model_entry(label.to_s.split(":", 2).last)
@@ -244,7 +257,7 @@ module Agentilda
 
       # @param ordinal [String]
       # @return [String, nil] the node id, without its checkout
-      def claimed_by(ordinal) = @claims&.held_by(ordinal).to_s.split(":").first
+      def claimed_by(ordinal) = @claims&.held_by(ordinal)&.then { it.split(":").first }
 
       # @param ordinal [String]
       # @return [Boolean]

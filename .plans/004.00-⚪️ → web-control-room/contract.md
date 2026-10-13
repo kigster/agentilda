@@ -20,10 +20,11 @@ The shapes are in `web/src/api/types.ts`, the single source of truth. `web/src/a
 | `P:<node>:<checkout>:board` | stream | engine | `{seq, json}` per published snapshot, `MAXLEN ~ 100` |
 | `P:<node>:<checkout>:commands` | stream | API server | `{json}` one `Command`; engine reads with group `engine` |
 | `P:<node>:<checkout>:replies` | stream | engine | `{json}` one `Reply`, `MAXLEN ~ 1000` |
-| `P:<node>:<checkout>:done` | hash | engine | command id → `Reply` JSON, for redelivery (W13); trimmed after a day |
+| `P:<node>:<checkout>:done` | hash | engine | command id → `Reply` JSON, for redelivery (W13); trimmed after a day, unreadable entries dropped |
+| `P:<node>:<checkout>:run` | hash | engine | `seq` and `json`: the run state a person set (held questions, held cars, queued models), written in the same `MULTI` as the reply that changed it; mirrored into `.plans/agentilda-state.json` under `live`, and on start the copy with the higher `seq` wins (W6) |
 | `P:claim:<ordinal>` | string | engine | `<node>:<checkout>`, `SET NX EX 90`, renewed by heartbeat, released by compare-and-delete |
 
-A node is alive while its `snapshot` key exists. The API server reads every node's snapshot for the repository; it writes commands only to its own node's stream.
+A node is alive while its `snapshot` key exists. Whoever reads `P:nodes` drops the fields whose snapshot has expired, and an engine that closes cleanly removes its own. A checkout with no `origin` is `local/<dirname>-<12 hex of SHA-256 of its real path>`. The API server reads every node's snapshot for the repository; it writes commands only to its own node's stream.
 
 ## HTTP
 
@@ -43,17 +44,17 @@ The page reconnects with `@microsoft/fetch-event-source`, and on reconnect fetch
 
 | kind | effect |
 | --- | --- |
-| `answer` | append `## A<n>` with the text, "Answered by <user> on <date>", to blocked.md; the plan unblocks through `Unblocker` on the next round |
+| `answer` | append `## A<n>` with the text, "Answered by <user> on <date>" and `<!-- cmd:<id> -->`, to blocked.md; once every `B<n>` has an answer the dispatcher hands the plan to the agent that handles its state (lando-broker) through `Lifecycle::Unblocker`, on a thread, and picks the plan up again in the same run. Each answer set is tried once; a failed drain waits for blocked.md to change |
 | `hold_blocked` / `release_hold` | mark the question held in the run state; the page shows the pill solid red ⏸ |
 | `resume` | resume the interrupted agent from its last-known-state with the note in its mailbox |
-| `discard` | stop every agent in the plan's worktree, reset it, send the plan back one state |
-| `message` | append to the plan's mailbox, from `human`, to the agent |
+| `discard` | plan-wide (W9): stop every agent on the plan (STOP, then SIGKILL after 15 s), `git reset --hard` and `git clean -fd` in the plan's own worktree (its branch's last commit; agents never commit), then move the folder back one state through `StateMachine#retreat!`. The reply waits until all of it is done. Refused up front under `--isolation shared` or a dry run, and for a state with nothing behind it on the spine (🔴 💩 ⏪) or whose earlier state the folder does not fit |
+| `message` | append to the plan's mailbox, from `human`, to the agent; the entry carries the command id, so a redelivered command appends nothing |
 | `hold`, `wrap_up`, `stop` | write the word to that agent's control file (`HOLD`, `WRAP_UP`, `STOP`) |
 | `compact` | write `COMPACT` to the control file; the agent runs `/compact` at its next step |
 | `stop_all` | `Execution::Control.quit!` on this node |
-| `set_model` | the model for that agent's next round on this plan |
-| `switch_model` | stop the agent with a resume note, restart it on the new model, compact first |
+| `set_model` | the model for that agent's next round on this plan, normalised to the id the CLI will run (a model above the adapter's ceiling is refused) |
+| `switch_model` | stop the agent with INTERRUPT, so it leaves a resume note, and start it again on the new model in the same round, from that note in a fresh session. Not `--resume` plus `/compact`: agents run with `--disable-slash-commands`, so `/compact` cannot be sent, and a fresh session is already compact |
 | `add_plan` | claim the plan, add it to the run's scope |
-| `create_plans` | `Lifecycle.create` a plan from the idea, then `add_plan` |
+| `create_plans` | `Lifecycle.create` a plan from the idea, its spec.md carrying `<!-- cmd:<id> -->`, then `add_plan`; a plan already carrying the marker is added rather than created again |
 
-Every reply goes on `replies` and into `done`. A command whose id is already in `done` is acked and answered with its first reply.
+Every reply goes on `replies` and into `done`. A command whose id is already in `done` is acked and answered with its first reply. Effects outside Redis are idempotent by command id (the markers above, the mailbox's `command`), so a command applied again after a failed `MULTI` changes nothing twice.
