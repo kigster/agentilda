@@ -172,6 +172,47 @@ Existing trees keep working: `Ordinal.parse` still reads `NNN.MM` folder names, 
 
 Settled by the author on 2026-10-12, after seeing the web mockup. The ratatui screen, the keyboard handling only it uses, and the `ratatui` dependency go, and with it the Rust toolchain that building the gem needed. The `View` seam stays (W2), with the web view and a headless view behind it. This ships in its own pull request, ahead of the web view, since nothing in the web work depends on the TUI.
 
+### W23. Research is opt-in, and every choice explains itself
+
+Settled by the author on 2026-10-12.
+
+- **A spec says whether leah-researcher runs**, with `research: true` in its frontmatter. The default is **no**: research is not useful for every feature, and it is the slowest phase. The form shows it as "Research? Yes | No" beside the lane.
+- It only means something on the full lane; the plan and quick lanes skip research already, so there the control is disabled and says so.
+- **The mechanism exists already.** leah-researcher gets `toggle: research`, as rey-frontend has `toggle: frontend`, and `Agents::Routing` reads the switch. With research off nothing handles ⚪️ New, so `Lifecycle::Lanes` moves a full-lane plan from ⚪️ to the state after research, the same way it moves plan-lane plans today, writing whatever that state's invariant requires. This changes what a full-lane plan does when its spec says nothing: today it is always researched.
+- `.tilda.yml` may set a project default (`research: true`), with the same precedence as `frontend:` in PR #53: the spec, then `.tilda.yml`, then no.
+- **Under each control, two lines say what the current choice means**, and they change with it. The copy:
+
+| Control | Choice | Says |
+| --- | --- | --- |
+| Lane | Full | Complex feature engaging all agents; costs the most in tokens. |
+| | Plan | A spec you already trust: skip research and go straight to the plan. |
+| | Quick | A small task for a junior engineer, not a feature. Cheapest and fastest. |
+| Research? | Yes | Yes adds a research section to the spec. It takes more time, but provides additional context when needed. |
+| | No | No sends the spec straight to the copywriter, with no additional research. For when you know what you are doing. |
+| Front end | Plan decides | Plans UI work automatically, when it improves the final result. |
+| | Yes | A full-stack feature with a front-end component. |
+| | No | A back-end-only feature or task. |
+| Depth | Default | Maps to the model's effort; the default comes from the plan. |
+| | Fast | Low effort. |
+| | Medium | High effort. |
+| | Deep | xHigh effort. |
+
+### W24. Each agent's model can be changed from its car
+
+Settled by the author on 2026-10-12.
+
+- **Every car shows its model as a small dropdown.** It lists the models the agent's adapter offers, most capable first, with the current one selected. For now the only adapter is Claude, so the list is about seven Claude models, from Fable at the top to Haiku at the bottom; the list comes from the adapter, not from the front end, so codex and pi bring their own when they arrive.
+- **A change applies from the agent's next invocation.** A running `claude -p` cannot switch model, so the choice is queued: the car marks it, the drawer says "Sonnet 5.5, Fable 5.1 from its next round", and the agent's transcript records it. It is a `set_model` command through the API (W9), and it lands in the plan's `phases:` override for that agent's phase, so a restart keeps it.
+- Choosing the current model again cancels a queued change. A blocked car hides the dropdown, since the agent is not going to run until someone answers it.
+
+### W25. Depth maps to effort through a table `.tilda.yml` can replace
+
+Settled by the author on 2026-10-12.
+
+The mapping changes to Fast → `low`, Medium → `high`, Deep → `xhigh`. Today `Plans::Spec::EFFORT_FOR_DEPTH` says medium → `medium` and deep → `high`. Default leaves the effort to the agent's own frontmatter and the plan.
+
+Later, `.tilda.yml` will accept a `depth:` table that replaces those three values for one project (`depth: { medium: medium }`). That is not built yet; the form's help text reads from the same table, so it will show the project's mapping when it is.
+
 ### W12. Order of work
 
 0. Plan `003.00` lands first, or at least its phases B and C: the JSON mailbox, Redis Streams, the hook and `last-known-state`.
@@ -180,7 +221,8 @@ Settled by the author on 2026-10-12, after seeing the web mockup. The ratatui sc
 3. The web board: read-only, then kill, extend and interrupt (W9).
 4. Message kinds, the `PreToolUse` hook and `mail wait` (W8), human messages and `blocked.md` answers (W10).
 5. Animations (W4).
-6. The new-feature form and the spec editor (W5), then `tilda start` and the idea dialog (W19), then `tilda init` (W20).
+6. The new-feature form and the spec editor (W5, W23, W25), then `tilda start` and the idea dialog (W19), then `tilda init` (W20).
+7. The model dropdown on each car (W24), once commands reach the engine (W9).
 
 ## Review labels
 
