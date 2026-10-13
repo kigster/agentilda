@@ -23,6 +23,8 @@
     --lane-quick: #1E8C3A;
     --alarm: #D1343B;
     --go: #1E9E5A;
+    /* The highlight colour: the orange of the logo's mark, RGB (211, 87, 40). The same in both themes. */
+    --highlight: #D35728; --on-highlight: #FFFFFF;
     /* The copilot floats on an inverted surface: dark-ish here, light-ish in the dark theme. */
     --inv-plate: #1B2539; --inv-enamel: #111A2B; --inv-ink: #E4EAF3; --inv-ink-soft: #9AA7BC;
     --inv-hairline: #2D3B57; --inv-alarm: #F06A6F; --inv-go: #45D08A; --inv-focus: #8DB2FF; --inv-scheme: dark;
@@ -303,14 +305,14 @@
   .machine-note strong { color: var(--ink); }
   .car.is-readonly { cursor: default; }
   .car.is-readonly:hover { border-color: color-mix(in srgb, var(--car-tint) 32%, transparent); border-left-color: var(--lane-color); }
-  /* A band per machine in the merged board, on the copilot's inverted surface so the break between machines is unmissable. */
+  /* A band per machine in the merged board, in the highlight colour so the break between machines is unmissable. */
   .machine-head { display: flex; align-items: baseline; flex-wrap: wrap; gap: 4px 16px; margin: 0 0 2px; padding: 12px 18px;
-                  background: var(--inv-plate); color: var(--inv-ink); border-radius: 10px; }
+                  background: var(--highlight); color: var(--on-highlight); border-radius: 10px; }
   .plan + .machine-head, #plans + #theirs .machine-head:first-child { margin-top: 22px; }
   .machine-head h2 { margin: 0; font-size: 19px; font-weight: 800; letter-spacing: -0.01em; }
   .machine-head h2::before { content: "🔒"; margin-right: 8px; font-size: 15px; }
   .machine-head.is-ours h2::before { content: none; }
-  .machine-head p { margin: 0; font-size: 14px; color: var(--inv-ink-soft); display: flex; flex-wrap: wrap; gap: 0 14px; }
+  .machine-head p { margin: 0; font-size: 15px; font-weight: 600; color: var(--on-highlight); display: flex; flex-wrap: wrap; gap: 0 14px; }
   /* Their rows in the merged board, slightly faded so ours stay the thing you read. */
   .plan.is-theirs { opacity: .85; }
   .log-tools { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; padding: 12px 16px; border-bottom: 1px solid var(--hairline); }

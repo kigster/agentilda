@@ -29,6 +29,7 @@ The state machine already has the shape of a transit line. The spine is the trun
 | `--lane-plan` | `#C98700` | `#F0B43C` | plan lane line |
 | `--lane-quick` | `#1E8C3A` | `#4CC76A` | quick lane line |
 | `--alarm` | `#D1343B` | `#F06A6F` | rejected, failing CI, stop |
+| `--highlight` | `#D35728` | `#D35728` | the highlight colour: the logo's orange, RGB (211, 87, 40). Machine bands in the merged board; white text on it |
 
 The review labels keep the colours of plan 005 (L1).
 
@@ -85,7 +86,7 @@ The review labels keep the colours of plan 005 (L1).
 ## Other machines
 
 - **Machines sharing one Redis** (decision W26) each get a tab after Board, labelled `username@hostname` with a 🔒, drawing that machine's plans exactly as the board draws ours, minus every control: cars are plain cards with the model as text, and the tab opens with "Read only. alex@build-01 is working on these in ~/src/agentilda; this machine will not start them. Last seen 4s ago."
-- **All machines** in the header is a pressed-state toggle that appends every other machine's rows under ours on the Board, each machine opening with a band on the copilot's inverted surface (`username@hostname` at 19 px, then its IP, plan count, "read only" and last seen; ours gets one too, marked "this machine"), its rows at 85% opacity (first 25%, raised by the author once it was on screen). Fading by opacity rather than colour keeps the lane colours legible as lanes, while making it obvious which rows are not ours to touch.
+- **All machines** in the header is a pressed-state toggle that appends every other machine's rows under ours on the Board, each machine opening with a band in the highlight colour (`username@hostname` at 19 px, then its IP, plan count, "read only" and last seen; ours gets one too, marked "this machine"), its rows at 85% opacity (first 25%, raised by the author once it was on screen). Fading by opacity rather than colour keeps the lane colours legible as lanes, while making it obvious which rows are not ours to touch.
 - **This machine's name** sits in the project line under the logo ("On dana@studio-mini"), not among the run's numbers, which is where it was first put and where it pushed Stop run onto a second line.
 
 ## Principles
