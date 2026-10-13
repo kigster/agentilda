@@ -551,6 +551,10 @@
   .menu-title { font-weight: 700; }
   .menu-sub { font-size: 12px; color: var(--ink-soft); }
   .menu-back { min-height: 36px; color: var(--ink-soft); }
+  .menu-danger .menu-title { color: var(--alarm); }
+  /* At the bottom of the drawer the menu opens upward, from the right edge, so it stays inside the drawer. */
+  .composer-actions:has(.action-up) { justify-content: space-between; }
+  .action-up .menu { top: auto; bottom: calc(100% + 6px); width: 280px; }
   .menu-note { margin: 6px 12px 4px; font-size: 12px; color: var(--ink-soft); }
   .help-pill { min-width: 40px; padding-inline: 0; border: 1px solid color-mix(in srgb, var(--ink) 30%, transparent); border-radius: 999px; font-weight: 800; }
   .help { width: min(620px, calc(100vw - 32px)); }
@@ -762,9 +766,10 @@
       <textarea id="d-message" placeholder="It reads this at its next step."></textarea>
       <div class="composer-actions">
         <button class="btn btn-primary" type="submit">Send message</button>
-        <button class="btn" type="button" data-kind="hold">Hold for more</button>
-        <button class="btn" type="button" data-kind="wrap_up">Wrap up</button>
-        <button class="btn btn-alarm" type="button" data-kind="stop">Stop agent</button>
+        <div class="action-wrap action-up">
+          <button class="btn" id="agent-action" type="button" aria-haspopup="menu" aria-expanded="false" aria-controls="agent-action-list">Action <span aria-hidden="true">▾</span></button>
+          <div class="menu" id="agent-action-list" role="menu" aria-labelledby="agent-action" hidden></div>
+        </div>
       </div>
     </form>
   </aside>
@@ -1333,13 +1338,27 @@
     $("announcer").textContent = `Message sent to ${watching.car.agent}.`;
     paintDrawer();
   });
-  $("composer").querySelectorAll("[data-kind]").forEach(b => b.addEventListener("click", () => {
+  // The drawer's Action menu: everything but Send message, which stays a button. Compact runs /compact now, ahead of
+  // the 40% autocompact (W28), for an agent whose context is cluttered before it is full.
+  function agentCommand(kind) {
     if (!watching) return;
-    const said = { hold: "Asked to hold for more.", wrap_up: "Asked to wrap up.", stop: "Asked to stop." }[b.dataset.kind];
-    watching.car.log.unshift(`you: ${said}`);
-    $("announcer").textContent = `${watching.car.agent}: ${said}`;
+    const { plan, car } = watching;
+    const said = kind === "compact" ? `Compacted its context: ${compact(car, 0.25)}.`
+      : { hold: "Asked to hold for now.", wrap_up: "Asked to wrap up.", stop: "Asked to stop." }[kind];
+    car.log.unshift(`you: ${said}`);
+    log("api", "info", `POST /api/commands ${kind} ${plan.id}/${car.agent} accepted`);
+    $("announcer").textContent = `${car.agent}: ${said}`;
+    agentMenu.close(true);
     paintDrawer();
-  }));
+  }
+  function agentMenuItems() {
+    const car = watching?.car, used = car?.ctx ? `${Math.round(car.ctx / CONTEXT * 100)}% of its context used` : "";
+    $("agent-action-list").replaceChildren(
+      menuItem("Hold for now", "Pause after its current step until you send more", () => agentCommand("hold")),
+      menuItem("Wrap up", "Finish the current step, leave a note, then stop", () => agentCommand("wrap_up")),
+      menuItem("Compact", `Run /compact now${used ? `; ${used}` : ""}`, () => agentCommand("compact")),
+      menuItem("Stop agent", "Stop now; it gets 60 seconds to leave a resume note", () => agentCommand("stop"), "menu-danger"));
+  }
 
 
   // Logs: tail of engine.log and api.log, as the API server would stream them.
@@ -2272,23 +2291,33 @@
     plan.el.scrollIntoView({ behavior: reduced ? "auto" : "smooth", block: "center" });
     $("announcer").textContent = `${p.id} added to this run${p.blocked ? "; it is blocked and needs you" : ""}.`;
   }
-  const menuItems = () => [...$("action-list").querySelectorAll("[role=menuitem]")];
-  const focusItem = i => menuItems().at(i)?.focus();
-  function openMenu() { menuMain(); $("action-list").hidden = false; $("action").setAttribute("aria-expanded", "true"); focusItem(0); }
-  function closeMenu(back) { $("action-list").hidden = true; $("action").setAttribute("aria-expanded", "false"); if (back) $("action").focus(); }
-  $("action").addEventListener("click", () => $("action-list").hidden ? openMenu() : closeMenu());
-  $("action-list").addEventListener("keydown", e => {
-    const items = menuItems(), i = items.indexOf(document.activeElement);
-    if (e.key === "ArrowDown") { e.preventDefault(); items[(i + 1) % items.length].focus(); }
-    else if (e.key === "ArrowUp") { e.preventDefault(); items.at(i - 1).focus(); }
-    else if (e.key === "Home") { e.preventDefault(); items[0].focus(); }
-    else if (e.key === "End") { e.preventDefault(); items.at(-1).focus(); }
-    else if (e.key === "Escape") { e.preventDefault(); e.stopPropagation(); closeMenu(true); }
-    else if (e.key === "Tab") closeMenu();
-  });
-  // The path, not e.target: choosing "Choose an existing plan" replaces the item that was clicked, so by now the
-  // target is detached and would look like a click outside.
-  document.addEventListener("click", e => { if (!e.composedPath().some(el => el.classList?.contains("action-wrap"))) closeMenu(); });
+  // One menu button: arrow keys, Home and End move, Esc closes back to the button, Tab or a click outside closes.
+  function wireMenu(btn, list, fill) {
+    const items = () => [...list.querySelectorAll("[role=menuitem]")];
+    const m = {
+      focus: i => items().at(i)?.focus(),
+      open() { fill(); list.hidden = false; btn.setAttribute("aria-expanded", "true"); m.focus(0); },
+      close(back) { list.hidden = true; btn.setAttribute("aria-expanded", "false"); if (back) btn.focus(); },
+    };
+    btn.addEventListener("click", () => list.hidden ? m.open() : m.close());
+    list.addEventListener("keydown", e => {
+      const all = items(), i = all.indexOf(document.activeElement);
+      if (e.key === "ArrowDown") { e.preventDefault(); all[(i + 1) % all.length].focus(); }
+      else if (e.key === "ArrowUp") { e.preventDefault(); all.at(i - 1).focus(); }
+      else if (e.key === "Home") { e.preventDefault(); all[0].focus(); }
+      else if (e.key === "End") { e.preventDefault(); all.at(-1).focus(); }
+      else if (e.key === "Escape") { e.preventDefault(); e.stopPropagation(); m.close(true); }
+      else if (e.key === "Tab") m.close();
+    });
+    // The path, not e.target: "Choose an existing plan" replaces the item that was clicked, so by now the target
+    // is detached and would look like a click outside.
+    document.addEventListener("click", e => { if (!e.composedPath().includes(btn.parentElement)) m.close(); });
+    return m;
+  }
+  const actionMenu = wireMenu($("action"), $("action-list"), menuMain);
+  const agentMenu = wireMenu($("agent-action"), $("agent-action-list"), agentMenuItems);
+  const focusItem = i => actionMenu.focus(i);
+  const closeMenu = back => actionMenu.close(back);
   // tilda start opens the page at #start (decision W19).
   if (location.hash === "#start") openStart();
 

@@ -163,3 +163,12 @@ The mockup carries pieces that exist only to make it demonstrable. None of them 
 - [ ] Drop the simulation: the one-second ticks, random blockers and test runs, the timed merges, the sample plans, machines and backlog. Everything comes from the API and its event stream (W9, W13).
 - [ ] Drop the mockup's localStorage of settled requests (`agentilda-mockup-settled`); a settled request lives in the plan's mailbox.
 - [ ] Replace the draft help copy with the author's (see "Help dialog").
+
+## Drawer actions
+
+- The drawer's composer keeps **Send message** as a button. Everything else moves into an **Action ▾** menu beside it, the same menu as the header's, opening upward from the drawer's right edge:
+  - **Hold for now** (was Hold for more): pause after the current step until you send more.
+  - **Wrap up**: finish the current step, leave a note, then stop.
+  - **Compact**: run `/compact` now, ahead of the 40% autocompact (W28), for a context that is cluttered before it is full. The item shows how much of the context is used; the context bar drops as it runs.
+  - **Stop agent**, in red: stop now, with 60 seconds to leave a resume note.
+- Each is a command through the API (W9): `hold`, `wrap_up`, `compact`, `stop`.
