@@ -159,8 +159,8 @@ RSpec.describe Agentilda::Web::App, :tree do
       expect(last_response.headers["Content-Type"]).to start_with("text/event-stream")
     end
 
-    it "opens with the board" do
-      expect(last_response.body).to start_with("event: board\ndata: {\"me\":{\"seq\":7")
+    it "opens with the reply cursor, then the board" do
+      expect(last_response.body).to start_with("id: 0-0\nevent: cursor\ndata: {\"id\":\"0-0\"}\n\nevent: board\ndata: {\"me\":{\"seq\":7")
     end
   end
 

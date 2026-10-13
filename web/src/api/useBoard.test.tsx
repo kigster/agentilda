@@ -136,3 +136,35 @@ it("does not roll the board back when a reconnect GET lands after a newer stream
   await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
   expect(result.current.board?.me.seq).toBe(42);
 });
+
+it("keeps a finished run finished when an older GET, still holding its last snapshot, lands after `me: null`", async () => {
+  const first = loadFixtureBoard();
+  let release: (r: Response) => void = () => {};
+  fetchMock.mockResolvedValueOnce(json(first)).mockImplementationOnce(() => new Promise<Response>(r => (release = r)));
+  const { result } = renderHook(() => useBoard(), { wrapper });
+  await waitFor(() => expect(result.current.board?.me.seq).toBe(first.me.seq));
+  const stream = streams[0];
+  act(() => stream.onReconnect()); // the GET leaves now, and the server still has the run's last snapshot
+  act(() => stream.onBoard({ me: null, others: first.others }));
+  await act(async () => release(json(first)));
+  await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
+  expect(result.current.waiting).toBe(true);
+  expect(result.current.board).toBeUndefined();
+});
+
+it("ignores a GET whose fetch outlives its cancellation, answering from what the stream applied", async () => {
+  const first = loadFixtureBoard();
+  let release: (r: Response) => void = () => {};
+  fetchMock.mockImplementationOnce(() => new Promise<Response>(r => (release = r)));
+  const client = createQueryClient();
+  const { result } = renderHook(() => useBoard(), {
+    wrapper: ({ children }: { children: ReactNode }) => <QueryClientProvider client={client}>{children}</QueryClientProvider>,
+  });
+  await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+  const cancel = vi.spyOn(client, "cancelQueries");
+  act(() => streams[0].onBoard({ me: null, others: [] }));
+  expect(cancel).toHaveBeenCalledWith({ queryKey: ["board"] });
+  await act(async () => release(json(first)));
+  await waitFor(() => expect(result.current.waiting).toBe(true));
+  expect(result.current.board).toBeUndefined();
+});

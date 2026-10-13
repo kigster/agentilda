@@ -32,7 +32,7 @@ A node is alive while its `snapshot` key exists. Whoever reads `P:nodes` drops t
 | --- | --- |
 | `GET /` and static | `web/dist`; `index.html` for unknown non-API paths |
 | `GET /api/board` | `Board` JSON now |
-| `GET /api/events` | SSE: `event: board` with a `Board` whenever any snapshot's `seq` changes (checked every 250 ms), `event: reply` with each `Reply`; a `: ping` comment every 15 s |
+| `GET /api/events` | SSE: first `event: cursor` with `id:` and `{id}` set to the newest reply id (`0-0` when there is none), so a reconnect always has a `Last-Event-ID`; then `event: board` with a `Board` whenever any snapshot's `seq` changes (checked every 250 ms), `event: reply` with each `Reply`; a `: ping` comment every 15 s |
 | `POST /api/commands` | body `Command`; header `X-CSRF-Token` must equal the token in `GET /api/session`; `202` with `Reply{status: "accepted"}` once queued, `422` with `Reply{status: "refused"}` for an invalid command |
 | `GET /api/session` | `{csrf, node, repo}` |
 | `GET /api/plans/:ordinal/files/:name` | the Markdown of a plan file (spec.md, plan.md, blocked.md), for the drawer and preview |

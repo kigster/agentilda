@@ -48,7 +48,15 @@ RSpec.describe Agentilda::Web::Server do
         nil
       end
     end
-    let(:first) { Timeout.timeout(5) { frames.pop } }
+    # Everything up to the first board: the cursor and the board may come
+    # in one chunk or two.
+    let(:first) do
+      Timeout.timeout(5) do
+        opened = +""
+        opened << frames.pop until opened.include?("event: board\n")
+        opened
+      end
+    end
 
     before do
       store.set(keys.snapshot, JSON.generate(seq: 1, node: { id: "aaaa", checkout: "~/w" }))
@@ -59,8 +67,9 @@ RSpec.describe Agentilda::Web::Server do
 
     after { reader.kill }
 
-    it "sends the board as soon as it opens, then a reply as it arrives" do
-      expect([first, Timeout.timeout(5) { frames.pop }]).to match([/\Aevent: board\n/, /event: reply\ndata: \{"id":"01LIVE"/])
+    it "sends the cursor and the board as soon as it opens, then a reply as it arrives" do
+      expect([first, Timeout.timeout(5) { frames.pop }])
+        .to match([/\Aid: 0-0\nevent: cursor\n.*^event: board\n/m, /event: reply\ndata: \{"id":"01LIVE"/])
     end
 
     it "ends when the server stops" do

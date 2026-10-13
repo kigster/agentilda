@@ -1,12 +1,12 @@
 // The event stream (contract.md, `GET /api/events`) through @microsoft/fetch-event-source, which reconnects after a
 // dropped connection instead of giving up the way a bare EventSource does on a non-200.
 import { fetchEventSource, type EventSourceMessage } from "@microsoft/fetch-event-source";
-import type { Board, Reply } from "./types";
+import type { Reply, WireBoard } from "./types";
 
 export type ConnectionState = "live" | "reconnecting" | "offline";
 
 export interface StreamHandlers {
-  onBoard(board: Board): void;
+  onBoard(board: WireBoard): void;
   onReply(reply: Reply): void;
   onState(state: ConnectionState): void;
   /** Called on every open after the first: whatever happened while the stream was down is fetched once. */
@@ -42,7 +42,9 @@ export function openStream(handlers: StreamHandlers, url = "/api/events"): () =>
     },
     onmessage(message: EventSourceMessage) {
       if (!message.data) return;
-      if (message.event === "board") handlers.onBoard(JSON.parse(message.data) as Board);
+      // `cursor` opens every stream only so its `id:` becomes the Last-Event-ID a reconnect sends; the library keeps
+      // that id itself, so the event needs nothing from here, and like any other name it falls through.
+      if (message.event === "board") handlers.onBoard(JSON.parse(message.data) as WireBoard);
       else if (message.event === "reply") handlers.onReply(JSON.parse(message.data) as Reply);
     },
     onclose() {

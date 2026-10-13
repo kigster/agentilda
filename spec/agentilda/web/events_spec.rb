@@ -81,8 +81,16 @@ RSpec.describe Agentilda::Web::Events do
   describe "#run" do
     before { publish(1) }
 
+    # The first frame, which hands the browser a Last-Event-ID before any
+    # reply has.
+    let(:opening) { frames.first }
+
     context "when nothing changes" do
       before { run_ticks }
+
+      it "opens with a cursor event at the start of an empty reply stream" do
+        expect(opening).to eq("id: 0-0\nevent: cursor\ndata: {\"id\":\"0-0\"}\n\n")
+      end
 
       it "sends the board once, then only pings" do
         expect(frames.grep(/\Aevent: board/).size).to eq(1)
@@ -102,8 +110,12 @@ RSpec.describe Agentilda::Web::Events do
         end
       end
 
-      it "sends a board event, then the new board, then the reply" do
-        expect(frames.reject { it == ": ping\n\n" }.map { it[/event: (\w+)/, 1] }).to eq(%w[board board reply])
+      it "sends the cursor, a board event, then the new board, then the reply" do
+        expect(frames.reject { it == ": ping\n\n" }.map { it[/event: (\w+)/, 1] }).to eq(%w[cursor board board reply])
+      end
+
+      it "opens with a cursor at the newest reply already written" do
+        expect(opening).to start_with("id: #{store.xrange(keys.replies).first.id}\nevent: cursor\n")
       end
 
       it "sends the reply with its stream id, and leaves out the ones from before it connected" do
@@ -133,6 +145,10 @@ RSpec.describe Agentilda::Web::Events do
       it "sends what came after it" do
         expect(frames.grep(/event: reply/).map { it[/"id":"(\w+)"/, 1] }).to eq(["01MISSED"])
       end
+
+      it "opens with a cursor at the id the browser sent" do
+        expect(opening).to start_with("id: #{last_id}\nevent: cursor\n")
+      end
     end
 
     context "with a Last-Event-ID that is not a stream id" do
@@ -155,7 +171,7 @@ RSpec.describe Agentilda::Web::Events do
       before { run_ticks }
 
       it "stops after the write it noticed on" do
-        expect(frames.size).to eq(1)
+        expect(frames).to eq([opening])
       end
     end
 
@@ -176,7 +192,7 @@ RSpec.describe Agentilda::Web::Events do
       end
 
       it "says so in a comment and ends, for the page to reconnect" do
-        expect(frames).to eq([": Redis at x is unavailable\n\n"])
+        expect(frames.drop(1)).to eq([": Redis at x is unavailable\n\n"])
       end
     end
   end

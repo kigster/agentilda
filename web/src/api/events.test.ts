@@ -37,6 +37,13 @@ it("routes board and reply events", () => {
   expect(h.onBoard).toHaveBeenCalledTimes(1);
 });
 
+it("passes over the opening cursor event, whose id the library keeps for Last-Event-ID", () => {
+  const h = handlers();
+  openStream(h);
+  calls[0].onmessage?.({ id: "0-0", event: "cursor", data: '{"id":"0-0"}', retry: undefined });
+  expect([h.onBoard, h.onReply, h.onState, h.onReconnect].map(f => f.mock.calls.length)).toEqual([0, 0, 0, 0]);
+});
+
 it("goes live on open and refetches on every reopen", async () => {
   const h = handlers();
   openStream(h);

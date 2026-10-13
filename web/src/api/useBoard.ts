@@ -1,21 +1,13 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import type { Board, Snapshot } from "./types";
+import type { Board, Snapshot, WireBoard } from "./types";
 import { fetchBoard, isFixtureMode, loadFixtureBoard } from "./client";
 import { openStream, type ConnectionState } from "./events";
 import { BOARD_KEY } from "./queryClient";
 import { replies } from "./replies";
 
 export type { ConnectionState } from "./events";
-
-/**
- * A board as `GET /api/board` and the stream deliver it. `me` is null until this machine's engine first publishes
- * (`tilda web` started before `tilda run`, or the run's snapshot expired), so the page never assumes it is there.
- */
-export interface WireBoard {
-  me: Snapshot | null;
-  others: Snapshot[];
-}
+export type { WireBoard } from "./types";
 
 const newer = (old: Snapshot | undefined, next: Snapshot): Snapshot => (old && old.seq >= next.seq ? old : next);
 
@@ -55,9 +47,18 @@ export function useBoard(): BoardState {
   const fixture = isFixtureMode();
   const client = useQueryClient();
   const [connection, setConnection] = useState<ConnectionState>(fixture ? "live" : "reconnecting");
+  // Counts stream events applied. A GET that sees it move while in flight left before the stream's news, and seq
+  // cannot catch every such answer: `{me: null}` (the run finished) has no seq to lose to the snapshot it replaced.
+  const streamed = useRef(0);
   const query = useQuery<WireBoard>({
     queryKey: BOARD_KEY,
-    queryFn: fixture ? () => Promise.resolve(loadFixtureBoard()) : fetchBoard,
+    queryFn: fixture
+      ? () => Promise.resolve(loadFixtureBoard())
+      : async () => {
+          const before = streamed.current;
+          const board = await fetchBoard();
+          return streamed.current === before ? board : (client.getQueryData<WireBoard>(BOARD_KEY) ?? board);
+        },
     // A fetched board is reconciled with what the stream already delivered, never laid over it.
     structuralSharing: (old: unknown, next: unknown) => reconcile(old as WireBoard | undefined, next as WireBoard),
   });
@@ -65,7 +66,13 @@ export function useBoard(): BoardState {
   useEffect(() => {
     if (fixture) return;
     return openStream({
-      onBoard: board => client.setQueryData<WireBoard>(BOARD_KEY, old => reconcile(old, board)),
+      onBoard: board => {
+        // Drop any GET still in flight before applying the event, so its older answer never lands on top of it.
+        // Cancelling reverts synchronously to the state before that GET, which the event then replaces.
+        void client.cancelQueries({ queryKey: BOARD_KEY });
+        streamed.current += 1;
+        client.setQueryData<WireBoard>(BOARD_KEY, old => reconcile(old, board));
+      },
       onReply: reply => replies.deliver(reply),
       onState: setConnection,
       onReconnect: () => void client.refetchQueries({ queryKey: BOARD_KEY }),

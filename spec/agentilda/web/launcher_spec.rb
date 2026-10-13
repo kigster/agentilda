@@ -84,6 +84,24 @@ RSpec.describe Agentilda::Web::Launcher do
       launcher.stop
       expect([launcher.ready?, launcher.pid]).to eq([false, nil])
     end
+
+    describe "after KILL" do
+      let(:pid) { launcher.pid }
+
+      before do
+        allow(Process).to receive(:waitpid).and_call_original
+        pid
+        launcher.stop
+      end
+
+      it "reaps the server, leaving no zombie behind" do
+        expect { Process.waitpid(pid, Process::WNOHANG) }.to raise_error(Errno::ECHILD)
+      end
+
+      it "waits for the reap rather than polling once" do
+        expect(Process).to have_received(:waitpid).with(pid).once
+      end
+    end
   end
 
   context "when it dies at once" do

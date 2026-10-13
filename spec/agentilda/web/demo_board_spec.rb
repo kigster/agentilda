@@ -171,6 +171,26 @@ RSpec.describe Agentilda::Web::DemoBoard do
         .to eq("rey-frontend runs on claude-haiku-5-5 from its next round")
     end
 
+    context "when a model is queued for the next round" do
+      before { board.apply(command("set_model", plan: ordinal, agent: "rey-frontend", model: "Haiku 5.5")) }
+
+      it "leaves the running model alone and queues the new one as next_model" do
+        expect(car("001.00/rey-frontend").slice("model", "next_model"))
+          .to eq("model" => "claude-sonnet-5-5", "next_model" => "claude-haiku-5-5")
+      end
+
+      it "queues nothing when the model asked for is the one already running" do
+        board.apply(command("set_model", plan: ordinal, agent: "rey-frontend", model: "claude-sonnet-5-5"))
+        expect(car("001.00/rey-frontend")["next_model"]).to be_nil
+      end
+
+      it "clears the queue when the agent is switched now" do
+        board.apply(command("switch_model", plan: ordinal, agent: "rey-frontend", model: "claude-opus-5-5"))
+        expect(car("001.00/rey-frontend").slice("model", "next_model"))
+          .to eq("model" => "claude-opus-5-5", "next_model" => nil)
+      end
+    end
+
     it "switches a running agent now" do
       board.apply(command("switch_model", plan: ordinal, agent: "rey-frontend", model: "claude-opus-5-5"))
       expect(car("001.00/rey-frontend")["model"]).to eq("claude-opus-5-5")

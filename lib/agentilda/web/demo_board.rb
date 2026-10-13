@@ -192,11 +192,16 @@ module Agentilda
         "stopping #{cars.size} agent#{"s" unless cars.size == 1} on #{@me.dig("node", "user")}@#{@me.dig("node", "host")}"
       end
 
+      # Queues the model for the next round and leaves the running one
+      # alone, as Live::Snapshot reports it: `next_model` until a round runs
+      # on it, and nil when it is the model already running.
+      #
       # @return [String]
       def set_model(command) # rubocop:disable Naming/AccessorMethodName -- named for the command kind, as in Live::Commands
         car = car!(command)
-        car["model"] = model!(command["model"])
-        "#{command.agent} runs on #{car["model"]} from its next round"
+        model = model!(command["model"])
+        car["next_model"] = (model unless model == car["model"])
+        "#{command.agent} runs on #{model} from its next round"
       end
 
       # @return [String]
@@ -205,6 +210,8 @@ module Agentilda
         raise Refusal, "#{command.car} is not running; use set_model for its next round" unless car["state"] == "running"
 
         car["model"] = model!(command["model"])
+        # The switch is the model now, so nothing is queued behind it.
+        car["next_model"] = nil
         "#{command.agent} stops at its next step and restarts on #{car["model"]} from its resume note; " \
           "its session is not carried over"
       end

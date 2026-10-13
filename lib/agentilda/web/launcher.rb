@@ -121,9 +121,14 @@ module Agentilda
         nil
       end
 
+      # Blocks: after KILL the child is gone or about to be, and a
+      # non-blocking wait that runs before the kernel has finished with it
+      # returns nil and leaves a zombie behind. ECHILD means {#alive?}
+      # already reaped it.
+      #
       # @return [void]
       def reap
-        Process.waitpid(@pid, Process::WNOHANG)
+        Process.waitpid(@pid)
       rescue Errno::ECHILD
         nil
       end

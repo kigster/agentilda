@@ -1,7 +1,7 @@
 // The page's only door to the API server (contract.md, "HTTP"). Everything that crosses the network goes through
 // here, so the tests mock fetch once and every caller is covered.
 import { ulid } from "ulid";
-import type { Board, Command, Node, Reply } from "./types";
+import type { Board, Command, Node, Reply, WireBoard } from "./types";
 import fixtureBoard from "./fixtures/board.json";
 
 export interface Session {
@@ -41,7 +41,7 @@ async function getJson<T>(path: string): Promise<T> {
   return (await res.json()) as T;
 }
 
-export const fetchBoard = (): Promise<Board> => getJson<Board>("/api/board");
+export const fetchBoard = (): Promise<WireBoard> => getJson<WireBoard>("/api/board");
 
 let session: Promise<Session> | null = null;
 

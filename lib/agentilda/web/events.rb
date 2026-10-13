@@ -14,7 +14,10 @@ module Agentilda
     # at every tick anyway.
     #
     # A reply carries its stream id as the event's `id:`, so a browser that
-    # reconnects sends `Last-Event-ID` and gets what it missed.
+    # reconnects sends `Last-Event-ID` and gets what it missed. The stream
+    # opens with a `cursor` event carrying the id it starts from, so a
+    # browser that drops before the first reply still has one to send;
+    # without it, replies written during that gap were skipped.
     class Events
       # @param context [Agentilda::Web::Context]
       # @param store [Agentilda::Live::Store, Agentilda::Live::MemoryStore]
@@ -40,6 +43,7 @@ module Agentilda
         started = @clock.call
         pinged = started
         cursor = @last_id || newest_reply
+        out << self.class.frame("cursor", { id: cursor }, id: cursor)
         seqs = nil
         until over?(out, started)
           seqs = board(out, seqs)
@@ -90,9 +94,11 @@ module Agentilda
       end
 
       # Replies already written before this page connected are not news.
+      # An empty stream starts from `0-0` rather than `0`: the browser echoes
+      # it back as `Last-Event-ID`, and only a full stream id is accepted.
       #
       # @return [String]
-      def newest_reply = @store.xrevrange(@keys.replies, count: 1).first&.id || "0"
+      def newest_reply = @store.xrevrange(@keys.replies, count: 1).first&.id || "0-0"
     end
   end
 end
