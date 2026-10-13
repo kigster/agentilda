@@ -39,6 +39,15 @@ eval "$(tilda completion zsh)"
 eval "$(alock completion zsh)"
 ```
 
+To give your coding agents the bundled `tilda` skills (how the factory works, and how to spec, run, inspect and sync plans), copy them into the shared skill store:
+
+```bash
+tilda skills install          # copies skills/* into ~/.agents/skills; -h lists them
+tilda skills install -n       # what it would install, keep or replace
+```
+
+It copies rather than links, so re-run it with `--overwrite` after upgrading the gem.
+
 ![help-screen](./.img/help-screen.avif)
 
 ### What it compiles
@@ -57,22 +66,39 @@ Put it in `.envrc` if you hit it more than once.
 
 ## Quick start
 
-Run these from the root of your project:
+Run these anywhere inside your project:
 
 ```bash
+tilda init                  # writes .tilda.yml and creates .plans/; asks on a terminal, -y asks nothing
 tilda create tax rule dsl   # creates .plans/000.00-⚪️ → tax-rule-dsl/spec.md and opens it
                             # finish the brief in spec.md, then save it
-tilda run                   # dry run: shows which agent would take which plan
-tilda run --commit          # runs the agents until no plan changes state
-
-# alternatively
-export AGENTILDA_AUTOCOMMIT=true 
-tilda run 001.00 
+tilda run -n                # dry run: shows which agent would take which plan
+tilda run                   # runs the agents until no plan changes state
 
 tilda list-plans            # every plan, its state and its pull requests
 ```
 
 The agents stop at an approved pull request. Merging it is up to you.
+
+### Project settings: `.tilda.yml`
+
+Every command that reads or writes plans first finds the project root and works from there, so it does not matter which subdirectory you type it in. The root is the nearest directory above you holding `.tilda.yml` or `.plans/`; failing that, the nearest holding `.git`. Your home directory counts only if it holds `.tilda.yml`, so a dotfiles repository there cannot capture every project under it. When the root is not where you are, one line on STDERR says so (`-q` silences it); when there is none, the command exits 66. `-D` and `PLANS_DIR` resolve against the root. `version`, `states`, `docs`, `agents`, `describe`, `completion`, `eval` and `skills` need no project and skip the search.
+
+`tilda init` writes `.tilda.yml` at the nearest `.git` (else the current directory) and creates `.plans/`. It takes `--project`, `--lane`, `--[no-]frontend` and `--jobs`, asks on a terminal for whatever no flag gave, and confirms before writing. `-y` asks nothing, `-n` prints the file instead, and an existing file is kept unless `--overwrite`.
+
+```yaml
+project: Equilibris App   # heading for INDEX.md; default: the root's directory name
+lane: full                # default lane for `tilda create`: full | plan | quick
+frontend: false           # a spec's `frontend:` when spec.md says nothing; omit to let each plan decide
+jobs: 4                   # how many plans `tilda run` works on at once
+commands:                 # option defaults for any command, by the name you type it as
+  run:
+    timeout: 1800
+  resync prs:
+    adopt: false
+```
+
+A typed flag beats the plan's `spec.md` frontmatter, which beats `.tilda.yml`, which beats the built-in default. `jobs`, `lane` and `project` are the same settings as `commands.run.jobs`, `commands.create.lane` and `commands.index.project`; set either spelling, not both. An unknown key, a bad value, or an option the command does not take is an error naming the file (exit 65): a setting silently ignored is a timeout that stops applying with no signal. `dry_run` cannot be a default. `~/.local/config/agentilda.json` is no longer read; move its `run` section under `commands:`.
 
 ## How it works
 
@@ -198,8 +224,8 @@ Run `tilda agents list` for the same table, or `tilda describe <agent>` to read 
 The loop never assigns a blocked plan (⭕️ or 🅱️) to an agent. Write your answers into the plan's `blocked.md`, then:
 
 ```bash
-tilda unblock 003            # what is 003 still waiting on?
-tilda unblock 003 --commit   # fold the answered questions into spec.md and plan.md
+tilda unblock 003 -n         # what is 003 still waiting on?
+tilda unblock 003            # fold the answered questions into spec.md and plan.md
 ```
 
 Partial answers are fine. The plan stays blocked until the last question is answered.
@@ -207,6 +233,7 @@ Partial answers are fine. The plan stays blocked until the last question is answ
 ## Commands
 
 ```bash
+tilda init                             # .tilda.yml and .plans/ at the project root
 tilda create tax rule dsl              # a new plan: 003.00-⚪️ → tax-rule-dsl
 tilda create --lane quick split big migration  # one agent, straight to a pull request
 tilda create --from notes/dsl.md       # a new plan named by the file's frontmatter title
@@ -215,33 +242,34 @@ tilda list-plans                       # every plan, its state and its pull requ
 tilda index                            # write .plans/INDEX.md
 tilda states                           # the state machine, as a diagram
 tilda docs -o docs/WORKFLOW.md         # regenerate the conventions from the code
-tilda run --commit --plan 003          # run the agents on specific plans
-tilda unblock 003 --commit             # fold answered blocks back in
+tilda run --plan 003                   # run the agents on specific plans
+tilda unblock 003                      # fold answered blocks back in
 tilda worktree 003                     # create and seed a worktree for one plan
 tilda resync dirs                      # rename folders whose emoji their contents contradict
 tilda resync prs                       # add missing [NNN.MM] prefixes to pull request titles
 tilda linear import TAX -p 'Tax DSL'   # mirror the plans into Linear
+tilda skills install                   # copy the bundled skills into ~/.agents/skills
 ```
 
 > [!IMPORTANT]
-> **Every command that writes is a dry run until you add `--commit`.** Read what it would do first. Set `AGENTILDA_AUTOCOMMIT=true` to have every command behave as if `--commit` were passed.
+> **Every command does the work it is named for.** Add `-n` / `--dry-run` to `run`, `unblock`, `resync dirs`, `resync prs` or `linear import` to see what it would do first, with nothing changed.
 
 ## Running the agents
 
 ```bash
-tilda run                                  # dry run: who would take what
-tilda run --commit                         # the whole tree, one worktree per plan, in parallel
-tilda run --commit -j 4                    # at most four agents at once
-tilda run --commit --plan 003,005.01       # only these plans
-tilda run --commit --agent yoda-writer --prompt "Rework the risks section first"
-tilda run --commit --skip hansolo-reviewer # everyone but the reviewer; its plans wait
-tilda run --commit --model opus            # one model for every agent
-tilda run --commit --user-config           # agents load your personal plugins and skills too
-tilda run --commit --timeout 600           # at most ten minutes per agent
-tilda run --commit --scroll-height 5       # each agent's last five statuses under its row
-tilda run --commit --agent luke-backend --prompt steer.md  # a short --prompt naming a file is read
-tilda run --commit --rounds 1              # at most one round per agent per plan
-tilda run --commit --max-tokens 200000     # token budget per agent invocation
+tilda run -n                               # dry run: who would take what
+tilda run                                  # the whole tree, one worktree per plan, in parallel
+tilda run -j 4                             # at most four agents at once
+tilda run --plan 003,005.01                # only these plans
+tilda run --agent yoda-writer --prompt "Rework the risks section first"
+tilda run --skip hansolo-reviewer          # everyone but the reviewer; its plans wait
+tilda run --model opus                     # one model for every agent
+tilda run --user-config                    # agents load your personal plugins and skills too
+tilda run --timeout 600                    # at most ten minutes per agent
+tilda run --scroll-height 5                # each agent's last five statuses under its row
+tilda run --agent luke-backend --prompt steer.md  # a short --prompt naming a file is read
+tilda run --rounds 1                       # at most one round per agent per plan
+tilda run --max-tokens 200000              # token budget per agent invocation
 tilda run --isolation shared               # one checkout, one agent at a time, no git needed
 ```
 
@@ -273,17 +301,11 @@ Flags can only tighten what an agent declares, never loosen it. Each agent is to
 
 As its time runs out, the agent is warned at 10, 5 and 1 minute left, then asked to stop. If it is still running 60 seconds after that, it is killed. A token budget works the same way: the agent is told the number, and the tool aborts it once it goes over.
 
-Defaults for `run` can live in `~/.local/config/agentilda.json`:
-
-```json
-{ "run": { "timeout": 1800, "jobs": 4 } }
-```
-
-A typed flag beats the file, and the file beats the built-in default. The file accepts `timeout`, `jobs`, `rounds`, `log` and `max_tokens`. It never accepts `commit`.
+Defaults for `run` live in the project's `.tilda.yml`, under `jobs` and `commands.run` (see [Project settings](#project-settings-tildayml)). A typed flag beats the file, and the file beats the built-in default.
 
 ### The dashboard, and the keys during a run
 
-On a terminal, every command that runs agents draws the same ratatui dashboard and listens for the same keys: `run --commit`, `unblock --commit` and `create`. A cyan status bar runs the full width at the top and another at the bottom, and each running agent is one table row — plan, agent, file, elapsed and remaining — with its latest statuses printed under it, newest first. `run --scroll-height N` (`-s N`) keeps the last N of them; the default is three. Off a terminal (a pipe, a dry run, cron) there is no screen, and progress goes to the log instead.
+On a terminal, every command that runs agents draws the same ratatui dashboard and listens for the same keys: `run`, `unblock` and `create`. A cyan status bar runs the full width at the top and another at the bottom, and each running agent is one table row — plan, agent, file, elapsed and remaining — with its latest statuses printed under it, newest first. `run --scroll-height N` (`-s N`) keeps the last N of them; the default is three. Off a terminal (a pipe, a dry run, cron) there is no screen, and progress goes to the log instead.
 
 | Key      | What it does                                                                   |
 | :------- | :----------------------------------------------------------------------------- |
@@ -326,12 +348,12 @@ Suppose an agent stops without signing, because it crashed, timed out or was kil
 ## GitHub and Linear
 
 - **`resync dirs`** renames folders whose emoji their contents contradict. For example, a ⚪️ with a `plan.md` becomes ⭐️. It is safe to run repeatedly.
-- **`resync prs`** adds the `[NNN.MM]` prefix to pull request titles. It works from the branch name first, then from the diff. It reports anything ambiguous and never changes it, even with `--commit`. It needs `gh`.
-- **`linear import TEAM`** creates one Linear issue per plan and one child issue per work unit. It only goes one way: nothing edited in Linear comes back. It uses `LINEAR_API_KEY`, or with `--format json` it hands the same data to the Linear MCP server.
+- **`resync prs`** adds the `[NNN.MM]` prefix to pull request titles. It works from the branch name first, then from the diff. It reports anything ambiguous and never changes it. It needs `gh`.
+- **`linear import TEAM`** works out one Linear issue per plan and one child issue per work unit, and lists what would be created or updated. It only goes one way: nothing edited in Linear comes back. `--format json` hands the same data to the Linear MCP server, which applies it. `--update-unchanged` includes plans that have not changed since the last import.
 
 ## From Claude Code
 
-The `/plan-create`, `/plan-run`, `/plan-status` and other `/plan-*` slash commands wrap this same binary. They also add checks, such as confirming the scope and `--commit` before a run. They ship with [agentilda-ai-setup](https://github.com/kigster/agentilda-ai-setup). Use them inside a Claude Code session, and the binary everywhere else.
+The `/plan-create`, `/plan-run`, `/plan-status` and other `/plan-*` slash commands wrap this same binary. They also add checks, such as previewing the scope with `-n` before a run. They ship with [agentilda-ai-setup](https://github.com/kigster/agentilda-ai-setup). Use them inside a Claude Code session, and the binary everywhere else.
 
 ## Development
 

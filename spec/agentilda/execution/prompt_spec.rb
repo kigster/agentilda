@@ -84,8 +84,22 @@ RSpec.describe Agentilda::Execution::Prompt, :tree do
     expect(text).not_to include("Completion criteria")
   end
 
-  it "adds no requirements section when the spec has none" do
-    expect(text).not_to include("Implementation requirements")
+  # r2d2-mechanic builds, so it carries the standing requirement even when
+  # the spec states none; /repo names no justfile or Gemfile.
+  it "requires the project's tests and linters to pass, though the spec says nothing" do
+    expect(text).to include("Implementation requirements", "every test suite and linter the project defines passes")
+  end
+
+  context "when the agent writes documents, not code" do
+    let(:agent) { Agentilda::Agents.find("leah-researcher") }
+    let(:plan) do
+      plans { |t| t.plan "001.00", :new, "task", files: { "spec.md" => spec_body } }
+      Agentilda::Plans::Tree.new(dir: plans_root).subjects.first
+    end
+
+    it "adds no requirements section when the spec has none" do
+      expect(text).not_to include("Implementation requirements")
+    end
   end
 
   it "adds no suggestions section when the spec has none" do

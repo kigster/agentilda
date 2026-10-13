@@ -8,21 +8,18 @@ module Agentilda
       class Dirs < Base
         desc "Rename plan folders so the name matches the contents and the NNN.MM form"
 
-        option :commit,
-          type:    :boolean,
-          default: false,
-          desc:    "Actually rename the folders (default: dry run)"
+        dry_run_option "Rename nothing; print what would be renamed"
 
         example [
-          "                # show what would be renamed",
-          "--commit        # do it"
+          "-n              # show what would be renamed",
+          "                # do it"
         ]
 
         # @param options [Hash]
         # @return [void]
         def call(**options)
           changes = Agentilda::Lifecycle.resync_dirs(tree: tree_for(options))
-                                        .call(commit: commit?(options))
+                                        .call(commit: !dry_run?(options))
 
           if changes.empty?
             success("Every folder is already named NNN.MM-<emoji> → <slug> and the emoji matches.") unless quiet?(options)
@@ -39,10 +36,10 @@ module Agentilda
 
           return if quiet?(options)
 
-          if commit?(options)
-            success("Renamed #{changes.size} folder#{"s" unless changes.size == 1}.")
-          else
+          if dry_run?(options)
             dry_run_footer(changes.size, "rename#{"s" unless changes.size == 1}")
+          else
+            success("Renamed #{changes.size} folder#{"s" unless changes.size == 1}.")
           end
         end
       end

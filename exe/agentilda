@@ -3,7 +3,7 @@
 
 # agentilda — spec → plan → build.
 #
-# Anything that writes to the disk or to GitHub is a dry run until you pass --commit.
+# Every command does the work it is named for; -n / --dry-run previews it.
 #
 # © 2026 Konstantin Gredeskoul
 

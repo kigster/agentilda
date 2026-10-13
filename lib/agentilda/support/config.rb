@@ -1,44 +1,199 @@
 # frozen_string_literal: true
 
-require "json"
+require "yaml"
 
 module Agentilda
-  # Default option overrides, read from `~/.local/config/agentilda.json`.
+  # A project's `.tilda.yml`, at its root:
   #
-  # The file is keyed by command, so it can grow without every command
-  # seeing every key:
+  #   project: Equilibris App   # heading for INDEX.md; default: the root's name
+  #   lane: full                # default lane for `tilda create`
+  #   frontend: false           # a spec's `frontend:` when spec.md omits it
+  #   jobs: 4                   # how many plans `tilda run` works on at once
+  #   commands:                 # per-command option defaults
+  #     run:
+  #       timeout: 1800
   #
-  #   {
-  #     "run": { "timeout": 1800, "jobs": 4 }
-  #   }
+  # Precedence, loudest first: a flag typed on the command line, the plan's
+  # spec.md frontmatter, this file, the built-in default. The file supplies
+  # defaults and nothing else.
   #
-  # Precedence is: an option passed on the command line, then this file,
-  # then the built-in default. The file supplies *defaults*, never
-  # mandates — nothing here can force `--commit`, which stays a flag a
-  # person types.
+  # `jobs`, `lane` and `project` are each one command's option said once for
+  # the whole project, so each has a second spelling under `commands:`.
+  # Writing both is an error rather than a tie-break: two answers to one
+  # question is a file somebody will edit in the wrong place.
   #
-  # An unreadable file is an error, not a shrug: a config silently ignored
-  # is how a timeout somebody set stops applying with no signal anywhere.
+  # Anything unknown is an error naming the file, never a shrug: a config
+  # silently ignored is a timeout somebody set that stops applying with no
+  # signal anywhere.
+  #
+  # @!attribute [r] path
+  #   @return [String, nil] the file, nil when the project has none
+  # @!attribute [r] project
+  #   @return [String, nil]
+  # @!attribute [r] lane
+  #   @return [Symbol, nil] one of {Plans::Spec::LANES}
+  # @!attribute [r] frontend
+  #   @return [Boolean, nil] nil when each plan decides
+  # @!attribute [r] jobs
+  #   @return [Integer, nil]
+  # @!attribute [r] commands
+  #   @return [Hash{String => Hash{Symbol => Object}}] by command name, as
+  #     typed: "run", "resync dirs"
+  Config = Data.define(:path, :project, :lane, :frontend, :jobs, :commands) do
+    def initialize(path: nil, project: nil, lane: nil, frontend: nil, jobs: nil, commands: {})
+      super
+    end
+
+    # One command's option defaults, the top-level spelling folded in.
+    #
+    # @param command [String, Symbol] e.g. :run or "resync dirs"
+    # @return [Hash{Symbol => Object}]
+    def for(command)
+      name = command.to_s
+      folded = Config::SHORTHANDS.filter_map { |key, owner|
+        value = public_send(key)
+        [key, value.is_a?(Symbol) ? value.to_s : value] if owner == name && !value.nil?
+      }.to_h
+      commands.fetch(name, {}).merge(folded)
+    end
+
+    # @return [Boolean] whether the project has a file at all
+    def file? = !path.nil?
+
+    # The file `tilda init` writes: only what was set, in the order the
+    # keys are documented, so it reads like the example it came from.
+    #
+    # @return [String]
+    def to_yaml
+      settings = { "project" => project, "lane" => lane&.to_s, "frontend" => frontend, "jobs" => jobs }
+      settings["commands"] = commands.transform_values { it.transform_keys(&:to_s) } unless commands.empty?
+      YAML.dump(settings.compact).delete_prefix("---\n")
+    end
+  end
+
   class Config
-    PATH = File.join(Dir.home, ".local", "config", "agentilda.json")
+    # The file, at the project root.
+    FILE = Project::FILE
 
-    # @param command [Symbol, String] the command whose section to read
-    # @param path [String] the config file
-    # @return [Hash{Symbol => Object}] that command's overrides, {} when the
-    #   file or the section is absent
-    # @raise [Agentilda::Error] when the file exists and cannot be used
-    def self.for(command, path: PATH)
-      return {} unless File.file?(path)
+    # Every key the top level may hold.
+    KEYS = %w[project lane frontend jobs commands].freeze
 
-      data = JSON.parse(File.read(path))
-      raise Error, "#{path}: expected a JSON object keyed by command" unless data.is_a?(Hash)
+    # Top-level keys that are one command's option, by the command that takes it.
+    SHORTHANDS = { project: "index", lane: "create", jobs: "run" }.freeze
 
-      section = data.fetch(command.to_s, {})
-      raise Error, "#{path}: \"#{command}\" must be a JSON object" unless section.is_a?(Hash)
+    class << self
+      # @param root [String] the project root
+      # @return [Agentilda::Config] empty when the root holds no file
+      # @raise [Agentilda::Error] when the file exists and cannot be used
+      def load(root)
+        path = File.join(root, FILE)
+        return new unless File.file?(path)
 
-      section.transform_keys(&:to_sym)
-    rescue JSON::ParserError => e
-      raise Error, "#{path} is not valid JSON: #{e.message.lines.first.to_s.strip}"
+        parse(File.read(path, encoding: "UTF-8"), path:)
+      end
+
+      # The project the process is working in. {CLI::Base} has already moved
+      # to the root, so that is where this looks; the file is reread only
+      # when it changes, because routing asks for it on every tick.
+      #
+      # @return [Agentilda::Config]
+      def current
+        root = Project.root || Dir.pwd
+        path = File.join(root, FILE)
+        key = [path, File.file?(path) && File.mtime(path)]
+        return @current.last if @current&.first == key
+
+        load(root).tap { |config| @current = [key, config] }
+      end
+
+      # @param text [String] the whole file
+      # @param path [String] for every error message
+      # @return [Agentilda::Config]
+      def parse(text, path:)
+        data = YAML.safe_load(text) || {}
+        fail_with(path, "expected a mapping of settings at the top") unless data.is_a?(Hash)
+
+        settings = data.transform_keys(&:to_s)
+        unknown = settings.keys - KEYS
+        unless unknown.empty?
+          fail_with(path,
+            "unknown key#{"s" unless unknown.size == 1} #{unknown.join(", ")}; " \
+            "known: #{KEYS.join(", ")}")
+        end
+
+        config = new(path:,
+          project:  project(settings, path),
+          lane:     lane(settings, path),
+          frontend: frontend(settings, path),
+          jobs:     jobs(settings, path),
+          commands: commands(settings["commands"], path))
+        conflicts!(config, path)
+        config
+      rescue Psych::Exception => e
+        fail_with(path, "is not valid YAML (#{e.message.lines.first.to_s.strip})")
+      end
+
+      private
+
+      # @return [void] never returns
+      def fail_with(path, message) = raise(Error, "#{path}: #{message}")
+
+      # @return [String, nil]
+      def project(settings, path)
+        value = settings["project"]
+        return nil if value.nil?
+        return value.strip if value.is_a?(String) && !value.strip.empty?
+
+        fail_with(path, "project: must be a non-empty name, not #{value.inspect}")
+      end
+
+      # @return [Symbol, nil]
+      def lane(settings, path)
+        return nil unless settings.key?("lane")
+
+        value = settings["lane"].to_s.strip.downcase.to_sym
+        return value if Plans::Spec::LANES.include?(value)
+
+        fail_with(path, "lane: #{settings["lane"].inspect} is not one of #{Plans::Spec::LANES.join(", ")}")
+      end
+
+      # @return [Boolean, nil]
+      def frontend(settings, path)
+        value = settings["frontend"]
+        return value if [true, false, nil].include?(value)
+
+        fail_with(path, "frontend: #{value.inspect} is not true or false")
+      end
+
+      # @return [Integer, nil]
+      def jobs(settings, path)
+        value = settings["jobs"]
+        return value if value.nil? || (value.is_a?(Integer) && value.positive?)
+
+        fail_with(path, "jobs: #{value.inspect} is not a whole number above zero")
+      end
+
+      # @return [Hash{String => Hash{Symbol => Object}}]
+      def commands(value, path)
+        return {} if value.nil?
+
+        fail_with(path, "commands: must be a mapping of command name to its options") unless value.is_a?(Hash)
+
+        value.to_h do |name, options|
+          fail_with(path, "commands.#{name}: must be a mapping of option to value") unless options.is_a?(Hash)
+
+          [name.to_s.strip, options.transform_keys { it.to_s.tr("-", "_").to_sym }]
+        end
+      end
+
+      # @return [void]
+      def conflicts!(config, path)
+        SHORTHANDS.each do |key, owner|
+          next if config.public_send(key).nil? || !config.commands.fetch(owner, {}).key?(key)
+
+          fail_with(path, "#{key} and commands.#{owner}.#{key} are the same setting; keep one")
+        end
+      end
     end
   end
 end

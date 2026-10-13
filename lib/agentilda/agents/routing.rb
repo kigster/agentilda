@@ -24,6 +24,7 @@ module Agentilda
       # @return [Boolean]
       def allows?(agent, subject, spec = Plans::Spec.for(subject))
         return false unless agent.serves?(spec.lane)
+        return false unless reviewable?(agent, subject)
 
         switch = toggled(agent, spec)
         return switch unless switch.nil?
@@ -43,22 +44,40 @@ module Agentilda
       # @return [Array<Agentilda::Agents::Agent>]
       def filter(agents, subject)
         spec = Plans::Spec.for(subject)
-        routed = agents.select { |agent| agent.serves?(spec.lane) && toggled(agent, spec) != false }
+        routed = agents.select do |agent|
+          agent.serves?(spec.lane) && toggled(agent, spec) != false && reviewable?(agent, subject)
+        end
         return routed if routed.size <= 1
 
         routed.select { |agent| toggled(agent, spec) || agent.needs.all? { |file| units?(subject, file) } }
       end
 
       # What the spec's switch for this agent says: true forces it, false
-      # forbids it, nil leaves the decision to {Agent#needs}.
+      # forbids it, nil leaves the decision to {Agent#needs}. A spec.md that
+      # says nothing takes the project's answer from `.tilda.yml`, so a
+      # command-line tool can say once that no plan of it has a front end.
       #
+      # @param config [Agentilda::Config] the project's settings
       # @return [Boolean, nil]
-      def toggled(agent, spec)
+      def toggled(agent, spec, config = Agentilda::Config.current)
         return nil if agent.toggle.nil?
         return nil unless spec.respond_to?(agent.toggle)
 
-        spec.public_send(agent.toggle)
+        value = spec.public_send(agent.toggle)
+        return value unless value.nil?
+
+        config.public_send(agent.toggle) if config.respond_to?(agent.toggle)
       end
+
+      # A reviewer reviews a pull request, through `gh pr diff`. A plan that
+      # reached 🟢 with none open (a shared-tree run, or --no-git-push) would
+      # hand it nothing to read, so the plan waits at 🟢 until one exists;
+      # `resync prs` records one a human opened.
+      #
+      # @param agent [Agentilda::Agents::Agent]
+      # @param subject [Agentilda::Plans::Subject]
+      # @return [Boolean]
+      def reviewable?(agent, subject) = agent.phase.to_s != "review" || subject.pull_requests.any?(&:open?)
 
       # @param subject [Agentilda::Plans::Subject]
       # @param file [String]

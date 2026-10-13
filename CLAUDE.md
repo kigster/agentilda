@@ -108,7 +108,9 @@ lib/agentilda/
   vcs/                   Agentilda::Vcs — worktree.rb, publisher.rb (push, open the PR), github.rb (the gh seam)
   presentation/          Agentilda::Presentation — dashboard, console, keyboard, screen/ratatui,
                          documentation.rb (`agentilda docs`), diagram.rb (`agentilda states`), reporter.rb, viewer.rb
-  support/               collapsed by Zeitwerk, so these stay Agentilda::UI, ::Config, ::Markdown, ::Frontmatter
+  support/               collapsed by Zeitwerk, so these stay Agentilda::UI, ::Markdown, ::Frontmatter,
+                         ::Project (the root search) and ::Config (.tilda.yml)
+  skills/                Agentilda::Skills — the bundled skills/*/SKILL.md, and the installer that copies them
   linear/                one-way export of .plans to Linear projects and issues
   evals/                 Agentilda::Evals — per-agent cases (evals/cases/<agent>/<id>.yml), deterministic
                          checks per depth, offline scoring of recordings, --live runs in a temp repo
@@ -153,9 +155,10 @@ Raw NDJSON traces land in `Dir.tmpdir/agentilda-traces` on purpose, outside the 
 ## Conventions in the code
 
 - STDOUT carries the deliverable, STDERR carries progress. `UI` draws every box on STDERR so tables stay pipeable, and `Reporter#render`, `Roster#list`, `Tally#render` and friends return strings while printing nothing.
-- Anything that writes to disk, GitHub or Linear is a dry run until `--commit`.
+- A command does the work it is named for; anything that writes to disk, GitHub or Linear previews with `-n` / `--dry-run`.
 - `Data.define` for value objects, everywhere. Endless method definitions (`def open? = state.match?(...)`) are idiomatic here.
 - YARD on public methods, with `@param` and `@return`. Comments explain why, usually by naming the specific failure the code prevents. Match that density; it is the house style, not decoration.
+- Project commands find the root (`Agentilda::Project.root`) and `chdir` there before `call` runs; a command that needs no project says `standalone!`. `.tilda.yml` reaches a command through `Base.default_params`, so dry-cli's own merge keeps a typed flag above the file.
 - `GitHub` and `Linear::API` are seams. The suite injects doubles into both and never reaches the network.
 - Specs build real `.plans` trees in temp directories through `PlansFixture` and the `:tree` tag. Do not mock the filesystem. Faking it would test the fake.
 - `spec_helper.rb` forces `NO_COLOR=1` so assertions test content on every machine. Cover the colored path deliberately, by stubbing `UI.color?`.

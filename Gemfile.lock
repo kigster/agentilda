@@ -17,6 +17,7 @@ PATH
       tty-box
       tty-command
       tty-cursor
+      tty-prompt
       tty-screen
       unicode-display_width
       zeitwerk

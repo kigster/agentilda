@@ -11,10 +11,7 @@ module Agentilda
         option :project,
           aliases: ["-p", "--project-url", "--project-id"],
           desc:    "The project to file everything under: its URL, its name, or its id"
-        option :commit,
-          type:    :boolean,
-          default: false,
-          desc:    "Actually create and update in Linear (default: dry run)"
+        dry_run_option "Send nothing to Linear; print what would be created and updated"
         option :format,
           default: "text",
           values:  %w[text json],
@@ -24,15 +21,15 @@ module Agentilda
           desc:    "Skip plans numbered below this, e.g. 010.00"
         option :status,
           desc: "Only plans in these states: a comma-separated list of status keys"
-        option :force,
+        option :update_unchanged,
           type:    :boolean,
           default: false,
           desc:    "Update everything, whether the plan has changed or not"
 
         example [
-          "TAX -p 'US Tax Law: Self Contained Ruby Gem'   # show what would be created",
+          "TAX -p 'US Tax Law: Self Contained Ruby Gem'   # list what would be created",
           "TAX -p https://linear.app/acme/project/…       # a URL works too",
-          "TAX -p 'Ruby Gem' --commit                     # do it, using LINEAR_API_KEY",
+          "TAX -p 'Ruby Gem' -n                           # preview, sending nothing",
           "TAX -p 'Ruby Gem' --format json                # hand it to the MCP transport instead",
           "TAX -p 'Ruby Gem' --since 010.00               # only the recent plans",
           "TAX -p 'Ruby Gem' --status building,in_review"
@@ -97,7 +94,7 @@ module Agentilda
             project:,
             since: options[:since],
             statuses: statuses(options),
-            force: options.fetch(:force, false))
+            update_unchanged: options.fetch(:update_unchanged, false))
         end
 
         # @param options [Hash]
@@ -120,7 +117,13 @@ module Agentilda
 
           import.pending.each { |action| say(line(action)) }
           report_unplaced(import)
-          dry_run_footer(import.pending.size, "Linear change#{"s" unless import.pending.size == 1}")
+          what = "Linear change#{"s" unless import.pending.size == 1}"
+          return dry_run_footer(import.pending.size, what) if dry_run?(options)
+
+          # There is no push of its own here yet: the MCP transport is what
+          # applies these. Saying so beats implying something was sent.
+          warn("#{import.pending.size} #{what} pending — nothing was sent.\n" \
+               "This command does not write to Linear itself: pipe --format json to the Linear MCP tools.")
         end
 
         # @param action [Agentilda::Linear::Action]

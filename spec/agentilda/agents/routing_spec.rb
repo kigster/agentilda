@@ -35,4 +35,48 @@ RSpec.describe Agentilda::Agents::Routing, :tree do
     plan_with("spec.md" => "---\nfrontend: false\n---\n#{spec_body}")
     expect(described_class.allows?(agents.find("rey-frontend"), subject_plan)).to be(false)
   end
+
+  # The project says once what most plans would otherwise each repeat.
+  describe "the project's frontend: in .tilda.yml" do
+    let(:frontend_units) { { "plan-frontend.md" => "# FE\n\n## F1\n" } }
+
+    before do
+      root = File.dirname(plans_root)
+      File.write(File.join(root, ".tilda.yml"), "frontend: false\n")
+      Dir.chdir(root)
+    end
+
+    it "keeps rey-frontend off a plan whose spec.md says nothing" do
+      plan_with(frontend_units)
+      expect(routed).to eq(%w[luke-backend])
+    end
+
+    it "yields to a spec.md that says otherwise" do
+      plan_with(frontend_units.merge("spec.md" => "---\nfrontend: true\n---\n#{spec_body}"))
+      expect(routed).to eq(%w[luke-backend rey-frontend])
+    end
+  end
+
+  # hansolo-reviewer reads the pull request; with none open there is
+  # nothing to review, so the plan waits at 🟢 for one.
+  describe "a plan ready for review" do
+    let(:ready) { Agentilda::Plans.status(:ready_for_review) }
+
+    def review_routed = described_class.filter(agents.for_status(ready), subject_plan).map(&:name)
+
+    it "goes to the reviewer once its pull request is open" do
+      plans { |t| t.plan "001.00", :ready_for_review, "work", files: { "spec.md" => spec_body }, prs: [t.open(7, "[001.00] Work")] }
+      expect(review_routed).to eq(%w[hansolo-reviewer])
+    end
+
+    it "waits, unassigned, while no pull request is open" do
+      plans { |t| t.plan "001.00", :ready_for_review, "work", files: { "spec.md" => spec_body } }
+      expect(review_routed).to be_empty
+    end
+
+    it "is not allowed to the reviewer with only a merged pull request" do
+      plans { |t| t.plan "001.00", :ready_for_review, "work", files: { "spec.md" => spec_body }, prs: [t.merged(7, "[001.00] Work")] }
+      expect(described_class.allows?(agents.find("hansolo-reviewer"), subject_plan)).to be(false)
+    end
+  end
 end

@@ -1,51 +1,28 @@
 # frozen_string_literal: true
 
 RSpec.describe Agentilda::CLI::Base do
-  describe "#commit?" do
-    subject { Class.new(described_class).new.send(:commit?, options) }
+  describe "#dry_run?" do
+    subject { Class.new(described_class).new.send(:dry_run?, options) }
 
     let(:options) { {} }
-    let(:autocommit) { nil }
 
-    around do |example|
-      autocommit.nil? ? ENV.delete("AGENTILDA_AUTOCOMMIT") : ENV["AGENTILDA_AUTOCOMMIT"] = autocommit
-      example.run
-    ensure
-      ENV.delete("AGENTILDA_AUTOCOMMIT")
-    end
-
-    context "without --commit" do
+    # A command does the work it is named for: no flag means do it.
+    context "without --dry-run" do
       it { is_expected.to be(false) }
     end
 
-    context "with --no-commit" do
-      let(:options) { { commit: false } }
-
-      it { is_expected.to be(false) }
-    end
-
-    context "with --commit" do
-      let(:options) { { commit: true } }
+    context "with --dry-run" do
+      let(:options) { { dry_run: true } }
 
       it { is_expected.to be(true) }
     end
+  end
 
-    # `--commit` on every command, for someone who never wants the dry run.
-    %w[true YES 1].each do |value|
-      context "with AGENTILDA_AUTOCOMMIT=#{value}" do
-        let(:autocommit) { value }
-        let(:options) { { commit: false } }
+  describe ".dry_run_option" do
+    subject(:option) { Agentilda::CLI::Run.options.find { |o| o.name == :dry_run } }
 
-        it { is_expected.to be(true) }
-      end
-    end
-
-    ["false", ""].each do |value|
-      context "with AGENTILDA_AUTOCOMMIT=#{value.inspect}" do
-        let(:autocommit) { value }
-
-        it { is_expected.to be(false) }
-      end
+    it "declares -n, off by default" do
+      expect([option.aliases, option.default]).to eq([["-n"], false])
     end
   end
 
@@ -96,6 +73,102 @@ RSpec.describe Agentilda::CLI::Base do
       let(:options) { { args: [] } }
 
       it { is_expected.to eq(0) }
+    end
+  end
+
+  # Typed three directories down, a command still works on the project's
+  # own .plans, and says where that is.
+  describe "entering the project" do
+    subject(:run) do
+      status = 0
+      original = $stderr
+      $stderr = err
+      Dir.chdir(from)
+      begin
+        command.new.call(**options)
+      rescue SystemExit => e
+        status = e.status
+      ensure
+        $stderr = original
+      end
+      status
+    end
+
+    let(:top) { File.realpath(Dir.mktmpdir("agentilda-root")) }
+    let(:err) { CapturedStream.new }
+    let(:seen) { [] }
+    let(:recorder) { seen }
+    let(:command) do
+      log = recorder
+      Class.new(described_class) { define_method(:call) { |**| log << Dir.pwd } }
+    end
+    let(:options) { { args: [] } }
+    let(:from) { File.join(top, "app", "lib") }
+
+    after { FileUtils.rm_rf(top) }
+
+    before { FileUtils.mkdir_p([from, File.join(top, "app", ".plans")]) }
+
+    it "moves to the root before the command runs" do
+      run
+
+      expect(seen).to eq([File.join(top, "app")])
+    end
+
+    it "names the root on STDERR" do
+      run
+
+      expect(strip_ansi(err.string)).to include("Project root: #{File.join(top, "app")}")
+    end
+
+    context "with -q" do
+      let(:options) { { args: [], quiet: true } }
+
+      it "moves without a word" do
+        run
+
+        expect([seen, err.string]).to eq([[File.join(top, "app")], ""])
+      end
+    end
+
+    context "when already at the root" do
+      let(:from) { File.join(top, "app") }
+
+      it "says nothing" do
+        run
+
+        expect(err.string).to eq("")
+      end
+    end
+
+    context "when nothing above is a project" do
+      let(:from) { File.join(top, "loose") }
+
+      before { FileUtils.mkdir_p(from) }
+
+      it { is_expected.to eq(66) }
+
+      it "points at tilda init" do
+        run
+
+        expect(unwrapped(strip_ansi(err.string))).to include("No project here", "tilda init")
+      end
+    end
+
+    context "with a command that needs no project" do
+      let(:command) do
+        log = recorder
+        Class.new(described_class) do
+          standalone!
+          define_method(:call) { |**| log << Dir.pwd }
+        end
+      end
+
+      it "stays where it was typed" do
+        run
+
+        expect(seen).to eq([from])
+      end
     end
   end
 end
