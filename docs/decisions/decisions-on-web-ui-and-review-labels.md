@@ -161,6 +161,15 @@ A sub-plan is an ordinary plan with its own number. Its frontmatter names its pa
 
 **Amended 2026-10-13: `tilda start` stays up.** The command now exists, as the factory running as a service: `run` with the control room required, idling instead of ending at a fixed point. A blocked plan (palpatine-planner's questions included) waits in Needs You, the answer from the page is drained, and the plan goes back to its agent, all without a restart. It opens the page at `#start` only when no plan is unfinished; otherwise on the board, and it starts agents on existing plans at once rather than waiting for a confirmation. It ends on its own once every plan in scope is ✅, 😎 or ❌, and on Ctrl-C or SIGTERM. Without Redis it refuses (exit 69); it has no `-n` and no `--no-web`. Stop All stops the agents and keeps the engine up. The idea dialog's split and confirmation (steps 2 to 4) are unchanged and still to come.
 
+**Amended again 2026-10-13: a connected engine never stops on its own** (settled by the author). Once the engine and the control room are connected, the engine runs until the web stops or the page sends Stop All, and for no other reason: not a fixed point, not every plan finished.
+
+- This holds for `tilda run` too, whenever its control room is up. Headless (`--no-web`, no Redis, `-n`), `run` still ends at a fixed point.
+- **Stop All ends the run**: the agents get the graceful stop, then the engine exits, and the control room it started goes with it. It no longer pauses. This reverses the pause from earlier the same day.
+- **The web going away ends the run** the same way. The engine asks the server every tick: `waitpid` for one it spawned, `/healthz` every 5 s for one it joined.
+- **A `tilda web` already serving on the port is joined**, not fought over. The run connects to it, never stops it, opens no second tab, and ends when it stops.
+- `tilda start` needs no plans. It makes `.plans/` (or `.tilda.yml`'s `commands: start: dir:`) when it is missing, and the page opens on New idea.
+- `tilda web` with no engine says so on the page and the terminal: "No engine is running for this project. Please use `tilda start`, or start an engine in another terminal by running `tilda run`."
+
 ### W20. `tilda init` ends in `tilda start`
 
 `tilda init` arrives in PR #53, where it writes `.tilda.yml` and creates `.plans/`. This decision extends it: it also checks that Redis answers, and installs the `agent-lock` gem when `alock` is missing or older than the version agentilda needs, so the two always arrive together (settled by the author, 2026-10-12). It then runs `tilda start`, so a new project goes straight from setup to the idea dialog. `--no-start` stops after setup, for scripts and CI.

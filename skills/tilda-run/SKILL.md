@@ -1,6 +1,6 @@
 ---
 name: tilda-run
-description: Start the tilda factory with `tilda start` (engine plus control room, up until every plan is finished, questions answered on the page), or run tilda's specialist agents to a fixed point with `tilda run` and clear blocked plans with `tilda unblock`. Use when the user wants to start, run, resume or finish the agents, build or ship a plan, or unblock a ⭕️ / 🅱️ plan.
+description: Start the tilda factory with `tilda start` (engine plus control room, up until Stop All, questions and new plans through the page), or run tilda's specialist agents to a fixed point with `tilda run` and clear blocked plans with `tilda unblock`. Use when the user wants to start, run, resume or finish the agents, build or ship a plan, or unblock a ⭕️ / 🅱️ plan.
 ---
 
 # tilda-run: drive the plans
@@ -17,8 +17,9 @@ tilda start --no-open    # print the URL only
 ```
 
 - It takes `run`'s flags except `-n` and `--no-web`. It needs Redis and refuses without it (exit 69).
-- Every human decision goes through the page: answers, hold, wrap up, stop, models, new plans. **Stop All** stops the agents and keeps the engine up; the next answer, added plan or resume starts agents again. The terminal is output only.
-- It ends on its own once every plan in scope is finished (✅ Approved & Merged, 😎 Deployed or ❌ Discarded), with exit 0. A project with no plans waits for the first. Ctrl-C or `kill -TERM` stop it early; agents get the graceful stop and the page goes down with it.
+- Every human decision goes through the page: answers, hold, wrap up, stop, models, new plans. **Stop All** stops the agents, the engine and the page. The terminal is output only.
+- It never ends on its own, finished plans included. It needs no plans, and makes `.plans/` when missing; the page opens on **New idea**. Stop All, Ctrl-C, `kill -TERM` or the page's server going away end it, with exit 0; agents get the graceful stop and the page goes down with it.
+- `tilda run` with its control room up behaves the same way: it stays until Stop All or the page goes. Headless (`--no-web`, no Redis, `-n`), it ends at a fixed point.
 - Start it in the background, give the user the URL, and leave the answering to them on the page. Steps 1 to 5 below are the scripted, headless alternative.
 
 `tilda run` loops in rounds. Each round hands every movable plan to the agent its state and lane call for and renames the folder when the agent finishes. When a builder lands a plan at 🟢 Ready for Review, `tilda` pushes its branch and opens the pull request, titled `[NNN.MM]`; `hansolo-reviewer` then reviews that pull request. It stops at a **fixed point**: a round in which no plan changed state. Your job is to start it, watch it, and turn what it stops on into questions for the human.

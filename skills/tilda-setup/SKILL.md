@@ -61,4 +61,4 @@ and offer `tilda-run` to start the agents.
 - [ ] `tilda status` lists the plan.
 - [ ] `tilda run -n --plan 000` names its first agent.
 - [ ] With Redis up, `tilda web --demo` opens the control room on a sample run (Ctrl-C to stop).
-- [ ] `tilda start` is running: the factory and its control room, up until every plan is finished. From here the user works on the page (see `tilda-run`).
+- [ ] `tilda start` is running: the factory and its control room, up until Stop All. From here the user works on the page (see `tilda-run`).
