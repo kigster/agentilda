@@ -54,6 +54,18 @@ module Agentilda
         def finished? = !status.nil?
       end
 
+      # What publishing did for one Completed build: the attempt with the
+      # pull request noted, the plan read again so the row the publisher
+      # recorded is in it, and whether the publisher refused.
+      #
+      # @!attribute [r] attempt
+      #   @return [Agentilda::Engine::Runner::Attempt]
+      # @!attribute [r] subject
+      #   @return [Agentilda::Plans::Subject]
+      # @!attribute [r] refused
+      #   @return [Boolean]
+      Published = Data.define(:attempt, :subject, :refused)
+
       # A blocked plan whose every question has an answer, being drained by
       # the agent that handles its state, on a thread of its own.
       Unblock = Struct.new(:ordinal, :thread, :outcome)
@@ -1054,7 +1066,7 @@ module Agentilda
         Plans::Ledger.append(File.join(subject.feature.path, agent.ledger.first), line)
       end
 
-      # A Completed entry: move the folder, publish if that made it reviewable,
+      # A Completed entry: publish if the move is to 🟢, then move the folder,
       # and honour the `next:` line.
       #
       # @return [Agentilda::Engine::Runner::Attempt]
@@ -1081,12 +1093,16 @@ module Agentilda
         return built_locally(attempt, ordinal) if local_only_review?(target, subject)
 
         if target
+          attempt = attempt.with(note: "#{base.note}#{" (#{entry.note})" if entry.note}")
+          published = publish_for_review(task, target, subject, attempt)
+          return unpublished(published, ordinal) if published.refused
+
+          attempt = published.attempt
+          subject = published.subject
           return attempt.with(ok: false, note: "ledger says Completed but #{Plans::STATUS_BY_KEY.fetch(target)} is not justified: #{Plans::STATUS_BY_KEY.fetch(target).violation(subject)}") unless subject.machine.may?(target)
 
           subject.machine.promote!(target)
-          attempt = attempt.with(to: target, note: "#{base.note}#{" (#{entry.note})" if entry.note}")
-          attempt = publish_if_reviewable(task, target, attempt)
-
+          attempt = attempt.with(to: target)
         end
 
         handoff = Plans::Ledger.handoff_after(reading, entry)
@@ -1142,19 +1158,50 @@ module Agentilda
         end
       end
 
-      # @return [Agentilda::Engine::Runner::Attempt]
-      def publish_if_reviewable(task, target, attempt)
-        return attempt unless target == :ready_for_review
+      # Push the build and open, or update, its pull request, before the
+      # folder is asked whether it may move to 🟢.
+      #
+      # The order is the whole point. 🟢 is justified by an open pull request
+      # recorded in `pull-requests.md`, and only the publisher records one.
+      # Promoting first and publishing after, as this once did, asked the
+      # invariant a question only the publish could answer: every first build
+      # under worktree isolation failed with "Ready for Review requires an open
+      # pull request; none are recorded", and no plan ever reached review.
+      #
+      # This runs in settle, after the executor's own boundary check has
+      # already compared HEAD against where the agent started. The commit and
+      # push are the harness's, so they cannot be mistaken for the agent's.
+      #
+      # @param task [Agentilda::Engine::Runner::Task]
+      # @param target [Symbol]
+      # @param subject [Agentilda::Plans::Subject] the plan, read fresh
+      # @param attempt [Agentilda::Engine::Runner::Attempt]
+      # @return [Agentilda::Engine::Dispatcher::Published]
+      def publish_for_review(task, target, subject, attempt)
+        unchanged = Published.new(attempt:, subject:, refused: false)
+        return unchanged unless target == :ready_for_review
 
-        subject = fresh(task) or return attempt
         publication = @runner.publish(task, subject)
-        if publication&.published?
-          attempt.with(note: "#{attempt.note}; opened #{publication.url}")
-        elsif publication&.refusal
-          attempt.with(note: "#{attempt.note}; publish refused: #{publication.refusal}")
+        if publication&.refusal
+          Published.new(attempt: attempt.with(ok: false, note: "#{attempt.note}; publish refused: #{publication.refusal}"), subject:, refused: true)
+        elsif publication&.published?
+          verb = publication.updated ? "pushed to" : "opened"
+          Published.new(attempt: attempt.with(note: "#{attempt.note}; #{verb} #{publication.url}"), subject: fresh(task) || subject, refused: false)
         else
-          attempt
+          unchanged
         end
+      end
+
+      # A refused publish leaves the plan where it was. Running the builder
+      # again would redo finished work to hit the same rejected push, so the
+      # plan is done for this run and the attempt says why.
+      #
+      # @param published [Agentilda::Engine::Dispatcher::Published]
+      # @param ordinal [String]
+      # @return [Agentilda::Engine::Runner::Attempt]
+      def unpublished(published, ordinal)
+        @finished_plans << ordinal
+        published.attempt
       end
 
       # A `next:` that names someone who handles the plan's new state is

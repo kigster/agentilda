@@ -1,9 +1,10 @@
 # frozen_string_literal: true
 
 RSpec.describe Agentilda::Vcs::Publisher, :tree do
-  subject(:publisher) { described_class.new(root: File.dirname(plans_root), command:, dry_run: false) }
+  subject(:publisher) { described_class.new(root: File.dirname(plans_root), command:, dry_run: false, github:) }
 
   let(:command) { instance_double(TTY::Command) }
+  let(:github) { instance_double(Agentilda::Vcs::GitHub) }
   let(:result) { instance_double(TTY::Command::Result, out: "https://github.com/example/repo/pull/7\n") }
 
   let!(:built) do
@@ -126,9 +127,74 @@ RSpec.describe Agentilda::Vcs::Publisher, :tree do
       end
     end
 
+    # A re-build after 🔴: the branch already carries the pull request the
+    # reviewer asked changes of, and a second `gh pr create` on it fails.
+    context "when the plan already has an open pull request" do
+      let!(:built) do
+        plans do |t|
+          t.plan "000.00", :rejected, "rebuilt", files: { "spec.md" => spec_body }, prs: [t.open(7, "[000.00](A) Rebuilt")]
+        end
+      end
+      let(:head) { checkout.branch }
+      let(:lookup_error) { nil }
+      let(:publication) { publisher.publish(checkout:, subject: plan) }
+
+      before do
+        lookup = allow(github).to receive(:pull_request).with("7")
+        lookup_error ? lookup.and_raise(Agentilda::Error, lookup_error) : lookup.and_return({ number: 7, branch: head })
+        publication
+      end
+
+      it "asks GitHub which branch the pull request is built from" do
+        expect(github).to have_received(:pull_request).with("7")
+      end
+
+      it "commits and pushes to the same branch and opens nothing" do
+        aggregate_failures do
+          expect(command).to have_received(:run).with("git", "commit", "-m", "Rebuilt", hash_including(:chdir))
+          expect(command).to have_received(:run).with("git", "push", "-u", "origin", checkout.branch, hash_including(:chdir))
+          expect(command).not_to have_received(:run).with("gh", any_args)
+        end
+      end
+
+      it "reports that pull request, marked as updated" do
+        expect(publication).to have_attributes(url: "https://github.com/example/repo/pull/7", title: "[000.00](A) Rebuilt", updated: true)
+      end
+
+      # An adopted or hand-opened pull request can come from any branch, and
+      # pushing the worktree branch would reach no pull request at all.
+      context "when that pull request is built from another branch" do
+        let(:head) { "someone/hand-made-branch" }
+
+        it "refuses, naming both branches" do
+          expect(publication).to have_attributes(
+            url:     nil,
+            updated: false,
+            refusal: a_string_including("publish refused", "someone/hand-made-branch", checkout.branch)
+          )
+        end
+
+        it "commits and pushes nothing" do
+          expect(command).not_to have_received(:run)
+        end
+      end
+
+      context "when GitHub cannot say which branch it is built from" do
+        let(:lookup_error) { "could not read pull request 7: offline" }
+
+        it "refuses with the reason" do
+          expect(publication.refusal).to include("publish refused", "offline")
+        end
+
+        it "commits and pushes nothing" do
+          expect(command).not_to have_received(:run)
+        end
+      end
+    end
+
     context "on a dry run" do
       subject(:publisher) do
-        described_class.new(root: File.dirname(plans_root), command:, dry_run: true)
+        described_class.new(root: File.dirname(plans_root), command:, dry_run: true, github:)
       end
 
       it "reports the title it would use and touches nothing" do

@@ -31,7 +31,12 @@ module Agentilda
       #   @return [String, nil] nil on a dry run or a refusal
       # @!attribute [r] refusal
       #   @return [String, nil]
-      Publication = Data.define(:ordinal, :branch, :title, :url, :refusal) do
+      # @!attribute [r] updated
+      #   @return [Boolean] whether the push went to a pull request the plan
+      #     already had open, rather than opening a new one
+      Publication = Data.define(:ordinal, :branch, :title, :url, :refusal, :updated) do
+        def initialize(updated: false, **rest) = super
+
         # @return [Boolean]
         def published? = !url.nil?
       end
@@ -43,21 +48,41 @@ module Agentilda
       # @param command [TTY::Command]
       # @param base [String] the branch pull requests target
       # @param dry_run [Boolean]
-      def initialize(root:, command: TTY::Command.new(printer: :null), base: "main", dry_run: true)
+      # @param github [Agentilda::Vcs::GitHub] asked which branch an open pull
+      #   request is built from
+      def initialize(root:, command: TTY::Command.new(printer: :null), base: "main", dry_run: true, github: GitHub.new)
         @root = root
         @command = command
+        @github = github
         @base = base
         @dry_run = dry_run
       end
 
-      # Push one plan's branch and open its pull request.
+      # Push one plan's branch and open its pull request, or, when the plan
+      # already has one open, push to it.
+      #
+      # A re-build after 🔴 Changes Requested is the second case. Its branch
+      # already carries the open pull request the reviewer asked changes of,
+      # and `gh pr create` on that branch fails ("a pull request for branch
+      # ... already exists") after the push has gone through, so the fixes
+      # reached the pull request and the run reported a refusal. One branch per
+      # plan means at most one open pull request per plan, so the open row in
+      # `pull-requests.md` is the one to push to.
+      #
+      # Only if that pull request is built from this checkout's branch, though.
+      # `pull-requests.md` does not record the head branch, and an adopted or
+      # hand-opened pull request can come from any branch at all; pushing the
+      # worktree branch then reaches no pull request while reporting one as
+      # updated. So the head is asked of GitHub first, and anything other than
+      # the checkout's own branch, or no answer, is a refusal.
       #
       # @param checkout [Agentilda::Vcs::Worktree::Checkout]
       # @param subject [Agentilda::Plans::Subject]
       # @param letter [String, nil] force a part letter; nil auto-assigns
       # @return [Agentilda::Vcs::Publisher::Publication]
       def publish(checkout:, subject:, letter: nil)
-        title = title_for(subject, letter)
+        open = subject.pull_requests.select(&:open?).last
+        title = open&.title || title_for(subject, letter)
 
         unless checkout.dirty?
           return refuse(subject, checkout, title, "nothing to publish — the worktree is unchanged")
@@ -65,11 +90,14 @@ module Agentilda
 
         return Publication.new(**base_fields(subject, checkout, title), url: nil, refusal: nil) if @dry_run
 
+        mismatch = open && head_mismatch(open, checkout)
+        return refuse(subject, checkout, title, mismatch) if mismatch
+
         commit(checkout, title)
         push(checkout)
-        url = create_pull_request(checkout, subject, title)
+        url = open ? open.url : create_pull_request(checkout, subject, title)
 
-        Publication.new(**base_fields(subject, checkout, title), url:, refusal: nil)
+        Publication.new(**base_fields(subject, checkout, title), url:, refusal: nil, updated: !open.nil?)
       rescue TTY::Command::ExitError => e
         refuse(subject, checkout, title, git_complaint(e))
       end
@@ -105,6 +133,22 @@ module Agentilda
       def auto_letter(subject) = LETTERS.fetch(subject.pull_requests.size, LETTERS.last)
 
       private
+
+      # Why the open pull request cannot receive this checkout's push, if it
+      # cannot.
+      #
+      # @param open [Agentilda::Plans::PullRequest]
+      # @param checkout [Agentilda::Vcs::Worktree::Checkout]
+      # @return [String, nil] nil when the pull request is built from the checkout's branch
+      def head_mismatch(open, checkout)
+        head = @github.pull_request(open.number || open.url).fetch(:branch)
+        return if head == checkout.branch
+
+        "publish refused — ##{open.number} is built from #{head.empty? ? "an unknown branch" : head}, " \
+          "not #{checkout.branch}, so a push would not reach it"
+      rescue Error => e
+        "publish refused — could not tell which branch ##{open.number} is built from: #{e.message}"
+      end
 
       # @return [Hash]
       def base_fields(subject, checkout, title)

@@ -652,6 +652,129 @@ RSpec.describe Agentilda::Engine::Dispatcher, :tree do
     end
   end
 
+  # A worktree run with a publisher: the run every real build takes. The
+  # publisher is a double, so nothing reaches the network; the checkout is a
+  # double, so no `git worktree add` runs.
+  describe "a build finished in a run that publishes" do
+    let(:checkout) do
+      instance_double(Agentilda::Vcs::Worktree::Checkout, branch: "kig/001.00-tic-tac-toe", path: plans_root, dirty?: true)
+    end
+    let(:worktree) { instance_double(Agentilda::Vcs::Worktree, checkout_for: checkout, root: File.dirname(plans_root)) }
+    let(:publisher) { instance_double(Agentilda::Vcs::Publisher) }
+    let(:url) { "https://github.com/example/repo/pull/12" }
+    let(:publication) do
+      Agentilda::Vcs::Publisher::Publication.new(ordinal: Agentilda::Plans::Ordinal.parse("001.00"),
+        branch: checkout.branch,
+        title: "[001.00](A) Tic Tac Toe",
+        url:,
+        refusal: nil)
+    end
+    let(:plan) { tree.reload.find(Agentilda::Plans::Ordinal.parse("001.00")) }
+    let(:files) do
+      { "spec.md" => "---\nlane: quick\n---\n#{spec_body}", "plan.md" => "# Plan\n\n## U1\n", "pull-requests.md" => "# Pull Requests\n" }
+    end
+    let!(:built) { plans { |t| t.plan "001.00", :building, "tic-tac-toe", files: } }
+    let(:roster) { agents.only("r2d2-mechanic") }
+    let(:attempts) do
+      Agentilda::Engine::Runner.new(tree:,
+        executor:,
+        agents: roster,
+        isolation: :worktree,
+        jobs: 1,
+        worktree:,
+        publisher:,
+        state:,
+        sleeper: ->(_) {}).call
+    end
+    let(:executor) do
+      executor_with do |agent, subject, round|
+        next "Completed" unless agent.name == "hansolo-reviewer"
+
+        Agentilda::Plans::Ledger.append(File.join(subject.feature.path, agent.ledger.first),
+          "> [#{stamp}] [ agent: #{agent.name}   status: Completed, round #{round} (approved) ]")
+        nil
+      end
+    end
+
+    before do
+      [calls, stamp]
+      allow(publisher).to receive(:publish).and_return(publication)
+    end
+
+    context "when a builder signs Completed on its first build" do
+      before { attempts }
+
+      it "publishes, records the pull request, and moves the folder to 🟢" do
+        aggregate_failures do
+          expect(publisher).to have_received(:publish).once
+          expect(plan.pull_requests.map(&:url)).to eq([url])
+          expect(plan.status.key).to eq(:ready_for_review)
+          expect(attempts.first).to have_attributes(ok: true, to: :ready_for_review)
+          expect(attempts.first.note).to include("opened #{url}")
+        end
+      end
+    end
+
+    context "when the reviewer follows in the same run" do
+      let(:roster) { agents.only("r2d2-mechanic", "hansolo-reviewer") }
+
+      before { attempts }
+
+      it "hands the 🟢 plan to hansolo, whose approval leaves it at 👀" do
+        aggregate_failures do
+          expect(attempts.map(&:agent)).to eq(%w[r2d2-mechanic hansolo-reviewer])
+          expect(plan.status.key).to eq(:in_review)
+        end
+      end
+    end
+
+    context "when publishing is refused" do
+      let(:publication) do
+        Agentilda::Vcs::Publisher::Publication.new(ordinal: Agentilda::Plans::Ordinal.parse("001.00"),
+          branch: checkout.branch,
+          title: "[001.00](A) Tic Tac Toe",
+          url: nil,
+          refusal: "push rejected")
+      end
+
+      before { attempts }
+
+      it "stays at 🟡, fails the attempt with the reason, and does not run the builder again" do
+        aggregate_failures do
+          expect(plan.status.key).to eq(:building)
+          expect(attempts.map(&:ok)).to eq([false])
+          expect(attempts.first.note).to include("push rejected")
+          expect(calls.size).to eq(1)
+        end
+      end
+    end
+
+    context "when a re-build after 🔴 finds its pull request already open" do
+      let!(:built) do
+        plans { |t| t.plan "001.00", :rejected, "tic-tac-toe", files: files.except("pull-requests.md"), prs: [t.open(12, "[001.00](A) Tic Tac Toe")] }
+      end
+      let(:publication) do
+        Agentilda::Vcs::Publisher::Publication.new(ordinal: Agentilda::Plans::Ordinal.parse("001.00"),
+          branch: checkout.branch,
+          title: "[001.00](A) Tic Tac Toe",
+          url:,
+          refusal: nil,
+          updated: true)
+      end
+
+      before { attempts }
+
+      it "pushes to that pull request and records no second one" do
+        aggregate_failures do
+          expect(publisher).to have_received(:publish).once
+          expect(plan.pull_requests.map(&:number)).to eq(["12"])
+          expect(plan.status.key).to eq(:ready_for_review)
+          expect(attempts.first.note).to include("pushed to #{url}")
+        end
+      end
+    end
+  end
+
   describe "the reviewer's verdicts" do
     let!(:built) do
       plans { |t|
