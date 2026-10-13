@@ -59,7 +59,7 @@ tilda init                  # writes .tilda.yml and creates .plans/; asks on a t
 tilda create tax rule dsl   # creates .plans/000.00-⚪️ → tax-rule-dsl/spec.md and opens it
                             # finish the brief in spec.md, then save it
 tilda run -n                # dry run: shows which agent would take which plan
-tilda start                 # the factory and its control room, up until every plan is finished
+tilda start                 # the factory and its control room, up until Stop All
 
 tilda list-plans            # every plan, its state and its pull requests
 ```
@@ -228,7 +228,7 @@ tilda list-plans                       # every plan, its state and its pull requ
 tilda index                            # write .plans/INDEX.md
 tilda states                           # the state machine, as a diagram
 tilda docs -o docs/WORKFLOW.md         # regenerate the conventions from the code
-tilda start                            # the factory as a service: agents plus the control room, until every plan is finished
+tilda start                            # the factory as a service: agents plus the control room, until Stop All
 tilda run --plan 003                   # run the agents on specific plans, until no plan changes state
 tilda unblock 003                      # fold answered blocks back in
 tilda worktree 003                     # create and seed a worktree for one plan
@@ -253,9 +253,9 @@ tilda start --rescan 10                    # look for new or hand-edited plans e
 
 `tilda start` is `tilda run` that does not stop at a fixed point. When a plan blocks, it idles, puts the questions in **Needs You** on the page, takes your answer from there, folds it in and hands the plan back to its agent, with no restart. Plans created on the page, by `tilda create` in another terminal, or edited by hand are picked up on the next rescan (every 5 s, or at once after anything you do on the page).
 
-Every decision goes through the page: answers, hold, wrap up and stop on an agent, model changes, new plans. **Stop All** stops the agents but keeps the engine and page up; the next answer, added plan or resume starts agents again. The terminal only prints the URL and the progress log.
+Every decision goes through the page: answers, hold, wrap up and stop on an agent, model changes, new plans. **Stop All** stops the agents, then the engine, then the page if `start` launched it; a `tilda web` it joined stays up and waits for the next engine. The terminal only prints the URL and the progress log.
 
-It ends on its own, with exit 0, once every plan in scope is finished: ✅ Approved & Merged, 😎 Deployed or ❌ Discarded. A project with no plans waits for the first. Ctrl-C or `SIGTERM` stops it early, with the same graceful stop as `run`. It takes `run`'s flags except `-n` and `--no-web`, and needs Redis: without it, it refuses (exit 69) rather than going headless.
+It never ends on its own, not even once every plan is finished: the next idea arrives through the page. It needs no plans to start, and makes `.plans/` (or the `dir:` that `.tilda.yml` names under `commands: start:`) when it is missing; the page then opens on **New idea**. Only **Stop All**, Ctrl-C, `SIGTERM` or the control room going away end it (a joined `tilda web` outlives it), each with the same graceful stop as `run`, and exit 0. It takes `run`'s flags except `-n` and `--no-web`, and needs Redis: without it, it refuses (exit 69) rather than going headless.
 
 ### `tilda run`: to a fixed point
 

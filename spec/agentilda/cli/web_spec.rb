@@ -50,6 +50,11 @@ RSpec.describe Agentilda::CLI::Web, :tree do
     expect(stderr).to include("Control room: http://127.0.0.1:4747", "Redis: memory:// as")
   end
 
+  it "says how to start an engine, since none publishes for this checkout" do
+    expect(unwrapped(stderr)).to include("No engine is running for this project. Please use `tilda start`, or start an engine " \
+                                         "in another terminal by running `tilda run`.")
+  end
+
   it "listens on the port asked for" do
     result
     expect(built[:server][:port]).to eq("4747")
@@ -92,6 +97,12 @@ RSpec.describe Agentilda::CLI::Web, :tree do
     before do
       allow(ENV).to receive(:[]).and_call_original
       allow(ENV).to receive(:[]).with("AGENTILDA_REDIS_URL").and_return("redis://:secret@run-host:6379/2")
+    end
+
+    it "leaves the engine hint out: the run's engine publishes a tick later" do
+      allow(ENV).to receive(:key?).and_call_original
+      allow(ENV).to receive(:key?).with("AGENTILDA_REDIS_URL").and_return(true)
+      expect(unwrapped(run[1])).not_to include("No engine is running")
     end
 
     it "connects to the run's Redis" do

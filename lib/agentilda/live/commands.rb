@@ -96,10 +96,6 @@ module Agentilda
       # @return [Proc] for {Engine::Dispatcher#before_tick}
       def to_proc = method(:call).to_proc
 
-      # @return [Boolean] whether a command is still at work, which keeps a
-      #   staying run from ending under it
-      def pending? = !@pending.empty?
-
       private
 
       # @return [void]
@@ -234,7 +230,7 @@ module Agentilda
                      "Answered by #{@node.user} on #{@clock.call.strftime("%Y-%m-%d")}\n#{marker(command)}\n")
         end
         @run_state.hold_question(question_id(subject, question), held: false)
-        dispatcher.unpause!
+        dispatcher.wake!
         nil
       end
 
@@ -282,7 +278,7 @@ module Agentilda
           command: command.id)
         dispatcher.resume(subject.feature.ordinal, agent)
         dispatcher.runner.add_plan(subject.feature.ordinal)
-        dispatcher.unpause!
+        dispatcher.wake!
         "#{agent} resumes on #{command.plan} at its next turn"
       end
 
@@ -324,20 +320,17 @@ module Agentilda
         nil
       end
 
-      # Under `tilda start` the engine and the page outlive the agents: they
-      # are stopped, nothing new starts until a person asks for work again,
-      # and the run idles. A plain `tilda run` ends, as q would end it.
+      # Stop All ends the run, under `tilda start` as under `tilda run`: the
+      # agents stop with their work written down, then the engine, then the
+      # control room if the engine started it. A `tilda web` the run joined
+      # stays up and goes back to waiting for an engine. It is one of the
+      # only two ways a run with a page ends; the other is the page going away.
       #
       # @return [String]
       def stop_all(_command, dispatcher)
-        if dispatcher.stay?
-          count = dispatcher.stop_all
-          return "stopping #{count} agent#{"s" unless count == 1} on #{@node.label}; the engine stays up, " \
-                 "and starts agents again at the next answer, plan or resume"
-        end
-
         Execution::Control.quit!
-        "stopping #{dispatcher.running.size} agent#{"s" unless dispatcher.running.size == 1} on #{@node.label}"
+        count = dispatcher.running.size
+        "stopping #{count} agent#{"s" unless count == 1} on #{@node.label}, then the engine and any control room it started"
       end
 
       # The model for the agent's next round on this plan (W24).
@@ -416,7 +409,7 @@ module Agentilda
 
         claim!(ordinal)
         dispatcher.runner.add_plan(ordinal)
-        dispatcher.unpause!
+        dispatcher.wake!
         nil
       end
 
@@ -469,7 +462,7 @@ module Agentilda
       def created(feature, dispatcher)
         claim!(feature.ordinal)
         dispatcher.runner.add_plan(feature.ordinal)
-        dispatcher.unpause!
+        dispatcher.wake!
         "created #{feature.ordinal} #{feature.slug}"
       end
 

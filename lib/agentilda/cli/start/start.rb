@@ -10,16 +10,17 @@ module Agentilda
     # with the question on it dies with it, and the answer has nowhere to
     # go. `start` stays. It keeps the board published and the commands read,
     # rescans the tree, and starts agents as soon as an answer, a new plan
-    # or a hand edit makes something dispatchable. It ends on its own only
-    # when every plan in scope is finished (✅ 😎 ❌), and early on Ctrl-C or
-    # SIGTERM.
+    # or a hand edit makes something dispatchable. It needs no plans to
+    # start: the page's New idea creates them. It never ends on its own,
+    # finished plans included; only Stop All, Ctrl-C, SIGTERM or the control
+    # room going away end it.
     #
     # The page is the only way in: every decision a person makes goes through
     # it, and the terminal is output only. So there is no headless fallback
     # (Redis and the control room are required, not hoped for), no dry run,
     # and no `--no-web`.
     class Start < Run
-      desc "Run the factory until every plan is finished, with the control room; questions wait on the page"
+      desc "Run the factory and its control room until Stop All; plans and questions go through the page"
 
       # Inherited from `run`, and meaningless here: a dry run publishes no
       # board, and a run without its page cannot be answered.
@@ -30,10 +31,10 @@ module Agentilda
         desc:    "Seconds between rescans of .plans while idle; a command from the page rescans at once"
 
       example [
-        "                       # engine and control room, until every plan is finished",
+        "                       # engine and control room, until Stop All or Ctrl-C",
         "--no-open              # print the control room's URL, open no browser",
         "--port 4848 -j 4       # somewhere other than 4747, four agents at a time",
-        "--plan 005             # only plan 005; ends once it is finished"
+        "--plan 005             # only plan 005"
       ]
 
       # Exit status when Redis or the control room is not there to serve.
@@ -61,9 +62,25 @@ module Agentilda
 
       private
 
+      # No plans is where a project starts, and the page's New idea is how
+      # the first one arrives, so a missing `.plans/` is made rather than
+      # refused.
+      #
+      # @param options [Hash]
+      # @return [Agentilda::Plans::Tree]
+      def tree_for(options)
+        tree = Plans.tree(options.fetch(:dir, Agentilda::PLANS_DIR))
+        return tree if tree.exist?
+
+        FileUtils.mkdir_p(tree.dir)
+        info("Created #{tree.dir}: no plans yet, so the control room opens on New idea.") unless quiet?(options)
+        tree
+      end
+
       # @param _options [Hash]
+      # @param web [Agentilda::Web::Launcher] always connected: {#without_web} refuses otherwise
       # @return [Hash]
-      def staying(_options) = { stay: true, rescan: @rescan }
+      def staying(_options, web) = { stay: true, rescan: @rescan, lifeline: web.method(:serving?) }
 
       # TERM too: a service manager stops a service that way, and it gets
       # the same graceful stop as Ctrl-C.
@@ -82,8 +99,7 @@ module Agentilda
       # @return [void]
       def without_web(web, live, _options)
         live.close
-        refuse("The control room did not answer on #{web.url}, and tilda start is no use without it. " \
-               "Its log: #{web.log}",
+        refuse(web.collision ? "#{web.collision} tilda start is no use without its control room." : "The control room did not answer on #{web.url}, and tilda start is no use without it. Its log: #{web.log}",
           UNAVAILABLE)
       end
 
@@ -95,9 +111,9 @@ module Agentilda
         open.empty? ? "#{web.url}#start" : web.url
       end
 
-      # What the service did, and exit 0: stopping it on purpose, or seeing
-      # every plan through, is not a failure, and the failed attempts it
-      # lived through are listed above the box.
+      # What the service did, and exit 0: it only ever ends by being
+      # stopped, which is not a failure, and the failed attempts it lived
+      # through are listed above the box.
       #
       # @return [void]
       def finish(runner, attempts, options, seconds:)
@@ -105,9 +121,8 @@ module Agentilda
         puts attempt_lines(attempts)
         puts("", Engine.tally(attempts:, seconds:).render)
         unless quiet?(options)
-          stopped = Execution::Control.quit?
           blocked = runner.blocked.map { it.feature.ordinal }
-          lines = [stopped ? "Stopped. Unfinished plans keep their state; tilda start picks them up again." : "Every plan is finished."]
+          lines = ["Stopped. Unfinished plans keep their state; tilda start picks them up again."]
           lines << "Still waiting for answers: #{blocked.join(", ")}" unless blocked.empty?
           success("#{attempts.size} invocation#{"s" unless attempts.size == 1}, " \
                   "#{attempts.count(&:advanced?)} advanced\n\n#{lines.join("\n")}")

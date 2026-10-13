@@ -47,12 +47,14 @@ module Agentilda
       # @param on_board [Proc, nil]
       # @param claims [Agentilda::Live::Claims, nil] plan claims shared with
       #   other machines; nil when the run is not live, and every plan is ours
-      # @param stay [Boolean] idle past fixed points until every plan is
-      #   finished or a person stops it; see {Dispatcher#done?}
+      # @param stay [Boolean] idle past fixed points until a person stops
+      #   it; see {Dispatcher#done?}
       # @param rescan [Integer] seconds between rescans while idle
+      # @param lifeline [Proc, nil] whether the control room still serves;
+      #   see {Dispatcher#page_gone!}
       def initialize(tree:, executor:, agents: Agents::Registry.new, isolation: :shared, jobs: 1, worktree: nil,
         plans: nil, publisher: nil, dry_run: false, rounds: nil, state: nil,
-        sleeper: ->(seconds) { sleep(seconds) }, on_board: nil, claims: nil, stay: false, rescan: Dispatcher::RESCAN)
+        sleeper: ->(seconds) { sleep(seconds) }, on_board: nil, claims: nil, stay: false, rescan: Dispatcher::RESCAN, lifeline: nil)
         @tree = tree
         @executor = executor
         @agents = agents
@@ -68,6 +70,7 @@ module Agentilda
         @claims = claims
         @stay = stay
         @rescan = rescan
+        @lifeline = lifeline
         @attempts = []
         @dropped = []
         @jobs = isolated? ? jobs : 1
@@ -146,8 +149,8 @@ module Agentilda
         true
       end
 
-      # Run until nothing is dispatchable, or, staying, until every plan is
-      # finished or a person stops it.
+      # Run until nothing is dispatchable, or, staying, until a person stops
+      # it or its control room goes away.
       #
       # @yieldparam dispatcher [Agentilda::Engine::Dispatcher] before it runs, so a
       #   console can attach itself and reach the running jobs
@@ -159,7 +162,8 @@ module Agentilda
           sleeper:  @sleeper,
           on_board: @on_board,
           stay:     @stay,
-          rescan:   @rescan)
+          rescan:   @rescan,
+          lifeline: @lifeline)
         yield dispatcher if block_given?
         @attempts = dispatcher.run
       end

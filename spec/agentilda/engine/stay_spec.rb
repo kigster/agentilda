@@ -2,8 +2,9 @@
 
 require_relative "../live/live_context"
 
-# `tilda start`: the dispatcher idles past every fixed point instead of
-# ending there. The case that asked for it: `tilda create a web-based
+# `tilda start`, and `tilda run` with its control room: the dispatcher
+# idles past every fixed point instead of ending there, and only a quit
+# (Stop All, a signal, the page going away) ends it. The case that asked for it: `tilda create a web-based
 # minesweeper game`, palpatine-planner asks a question, and the run ended
 # with the question on a page that died with it.
 RSpec.describe "A staying run", :tree do
@@ -181,6 +182,7 @@ RSpec.describe "A staying run", :tree do
 
   describe "when every plan is finished" do
     let(:agents) { Agentilda::Agents::Registry.new.only("leah-researcher") }
+    let(:script) { ->(tick) { Agentilda::Execution::Control.quit! if tick == 30 } }
 
     before do
       plans do |t|
@@ -189,24 +191,43 @@ RSpec.describe "A staying run", :tree do
       end
     end
 
-    it "ends on its own, with nothing left to do" do
-      expect([run_until_stopped, Agentilda::Execution::Control.quit?]).to eq([[], false])
+    it "stays up for the next idea until a person stops it" do
+      run_until_stopped
+      expect(ticks.size).to eq(30)
     end
 
     it "says so" do
       run_until_stopped
       expect(Agentilda::UI).to have_received(:log).with("idle: every plan is finished")
     end
+  end
 
-    context "with a command still at work" do
-      let(:holding) { [true, true, false] }
+  describe "when the control room goes away" do
+    let(:agents) { Agentilda::Agents::Registry.new.only("leah-researcher") }
+    let(:serving) { [true, true, true] }
+    let(:dispatcher) do
+      Agentilda::Engine::Dispatcher.new(runner:,
+        sleeper:,
+        on_board: session.on_board,
+        stay: true,
+        rescan:,
+        lifeline: -> { serving.shift || false })
+    end
 
-      before { dispatcher.hold_open { holding.shift } }
+    before do
+      plans { |t| t.plan "001.00", :blocked, "asked", files: { "spec.md" => spec_body, "blocked.md" => "## B1 Which?\n\nThis?\n" } }
+      run_until_stopped
+    end
 
-      it "stays open until it is answered" do
-        run_until_stopped
-        expect(holding).to be_empty
+    it "stops the run the way Stop All does" do
+      aggregate_failures do
+        expect(ticks.size).to eq(3)
+        expect(Agentilda::Execution::Control.quit?).to be(true)
       end
+    end
+
+    it "says why" do
+      expect(Agentilda::UI).to have_received(:log).with("the control room stopped; stopping the run")
     end
   end
 
@@ -281,44 +302,11 @@ RSpec.describe "A staying run", :tree do
 
     after { session.close }
 
-    it "stops the agents and starts no more, without ending the run" do
+    it "stops the agents, and the run with them" do
       aggregate_failures do
-        expect(dispatcher.running.map { File.read(it.handle.control).strip }.uniq).to eq(%w[STOP])
-        expect([dispatcher.paused?, Agentilda::Execution::Control.quit?]).to eq([true, false])
-        expect(JSON.parse(store.hget(session.keys.done, "01STOP"))["reason"]).to include("the engine stays up")
+        expect(Agentilda::Execution::Control.quit?).to be(true)
+        expect(JSON.parse(store.hget(session.keys.done, "01STOP"))["reason"]).to include("then the engine and any control room it started")
       end
-    end
-
-    it "lifts the pause at the next plan a person adds" do
-      Agentilda::Live.enqueue(store:,
-        keys: session.keys,
-        input: { id: "01ADD", kind: "add_plan", plan: nil, agent: nil, payload: { ordinal: "001.00" } })
-      dispatcher.tick
-      expect(dispatcher.paused?).to be(false)
-    end
-  end
-
-  # A Stop All holds the plans there were when it came. One that appears
-  # afterwards by another route than the page was never held.
-  describe "a plan written by hand after Stop All" do
-    let(:agents) { Agentilda::Agents::Registry.new }
-    let(:executor) { HeldExecutor.new(traces) }
-    let(:dispatcher) { Agentilda::Engine::Dispatcher.new(runner:, sleeper: ->(_) {}, stay: true, rescan:) }
-
-    before do
-      building("001.00", "tax-rule-dsl")
-      dispatcher.stop_all
-      building("002.00", "written-by-hand")
-      dispatcher.wake!
-      start_agents
-    end
-
-    it "starts the new plan and leaves the held one alone" do
-      expect(dispatcher.running.map { it.task.subject.feature.ordinal.to_s }.uniq).to eq(%w[002.00])
-    end
-
-    it "is still paused for the plan that was held" do
-      expect(dispatcher.paused?).to be(true)
     end
   end
 end

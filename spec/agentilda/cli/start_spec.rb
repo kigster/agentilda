@@ -2,7 +2,7 @@
 
 # `agentilda start` is `run` that stays: the same options and code, the
 # control room required rather than hoped for, and an end that comes from
-# every plan being finished or from a signal, never from a fixed point.
+# Stop All, a signal or the page going away, never from a fixed point.
 #
 # Like run_spec, every example runs `--isolation shared` over a bare temp
 # tree, publishes to a store in this process, and never spawns the server,
@@ -12,7 +12,14 @@ RSpec.describe Agentilda::CLI::Start, :tree do
 
   let(:live_store) { Agentilda::Live.memory_store }
   let(:web) do
-    instance_double(Agentilda::Web::Launcher, ready?: true, url: "http://127.0.0.1:4747", log: "/tmp/web.log", stop: nil)
+    instance_double(Agentilda::Web::Launcher,
+      ready?:    true,
+      url:       "http://127.0.0.1:4747",
+      log:       "/tmp/web.log",
+      stop:      nil,
+      joined?:   false,
+      collision: nil,
+      serving?:  true)
   end
   let(:executor) { instance_double(Agentilda::Execution::Executor) }
 
@@ -116,15 +123,69 @@ RSpec.describe Agentilda::CLI::Start, :tree do
       plans { |t| t.plan "001.00", :deployed, "shipped", files: { "spec.md" => spec_body, "deployed.md" => "v1\n" } }
     end
 
-    let(:sleeper) { ->(_) {} }
     let!(:result) { start }
 
-    it "ends on its own, exit 0" do
-      expect([result.last, result[1]]).to match([0, include("Every plan is finished.")])
+    it "stays up, waiting for the next idea, until SIGTERM" do
+      expect([result.last, result[1]]).to match([0, include("idle: every plan is finished", "Stopped.")])
     end
 
     it "opens the control room on the idea dialog" do
       expect(Agentilda::Web).to have_received(:open).with("http://127.0.0.1:4747#start")
+    end
+  end
+
+  describe "with no plans at all" do
+    let!(:result) { start }
+
+    it "stays up for the first plan from the page" do
+      expect([result.last, result[1]]).to match([0, include("idle: no plans yet", "Stopped.")])
+    end
+
+    it "opens the control room on the idea dialog" do
+      expect(Agentilda::Web).to have_received(:open).with("http://127.0.0.1:4747#start")
+    end
+  end
+
+  describe "without a .plans directory" do
+    let(:missing) { File.join(Dir.mktmpdir("start"), ".plans") }
+    let!(:result) { start(dir: missing) }
+
+    after { FileUtils.rm_rf(File.dirname(missing)) }
+
+    it "makes one and stays up for the first plan" do
+      expect([Dir.exist?(missing), result.last, unwrapped(result[1])]).to match([true, 0, include("no plans yet, so the control room opens on New idea")])
+    end
+  end
+
+  describe "a .plans directory named in .tilda.yml" do
+    let(:project) { Dir.mktmpdir("start") }
+    let(:named) { File.join(project, "work", "plans") }
+    let!(:result) do
+      File.write(File.join(project, ".tilda.yml"), "commands:\n  start:\n    dir: work/plans\n")
+      Dir.chdir(project) do
+        typed = Dry::CLI::Parser.call(described_class, [], "tilda start").arguments
+        start(**typed.except(:isolation, :log), dir: typed.fetch(:dir))
+      end
+    end
+
+    after { FileUtils.rm_rf(project) }
+
+    it "is made where the file says" do
+      expect([Dir.exist?(named), result.last]).to eq([true, 0])
+    end
+  end
+
+  describe "when the control room goes away" do
+    before do
+      asked
+      ticks = 0
+      allow(web).to receive(:serving?) { (ticks += 1) <= 1 }
+    end
+
+    let!(:result) { start(open: false) }
+
+    it "stops, exit 0, and says why in the progress log" do
+      expect([result.last, result[1]]).to match([0, include("the control room stopped; stopping the run")])
     end
   end
 
@@ -151,6 +212,19 @@ RSpec.describe Agentilda::CLI::Start, :tree do
 
     it "never starts the engine" do
       expect(Agentilda::Engine::Runner).not_to have_received(:new)
+    end
+  end
+
+  describe "when another repository's control room holds the port" do
+    before do
+      asked
+      allow(web).to receive_messages(ready?: false, collision: "Port 4747 is taken by github.com/acme/gadgets.")
+    end
+
+    let!(:result) { start }
+
+    it "refuses with exit 69, naming the collision" do
+      expect([result.last, result[1]]).to match([69, include("Port 4747 is taken by github.com/acme/gadgets.")])
     end
   end
 

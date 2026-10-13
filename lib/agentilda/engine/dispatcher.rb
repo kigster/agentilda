@@ -102,22 +102,22 @@ module Agentilda
       # @param sleeper [Proc] how a tick waits; the suite passes a no-op
       # @param on_board [Proc, nil] receives a {Board} each tick
       # @param stay [Boolean] keep running past a fixed point, idle, until a
-      #   person stops the run or every plan in scope is {FINISHED}
+      #   person stops the run: Stop All, Ctrl-C, or the control room going away
       # @param rescan [Integer] idle ticks, about a second each, between
       #   rescans of the tree while staying
+      # @param lifeline [Proc, nil] answers whether the control room is still
+      #   serving; once it answers false the run stops as Stop All stops it
       def initialize(runner:, state: nil, rounds: nil, sleeper: ->(seconds) { sleep(seconds) }, on_board: nil,
-        stay: false, rescan: RESCAN)
+        stay: false, rescan: RESCAN, lifeline: nil)
         @runner = runner
         @stay = stay
         @rescan = rescan
+        @lifeline = lifeline
         @idle = false
         @idle_ticks = 0
         @wake = false
-        @paused = false
-        @held = []
         @complete = false
         @said = nil
-        @holds = []
         @state = state
         @rounds_cap = rounds
         @sleeper = sleeper
@@ -167,6 +167,7 @@ module Agentilda
       # @return [void]
       def tick
         @before_tick.each { |hook| hook.call(self) }
+        page_gone! if @lifeline && !Execution::Control.quit? && !@lifeline.call
         reap
         finish_discards
         unblock_answered
@@ -179,19 +180,18 @@ module Agentilda
       end
 
       # A run ends at a fixed point: nothing running and nothing left to
-      # start. A staying run (`tilda start`) does not: it idles through every
-      # fixed point a blocked plan or an empty tree makes, and ends on its own
-      # only once every plan in scope is {FINISHED}, decided on a tick that
-      # rescanned the tree and with no command still at work. A quit ends
-      # either, once the agents have gone.
+      # start. A staying run, any run with its control room up, does not:
+      # it idles through every fixed point, finished plans included, since
+      # the next idea arrives through the page it keeps serving. Only a quit
+      # ends it (Stop All, Ctrl-C, SIGTERM, the page going away), once the
+      # agents have gone.
       #
       # @return [Boolean]
       def done?
         return false unless quiet?
         return true if Execution::Control.quit?
-        return next_dispatchable.nil? unless @stay
 
-        @complete && @holds.none?(&:call)
+        !@stay && next_dispatchable.nil?
       end
 
       # @return [Boolean] whether this run idles past its fixed points
@@ -202,39 +202,6 @@ module Agentilda
       #
       # @return [void]
       def wake! = @wake = true
-
-      # Something that keeps a staying run open while it answers true, such
-      # as a command still at work; checked before the run ends on its own.
-      #
-      # @yieldreturn [Boolean]
-      # @return [void]
-      def hold_open(&check) = @holds << check
-
-      # Stop every running agent and start no more on the plans there are
-      # now, without ending the run: the page's Stop All under `tilda start`,
-      # where the engine and the page stay up. STOP, not a kill, so each
-      # agent leaves its work written down. The next command that asks for
-      # work, an answer, a plan added or created, a resume, lifts the pause;
-      # a plan that appears later by any other route (`tilda create`, a
-      # folder written by hand) was never held, so a rescan starts it.
-      #
-      # @return [Integer] how many agents were told to stop
-      def stop_all
-        @paused = true
-        @held = @runner.in_scope.map { it.feature.ordinal.to_s }
-        @running.each { it.handle.request_stop! }
-        @running.size
-      end
-
-      # @return [void]
-      def unpause!
-        @paused = false
-        @held = []
-        wake!
-      end
-
-      # @return [Boolean] whether a Stop All is holding new agents back
-      def paused? = @paused
 
       # Kill from a view: STOP, {KILL_GRACE} seconds, SIGKILL, on a thread
       # so the tick is not held for fifteen seconds.
@@ -673,6 +640,15 @@ module Agentilda
 
       # ---- staying ----------------------------------------------------------
 
+      # The control room stopped answering, so nobody can reach this run:
+      # stop it the way Stop All does, agents leaving their work written down.
+      #
+      # @return [void]
+      def page_gone!
+        UI.log("the control room stopped; stopping the run")
+        Execution::Control.quit!
+      end
+
       # Nothing running, draining or being thrown back.
       #
       # @return [Boolean]
@@ -744,7 +720,6 @@ module Agentilda
           state = Lifecycle::Lanes.target(subject) || Lifecycle::Resync::Dirs.target(subject)
           next if Plans::StateMachine::SETTLED.include?(state.key)
           next if @finished_plans.include?(subject.feature.ordinal.to_s)
-          next if @held.include?(subject.feature.ordinal.to_s)
           next if @runner.foreign?(subject) || @discarding.key?(subject.feature.ordinal.to_s)
 
           candidates = Agents::Routing.filter(@runner.agents.for_status(state), subject)

@@ -73,8 +73,12 @@ function ControlRoom({ board, connection, fixture }: { board: BoardData; connect
   const [openCar, setOpenCar] = useState<OpenCar | null>(null);
   const [unblocking, setUnblocking] = useState<string | null>(null);
   const [logsSeenAt, setLogsSeenAt] = useState<string | null>(null);
-  // #start in the URL opens the idea dialog, so `tilda start` can send the browser straight to it (W19).
-  const [ideaOpen, setIdeaOpen] = useState(() => window.location.hash === "#start");
+  // #start in the URL opens the idea dialog, so `tilda start` can send the browser straight to it (W19). A page
+  // `tilda start` joined was opened before it, without the hash, and mounts here on the engine's first board: when
+  // that board has nothing to do, it opens on the idea dialog too.
+  const [ideaOpen, setIdeaOpen] = useState(
+    () => window.location.hash === "#start" || (me.plans.length === 0 && me.backlog.length === 0),
+  );
   const pressedSelected = useRef(false);
 
   const runs = useMemo(() => testRuns(me.plans), [me.plans]);
@@ -272,10 +276,17 @@ export default function App() {
             Could not load the board: {error.message}. Is tilda run (or tilda web --demo) running?
           </main>
         ) : (
-          // The server answered with no engine on the board yet (`tilda web` before `tilda run`): the stream brings
-          // the first snapshot, and the page draws itself then.
+          // The server answered with no engine on the board (`tilda web` on its own): say how to start one. The stream
+          // brings the first snapshot once one runs, and the page draws itself then.
           <main className="loading" aria-busy="true">
-            {waiting ? "Waiting for the engine to publish…" : "Connecting to the engine…"}
+            {waiting ? (
+              <>
+                No engine is running for this project. Please use <code>tilda start</code>, or start an engine in another
+                terminal by running <code>tilda run</code>.
+              </>
+            ) : (
+              "Connecting to the engine…"
+            )}
           </main>
         )}
       </AnnouncerProvider>
