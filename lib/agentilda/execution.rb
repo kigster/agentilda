@@ -12,7 +12,8 @@ module Agentilda
 
     # Run the block with Ctrl-C turned into a cooperative interrupt.
     #
+    # @param signals [Array<String>] handled as Ctrl-C is
     # @return [Object] whatever the block returns
-    def on_interrupt(&) = Control.on_interrupt(&)
+    def on_interrupt(signals: %w[INT], &) = Control.on_interrupt(signals, &)
   end
 end

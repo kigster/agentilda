@@ -1,11 +1,25 @@
 ---
 name: tilda-run
-description: Run tilda's specialist agents over `.plans/` until every plan reaches a fixed point, then clear blocked plans by getting the human's answers and running `tilda unblock`. Use when the user wants to run, start, resume or finish the agents, build or ship a plan, or unblock a ⭕️ / 🅱️ plan.
+description: Start the tilda factory with `tilda start` (engine plus control room, up until every plan is finished, questions answered on the page), or run tilda's specialist agents to a fixed point with `tilda run` and clear blocked plans with `tilda unblock`. Use when the user wants to start, run, resume or finish the agents, build or ship a plan, or unblock a ⭕️ / 🅱️ plan.
 ---
 
-# tilda-run: drive the plans to a fixed point
+# tilda-run: drive the plans
 
 Load the `tilda` skill first if it is not in context.
+
+## `tilda start`: the factory with its control room
+
+`tilda start` is the way to run the factory for a person. It is `tilda run` with the control room on, and it does not stop at a fixed point: when a plan blocks, palpatine-planner's questions included, it idles, shows the questions in **Needs You** on the page, takes the answer from there, drains it, and hands the plan back to its agent. It picks up plans created on the page, by `tilda create` in another terminal, or edited by hand, rescanning `.plans/` every 5 s (`--rescan`).
+
+```bash
+tilda start              # engine and control room on http://127.0.0.1:4747, browser opened
+tilda start --no-open    # print the URL only
+```
+
+- It takes `run`'s flags except `-n` and `--no-web`. It needs Redis and refuses without it (exit 69).
+- Every human decision goes through the page: answers, hold, wrap up, stop, models, new plans. **Stop All** stops the agents and keeps the engine up; the next answer, added plan or resume starts agents again. The terminal is output only.
+- It ends on its own once every plan in scope is finished (✅ Approved & Merged, 😎 Deployed or ❌ Discarded), with exit 0. A project with no plans waits for the first. Ctrl-C or `kill -TERM` stop it early; agents get the graceful stop and the page goes down with it.
+- Start it in the background, give the user the URL, and leave the answering to them on the page. Steps 1 to 5 below are the scripted, headless alternative.
 
 `tilda run` loops in rounds. Each round hands every movable plan to the agent its state and lane call for and renames the folder when the agent finishes. When a builder lands a plan at 🟢 Ready for Review, `tilda` pushes its branch and opens the pull request, titled `[NNN.MM]`; `hansolo-reviewer` then reviews that pull request. It stops at a **fixed point**: a round in which no plan changed state. Your job is to start it, watch it, and turn what it stops on into questions for the human.
 
@@ -40,7 +54,7 @@ tilda run --plan <NNN,...>
 
 A run takes minutes to hours: each agent may take up to 15 minutes per round, over several rounds. Start it in the background and wait for it to exit; it prints its progress log path at the start, which is what to read when the user asks how it is going. Avoid polling in a tight loop.
 
-When Redis answers, the run also serves the control room on `http://127.0.0.1:4747` and opens it in the browser: the user watches the board there and can message, interrupt or stop an agent. Without Redis the run warns once and goes on headless; that is not a failure. To get the page, start `redis-server` (or pass `--redis-url`) before the run; `tilda-start` has the details.
+When Redis answers, the run also serves the control room on `http://127.0.0.1:4747` and opens it in the browser: the user watches the board there and can message, interrupt or stop an agent. Without Redis the run warns once and goes on headless; that is not a failure. To get the page, start `redis-server` (or pass `--redis-url`) before the run; `tilda-setup` has the details.
 
 A warning about `ANTHROPIC_API_KEY` (or a similar variable) at the start means every agent will authenticate with that key instead of the user's claude.ai login. Stop and ask before running with it; a stale key fails every agent with `401` after minutes each.
 

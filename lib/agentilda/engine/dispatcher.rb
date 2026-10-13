@@ -67,13 +67,40 @@ module Agentilda
       # Seconds a kill waits between STOP and SIGKILL.
       KILL_GRACE = 15
 
+      # Seconds between rescans of the tree while a staying run has nothing
+      # to do. A command from the page rescans at once; this interval is for
+      # what arrives by other means: a folder edited by hand, `tilda create`
+      # typed in another terminal, a `blocked.md` answered in an editor.
+      RESCAN = 5
+
+      # Plans with nothing left to do, which is what a staying run waits for
+      # every plan to reach before it ends on its own. Not `Status#terminal?`:
+      # only ❌ has no way out, while ✅ and 😎 can still roll back, and a
+      # project whose plans all merged is finished in every sense a person
+      # means. The page's backlog draws the same line.
+      FINISHED = Live::Snapshot::FINISHED
+
       # @param runner [Agentilda::Engine::Runner]
       # @param state [Agentilda::Engine::StateFile, nil] nil under a dry run
       # @param rounds [Integer, nil] `--rounds`, a cap that only tightens
       # @param sleeper [Proc] how a tick waits; the suite passes a no-op
       # @param on_board [Proc, nil] receives a {Board} each tick
-      def initialize(runner:, state: nil, rounds: nil, sleeper: ->(seconds) { sleep(seconds) }, on_board: nil)
+      # @param stay [Boolean] keep running past a fixed point, idle, until a
+      #   person stops the run or every plan in scope is {FINISHED}
+      # @param rescan [Integer] idle ticks, about a second each, between
+      #   rescans of the tree while staying
+      def initialize(runner:, state: nil, rounds: nil, sleeper: ->(seconds) { sleep(seconds) }, on_board: nil,
+        stay: false, rescan: RESCAN)
         @runner = runner
+        @stay = stay
+        @rescan = rescan
+        @idle = false
+        @idle_ticks = 0
+        @wake = false
+        @paused = false
+        @complete = false
+        @said = nil
+        @holds = []
         @state = state
         @rounds_cap = rounds
         @sleeper = sleeper
@@ -128,17 +155,64 @@ module Agentilda
         unblock_answered
         poll
         @running.each { |job| job.handle.kill!(grace: 0, reason: :quit) } if Execution::Control.overdue?
-        dispatch unless Execution::Control.quit?
+        dispatch unless Execution::Control.quit? || resting?
         persist
         @on_board&.call(board)
       end
 
+      # A run ends at a fixed point: nothing running and nothing left to
+      # start. A staying run (`tilda start`) does not: it idles through every
+      # fixed point a blocked plan or an empty tree makes, and ends on its own
+      # only once every plan in scope is {FINISHED}, decided on a tick that
+      # rescanned the tree and with no command still at work. A quit ends
+      # either, once the agents have gone.
+      #
       # @return [Boolean]
       def done?
-        return false unless @running.empty? && @unblocking.empty? && @discarding.empty?
+        return false unless quiet?
+        return true if Execution::Control.quit?
+        return next_dispatchable.nil? unless @stay
 
-        Execution::Control.quit? || next_dispatchable.nil?
+        @complete && @holds.none?(&:call)
       end
+
+      # @return [Boolean] whether this run idles past its fixed points
+      def stay? = @stay
+
+      # Rescan on the next tick rather than at the end of the interval: a
+      # command was applied, and what it changed should be acted on now.
+      #
+      # @return [void]
+      def wake! = @wake = true
+
+      # Something that keeps a staying run open while it answers true, such
+      # as a command still at work; checked before the run ends on its own.
+      #
+      # @yieldreturn [Boolean]
+      # @return [void]
+      def hold_open(&check) = @holds << check
+
+      # Stop every running agent and start no more, without ending the run:
+      # the page's Stop All under `tilda start`, where the engine and the
+      # page stay up. STOP, not a kill, so each agent leaves its work
+      # written down. The next command that asks for work, an answer, a plan
+      # added or created, a resume, lifts the pause.
+      #
+      # @return [Integer] how many agents were told to stop
+      def stop_all
+        @paused = true
+        @running.each { |job| job.handle.control && Execution::Control.write(job.handle.control, Execution::Control::STOP) }
+        @running.size
+      end
+
+      # @return [void]
+      def unpause!
+        @paused = false
+        wake!
+      end
+
+      # @return [Boolean] whether a Stop All is holding new agents back
+      def paused? = @paused
 
       # Kill from a view: STOP, {KILL_GRACE} seconds, SIGKILL, on a thread
       # so the tick is not held for fifteen seconds.
@@ -302,7 +376,8 @@ module Agentilda
         down = @attempts.sum(&:down) + @running.sum { |j| j.down.to_i }
         Board.new(started_at: @started_at,
           status: run_status,
-          plans: (@running.map { |j| j.task.subject.feature.ordinal.to_s } + @recent.map { |r| r[:row].ordinal }).uniq,
+          plans: (@running.map { |j| j.task.subject.feature.ordinal.to_s } + @recent.map { |r| r[:row].ordinal } +
+                  waiting).uniq,
           up:,
           down:,
           rows: rows,
@@ -318,6 +393,7 @@ module Agentilda
       def run_status
         return :quitting if Execution::Control.quit?
         return :wrapping_up if @running.any? { |j| %i[wrap_up stopped].include?(j.handle.phase) }
+        return :idle if @idle && quiet?
 
         :running
       end
@@ -448,6 +524,7 @@ module Agentilda
           @history.each { |(ordinal, _), entries| entries.reject! { it[:status] == "Blocked" } if ordinal == unblock.ordinal }
         end
         @finished_plans.delete(unblock.ordinal)
+        wake!
         UI.log(outcome.cleared? ? "unblocked: blocked.md retired" : "unblock folded #{outcome.folded.size}",
           plan: unblock.ordinal)
       end
@@ -560,13 +637,79 @@ module Agentilda
 
       # @return [void]
       def dispatch
+        return @idle = quiet? if @paused
+
+        started = 0
         while @running.size < @runner.jobs && (pair = next_dispatchable)
           # Lost to another machine between the check and the claim: the next
           # pass sees the plan as foreign and steps around it.
           next unless @runner.claim(pair.last)
 
           start(*pair)
+          started += 1
         end
+        settle_idle(started) if @stay
+      end
+
+      # ---- staying ----------------------------------------------------------
+
+      # Nothing running, draining or being thrown back.
+      #
+      # @return [Boolean]
+      def quiet? = @running.empty? && @unblocking.empty? && @discarding.empty?
+
+      # Whether an idle staying run skips this tick's dispatch. Dispatching
+      # reloads the tree and runs `resync dirs` over it, which is cheap once
+      # but not once a second for hours with nothing to find, so an idle run
+      # looks again every {RESCAN} ticks, or at once when woken. Commands,
+      # drains and the board still run every tick; only the scan waits.
+      #
+      # @return [Boolean]
+      def resting?
+        return false unless @stay && @idle && quiet?
+
+        @idle_ticks += 1
+        return true unless @wake || @idle_ticks >= @rescan
+
+        @wake = false
+        @idle_ticks = 0
+        false
+      end
+
+      # After a dispatch that started nobody: idle when nothing else is under
+      # way, complete when every plan in scope is finished, and said once per
+      # change, so the log reads as a story rather than a heartbeat.
+      #
+      # @param started [Integer] agents this dispatch started
+      # @return [void]
+      def settle_idle(started)
+        @idle = started.zero? && quiet?
+        subjects = @runner.in_scope
+        @complete = @idle && !subjects.empty? && subjects.all? { FINISHED.include?(it.status.key) }
+        said = @idle ? idle_reason(subjects) : nil
+        UI.log(said) if said && said != @said
+        @said = said
+      end
+
+      # @param subjects [Array<Agentilda::Plans::Subject>] the plans in scope
+      # @return [String] what an idle run is waiting for
+      def idle_reason(subjects)
+        return "idle: every plan is finished" if @complete
+        return "idle: no plans yet; create one from the page or with tilda create" if subjects.empty?
+
+        blocked = waiting
+        return "idle: waiting for answers on #{blocked.join(", ")}" unless blocked.empty?
+
+        "idle: nothing to do"
+      end
+
+      # Blocked plans in scope that this machine may answer for: on the board
+      # whether or not an agent touched them this run, so their questions
+      # reach the page from the moment the run starts.
+      #
+      # @return [Array<String>] ordinals
+      def waiting
+        @runner.blocked.reject { @runner.foreign?(it) }.map { it.feature.ordinal.to_s }
       end
 
       # The next agent and plan to start, honouring a `next:` an agent wrote

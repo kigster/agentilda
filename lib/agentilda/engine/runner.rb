@@ -47,9 +47,12 @@ module Agentilda
       # @param on_board [Proc, nil]
       # @param claims [Agentilda::Live::Claims, nil] plan claims shared with
       #   other machines; nil when the run is not live, and every plan is ours
+      # @param stay [Boolean] idle past fixed points until every plan is
+      #   finished or a person stops it; see {Dispatcher#done?}
+      # @param rescan [Integer] seconds between rescans while idle
       def initialize(tree:, executor:, agents: Agents::Registry.new, isolation: :shared, jobs: 1, worktree: nil,
         plans: nil, publisher: nil, dry_run: false, rounds: nil, state: nil,
-        sleeper: ->(seconds) { sleep(seconds) }, on_board: nil, claims: nil)
+        sleeper: ->(seconds) { sleep(seconds) }, on_board: nil, claims: nil, stay: false, rescan: Dispatcher::RESCAN)
         @tree = tree
         @executor = executor
         @agents = agents
@@ -63,6 +66,8 @@ module Agentilda
         @sleeper = sleeper
         @on_board = on_board
         @claims = claims
+        @stay = stay
+        @rescan = rescan
         @attempts = []
         @dropped = []
         @jobs = isolated? ? jobs : 1
@@ -134,13 +139,20 @@ module Agentilda
         true
       end
 
-      # Run until nothing is dispatchable.
+      # Run until nothing is dispatchable, or, staying, until every plan is
+      # finished or a person stops it.
       #
       # @yieldparam dispatcher [Agentilda::Engine::Dispatcher] before it runs, so a
       #   console can attach itself and reach the running jobs
       # @return [Array<Agentilda::Engine::Runner::Attempt>]
       def call
-        dispatcher = Dispatcher.new(runner: self, state: @state, rounds: @rounds, sleeper: @sleeper, on_board: @on_board)
+        dispatcher = Dispatcher.new(runner: self,
+          state:    @state,
+          rounds:   @rounds,
+          sleeper:  @sleeper,
+          on_board: @on_board,
+          stay:     @stay,
+          rescan:   @rescan)
         yield dispatcher if block_given?
         @attempts = dispatcher.run
       end
