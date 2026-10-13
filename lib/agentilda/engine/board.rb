@@ -49,6 +49,9 @@ module Agentilda
     # @!attribute [r] since
     #   @return [Float, nil] the monotonic time its invocation started, which
     #     tells two invocations of one round apart
+    # @!attribute [r] session
+    #   @return [String, nil] the CLI's session id, once its stream named it;
+    #     what a compaction resumes (W28)
     Board::Row = Data.define(:key,
       :at,
       :ordinal,
@@ -71,9 +74,10 @@ module Agentilda
       :subagents,
       :history,
       :context,
-      :since) do
+      :since,
+      :session) do
       def initialize(pr: nil, phase: nil, remaining: nil, frame: 0, bold: false, message: nil,
-        elapsed: 0, subagents: 0, history: [], context: nil, since: nil, **rest)
+        elapsed: 0, subagents: 0, history: [], context: nil, since: nil, session: nil, **rest)
         super
       end
 

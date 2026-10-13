@@ -184,6 +184,12 @@ module Agentilda
         nil
       end
 
+      # The demo has no session to compact; the car calms as a real one would
+      # once its context is shed.
+      #
+      # @return [nil]
+      def compact(command) = signal(command)
+
       # @return [String]
       def stop_all(_command)
         cars = running(@me)
@@ -212,8 +218,7 @@ module Agentilda
         car["model"] = model!(command["model"])
         # The switch is the model now, so nothing is queued behind it.
         car["next_model"] = nil
-        "#{command.agent} stops at its next step and restarts on #{car["model"]} from its resume note; " \
-          "its session is not carried over"
+        "#{command.agent} compacted and carries on on #{car["model"]}"
       end
 
       # @return [String] the model's full id

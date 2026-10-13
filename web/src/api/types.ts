@@ -161,11 +161,11 @@ export type CommandKind =
   | "message" // payload: { text }
   | "hold"
   | "wrap_up"
-  | "compact"
+  | "compact" // now: stopped, its session compacted with claude --resume "/compact", then carried on in it; a fresh restart when it has no session id
   | "stop"
   | "stop_all" // every agent on this node
   | "set_model" // next round; payload: { model }
-  | "switch_model" // now: stopped with a resume note, restarted fresh on the new model (no --resume or /compact); payload: { model }
+  | "switch_model" // now: as compact, carried on in the new model; a fresh restart on it when the session cannot be resumed; payload: { model }
   | "add_plan" // payload: { ordinal }
   | "create_plans"; // payload: { idea }
 

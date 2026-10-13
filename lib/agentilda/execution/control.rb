@@ -31,12 +31,11 @@ module Agentilda
       # A person holds an agent to say something to it.
       HOLD = "HOLD"
 
-      # From the page, to one agent: run `/compact` at the next step, so a
-      # long session sheds its context before it degrades (W28).
-      COMPACT = "COMPACT"
-
       # The words a person may send one agent from the page, by command kind.
-      WORDS = { "hold" => HOLD, "wrap_up" => WRAP_UP, "stop" => STOP, "compact" => COMPACT }.freeze
+      # There is no word for compacting: `/compact` is the caller's command,
+      # not one an agent can run on itself, so the harness stops the agent and
+      # compacts its session from outside (see {Executor::Handle#compact!}).
+      WORDS = { "hold" => HOLD, "wrap_up" => WRAP_UP, "stop" => STOP }.freeze
 
       # Seconds between {#quit!} and the harness terminating whatever is still
       # running. Long enough to write files and a handoff note; short enough

@@ -38,7 +38,7 @@ module Agentilda
         "message"      => :message,
         "hold"         => :signal,
         "wrap_up"      => :signal,
-        "compact"      => :signal,
+        "compact"      => :compact,
         "stop"         => :signal,
         "stop_all"     => :stop_all,
         "set_model"    => :set_model,
@@ -304,7 +304,7 @@ module Agentilda
         nil
       end
 
-      # HOLD, WRAP_UP, STOP or COMPACT into one agent's control file.
+      # HOLD, WRAP_UP or STOP into one agent's control file.
       #
       # @return [nil]
       def signal(command, dispatcher)
@@ -331,17 +331,43 @@ module Agentilda
         "#{command.agent} runs on #{id} from its next round"
       end
 
-      # The model now (W27): the agent is stopped with a resume note and
-      # started again on it.
+      # Compact the agent's session now (W28): it stops at its next step,
+      # leaving a resume note, its session is compacted with `--resume`, and
+      # it carries on in that session on the same model. Answered once the
+      # continuation has started.
       #
-      # @return [String]
+      # @return [Agentilda::Execution::Executor::Compaction, String] still at
+      #   work, or why it restarts afresh instead
+      def compact(command, dispatcher)
+        job = dispatcher.job(command.car) or raise Refusal, "#{command.car} is not running"
+        adapter = dispatcher.adapter_for(job)
+        raise Refusal, "#{adapter.name} cannot resume a session, so #{command.agent} cannot be compacted" unless adapter.compacts?
+        return dispatcher.compact(command.car) if job.handle.session
+
+        dispatcher.requeue(command.car)
+        "#{command.agent} has no session id yet, so it cannot be compacted: it stops at its next step " \
+          "and restarts from its resume note in a fresh session"
+      end
+
+      # The model now (W27): the agent is stopped with a resume note, its
+      # session compacted, and carried on in it on the new model (W28). An
+      # agent whose session cannot be resumed is started again on the model
+      # from its resume note instead, in a fresh session.
+      #
+      # @return [Agentilda::Execution::Executor::Compaction, String]
       def switch_model(command, dispatcher)
-        raise Refusal, "#{command.car} is not running; use set_model for its next round" unless dispatcher.job(command.car)
+        job = dispatcher.job(command.car) or
+          raise Refusal, "#{command.car} is not running; use set_model for its next round"
 
         set_model(command, dispatcher)
+        model = @run_state.model_for(command.car)
+        adapter = dispatcher.adapter_for(job)
+        return dispatcher.compact(command.car, model:) if adapter.compacts? && job.handle.session
+
         dispatcher.requeue(command.car)
-        "#{command.agent} stops at its next step and restarts on #{@run_state.model_for(command.car)} " \
-          "from its resume note; its session is not carried over"
+        why = adapter.compacts? ? "it has no session id yet" : "#{adapter.name} cannot resume a session"
+        "#{command.agent} stops at its next step and restarts on #{model} from its resume note " \
+          "in a fresh session: #{why}"
       end
 
       # @return [String] the full model id

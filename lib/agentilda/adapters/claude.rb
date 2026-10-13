@@ -52,6 +52,11 @@ module Agentilda
               "--strict-mcp-config", "--mcp-config", '{"mcpServers":{}}',
               "--disable-slash-commands"].freeze
 
+      # The one flag of {LEAN} a compaction drops: with it, `claude -p
+      # --resume <id> "/compact"` answers "/compact isn't available in this
+      # environment" and compacts nothing (measured on 2.1.x).
+      SLASH_COMMANDS_OFF = "--disable-slash-commands"
+
       # @param invocation [Agentilda::Adapters::Invocation]
       # @return [Array<String>]
       def argv(invocation)
@@ -61,7 +66,8 @@ module Agentilda
         # what came back would read zero all run.
         argv = ["claude", "-p", invocation.prompt, "--add-dir", invocation.root,
                 "--output-format", "stream-json", "--verbose", "--include-partial-messages", "--brief"]
-        argv += LEAN if invocation.lean
+        argv += ["--resume", invocation.resume] if invocation.resume
+        argv += LEAN.reject { invocation.slash_commands && it == SLASH_COMMANDS_OFF } if invocation.lean
         argv += ["--disallowedTools", invocation.denied_tools.join(",")] unless invocation.denied_tools.empty?
         argv += ["--allowedTools", invocation.allowed_tools.join(",")] unless invocation.allowed_tools.empty?
         model = model(invocation.model)
@@ -85,6 +91,13 @@ module Agentilda
 
       # @return [Boolean]
       def enforces_tool_denial? = true
+
+      # `claude -p --resume <id> "/compact"` compacts the session and prints a
+      # `compact_boundary` event; the agent cannot run it on itself, because
+      # `/compact` is the caller's command, not a tool.
+      #
+      # @return [String]
+      def compact_prompt = "/compact"
 
       # @return [Hash{String => String}]
       def environment = { AUTOCOMPACT_VARIABLE => AUTOCOMPACT.to_s }

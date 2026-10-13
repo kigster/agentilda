@@ -54,8 +54,11 @@ module Agentilda
       # @!attribute [r] context
       #   @return [Integer, nil] tokens in the agent's context as of its latest
       #     message, nil until one has closed, and for streams that never say
-      Progress = Data.define(:activity, :up, :down, :subagents, :pid, :message, :context) do
-        def initialize(pid: nil, message: nil, context: nil, **rest) = super
+      # @!attribute [r] session
+      #   @return [String, nil] the CLI's session id, from its `init` event,
+      #     which is what `--resume` carries the agent on in (W28)
+      Progress = Data.define(:activity, :up, :down, :subagents, :pid, :message, :context, :session) do
+        def initialize(pid: nil, message: nil, context: nil, session: nil, **rest) = super
       end
 
       # The one kind of line the trace does not keep.
@@ -112,6 +115,8 @@ module Agentilda
         @tasks = {}
         @spawned = 0
         @context = nil
+        @session = nil
+        @compacted = nil
       end
 
       # Everything sent to the model, which on any turn after the first is
@@ -166,8 +171,18 @@ module Agentilda
           subagents: @spawned,
           pid: @pid,
           message: @message,
-          context: @context)
+          context: @context,
+          session: @session)
       end
+
+      # @return [String, nil] the session id from the stream's `init` event
+      attr_reader :session
+
+      # What a `/compact` reported in its `compact_boundary` event:
+      # `pre_tokens`, `post_tokens` and the rest of its `compact_metadata`.
+      #
+      # @return [Hash, nil] nil until the session has been compacted
+      attr_reader :compacted
 
       # What the agent's own context holds now: everything its latest message
       # was sent, fresh, cache writes and cache reads alike. Each turn re-sends
@@ -275,7 +290,7 @@ module Agentilda
           @tools += tool_calls(event)
           announce(phrase_for(event))
         when "stream_event" then meter(event)
-        when "system" then delegation(event)
+        when "system" then system_event(event)
         when "result" then record_result(event)
         end
       end
@@ -351,7 +366,8 @@ module Agentilda
         end
       end
 
-      # A sub-agent starting, and a sub-agent reporting what it spent.
+      # The `system` events read: the session starting, the session compacted,
+      # a sub-agent starting, and a sub-agent reporting what it spent.
       #
       # `claude` reports a sub-agent's spend as a single `total_tokens` with no
       # split, and reports it cumulatively: the last number for a task is the
@@ -362,11 +378,23 @@ module Agentilda
       #
       # @param event [Hash]
       # @return [void]
-      def delegation(event)
+      def system_event(event)
         case event["subtype"]
+        when "init" then begin_session(event)
+        when "compact_boundary" then @compacted = event["compact_metadata"] || {}
         when "task_started" then start_task(event)
         when "task_progress", "task_notification" then update_task(event)
         end
+      end
+
+      # The first `init` names the session. A resumed one names the same id
+      # again, so the first is kept rather than the last.
+      #
+      # @param event [Hash]
+      # @return [void]
+      def begin_session(event)
+        @session ||= event["session_id"]
+        publish
       end
 
       # @param event [Hash]

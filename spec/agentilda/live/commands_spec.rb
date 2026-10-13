@@ -201,8 +201,9 @@ RSpec.describe Agentilda::Live::Commands, :tree do
 
     let(:car) { dispatcher.running.first.key }
     let(:agent) { car.split("/").last }
+    let(:handle) { dispatcher.job(car).handle }
 
-    %w[hold wrap_up stop compact].each do |kind|
+    %w[hold wrap_up stop].each do |kind|
       it "writes #{kind.upcase} into the agent's control file" do
         send_command(kind, plan: "001.00", agent:)
         apply
@@ -274,11 +275,109 @@ RSpec.describe Agentilda::Live::Commands, :tree do
       expect(apply.map(&:reason)).to eq(["claude offers no model gpt-9", "no agent called nobody"])
     end
 
-    it "switches the model now: INTERRUPT, then the agent starts again on the new one" do
-      send_command("switch_model", plan: "001.00", agent:, model: "claude-opus-5-5")
-      aggregate_failures do
-        expect(apply.first.reason).to include("restarts on claude-opus-5-5")
-        expect(control_of(car)).to eq("INTERRUPT")
+    describe "switch_model" do
+      context "when the agent has not named its session" do
+        before { send_command("switch_model", plan: "001.00", agent:, model: "claude-opus-5-5") }
+
+        it "falls back to INTERRUPT and a fresh session on the new model, saying why" do
+          aggregate_failures do
+            expect(apply.first.reason).to eq("#{agent} stops at its next step and restarts on claude-opus-5-5 " \
+                                             "from its resume note in a fresh session: it has no session id yet")
+            expect(control_of(car)).to eq("INTERRUPT")
+          end
+        end
+      end
+
+      context "when the agent has named its session" do
+        before do
+          handle.session = "sess-1"
+          send_command("switch_model", plan: "001.00", agent:, model: "claude-opus-5-5", id: "01JS")
+          apply
+        end
+
+        it "compacts it into the new model, and waits for the continuation before replying" do
+          aggregate_failures do
+            expect(handle.compaction.to_h).to include(model: "claude-opus-5-5", status: nil)
+            expect(store.hget(keys.done, "01JS")).to be_nil
+            expect(control_of(car)).to eq("INTERRUPT")
+          end
+        end
+
+        it "replies done once the continuation has started" do
+          handle.compaction.done!("#{agent} compacted and carries on on claude-opus-5-5")
+          expect(apply.map(&:wire)).to eq([{ id: "01JS", status: "done", reason: "#{agent} compacted and carries on on claude-opus-5-5",
+                                             at: "2026-10-13T09:00:00Z" }])
+        end
+      end
+
+      context "when the agent's CLI cannot resume a session" do
+        before do
+          handle.session = "sess-1"
+          allow(dispatcher).to receive(:adapter_for).and_return(Agentilda::Adapters.for("codex"))
+          send_command("switch_model", plan: "001.00", agent:, model: "claude-opus-5-5")
+        end
+
+        it "restarts it on the new model instead" do
+          expect(apply.first.reason).to end_with("in a fresh session: codex cannot resume a session")
+        end
+      end
+    end
+
+    describe "compact" do
+      context "when the agent has not named its session" do
+        before { send_command("compact", plan: "001.00", agent:) }
+
+        it "falls back to INTERRUPT and a fresh session, saying why" do
+          aggregate_failures do
+            expect(apply.first.reason).to eq("#{agent} has no session id yet, so it cannot be compacted: it stops at " \
+                                             "its next step and restarts from its resume note in a fresh session")
+            expect(control_of(car)).to eq("INTERRUPT")
+          end
+        end
+      end
+
+      context "when the agent has named its session" do
+        before do
+          handle.session = "sess-1"
+          allow(handle).to receive(:compact!).and_call_original
+          send_command("compact", plan: "001.00", agent:, id: "01JC")
+          apply
+        end
+
+        it "stops the agent for its compaction, on the model it is on, and holds the reply" do
+          aggregate_failures do
+            expect(handle.compaction.to_h).to include(model: nil, status: nil)
+            expect(control_of(car)).to eq("INTERRUPT")
+            expect(store.hget(keys.done, "01JC")).to be_nil
+          end
+        end
+
+        it "replies refused when the compaction could not happen" do
+          handle.compaction.refuse!("could not compact #{agent}: /compact exited 1", restart: true)
+          expect(apply.map { [it.status, it.reason] }).to eq([["refused", "could not compact #{agent}: /compact exited 1; " \
+                                                                          "it restarts from its resume note in a fresh session"]])
+        end
+
+        it "answers a repeat of the command with its first reply, and compacts nothing twice" do
+          handle.compaction.done!("compacted")
+          apply
+          send_command("compact", plan: "001.00", agent:, id: "01JC")
+          aggregate_failures do
+            expect(apply.map { [it.id, it.status, it.reason] }).to eq([%w[01JC done compacted]])
+            expect(handle).to have_received(:compact!).once
+          end
+        end
+      end
+
+      it "refuses an agent on a CLI that cannot resume a session" do
+        allow(dispatcher).to receive(:adapter_for).and_return(Agentilda::Adapters.for("pi"))
+        send_command("compact", plan: "001.00", agent:)
+        expect(apply.first.reason).to eq("pi cannot resume a session, so #{agent} cannot be compacted")
+      end
+
+      it "refuses an agent that is not running" do
+        send_command("compact", plan: "001.00", agent: "leah-researcher")
+        expect(apply.first.reason).to eq("001.00/leah-researcher is not running")
       end
     end
 

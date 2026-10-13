@@ -60,14 +60,73 @@ module Agentilda
         def to_ary = [ok, note]
       end
 
+      # A person's request to compact one running agent's session (W28),
+      # and, once the harness has acted on it, how that went.
+      # {Live::Commands} holds on to it and replies once {#finished?}.
+      #
+      # @!attribute [r] model
+      #   @return [String, nil] the model the session carries on in; nil keeps
+      #     the one it was started on
+      # @!attribute [r] status
+      #   @return [String, nil] "done" once the continuation has started,
+      #     "refused" when it could not be, nil while under way
+      # @!attribute [r] reason
+      #   @return [String, nil]
+      # @!attribute [r] restart
+      #   @return [Boolean] whether the agent, stopped for a compaction that
+      #     could not happen, gets its round back to start again afresh
+      Compaction = Struct.new(:model, :status, :reason, :restart) do
+        # @return [Boolean]
+        def finished? = !status.nil?
+
+        # @param reason [String]
+        # @return [void]
+        def done!(reason) = settle("done", reason)
+
+        # @param reason [String]
+        # @param restart [Boolean] the agent stopped for nothing, and is
+        #   started again from its resume note in a fresh session
+        # @return [void]
+        def refuse!(reason, restart: false)
+          self.restart = restart
+          settle("refused", restart ? "#{reason}; it restarts from its resume note in a fresh session" : reason)
+        end
+
+        private
+
+        # The reason is set before the status, so a reader on another thread
+        # that sees it finished also sees why.
+        #
+        # @return [void]
+        def settle(status, reason)
+          self.reason = reason
+          self.status = status
+        end
+      end
+
       # What the dispatcher holds on a running invocation, so a keypress can
       # reach it: the process, its clock and its control file.
       #
       # Filled in by {#call} once the child exists. Every method tolerates the
       # gap before that, because the keyboard does not wait.
       class Handle
-        # @return [Agentilda::Execution::Child, nil]
+        def initialize
+          @mutex = Mutex.new
+          @requested = nil
+          @compaction = nil
+          @closed = false
+        end
+
+        # @return [Agentilda::Execution::Child, nil] the process running now,
+        #   which after a compaction is no longer the first one
         attr_accessor :child
+
+        # @return [String, nil] the CLI's session id, once its stream named it
+        attr_accessor :session
+
+        # @return [Agentilda::Execution::Executor::Compaction, nil] the latest
+        #   compaction asked for
+        def compaction = @mutex.synchronize { @compaction }
 
         # @return [Agentilda::Execution::Clock, nil]
         attr_accessor :clock
@@ -103,6 +162,114 @@ module Agentilda
         # @param seconds [Integer]
         # @return [void]
         def extend!(seconds) = clock&.extend!(seconds)
+
+        # Ask for the session to be compacted (W28): INTERRUPT, so the agent
+        # leaves a resume note and ends its turn, and SIGKILL after +grace+
+        # seconds if it has not. {Executor#call} then compacts the session and
+        # carries it on. Asked twice while under way, it is the same request.
+        #
+        # @param model [String, nil] what the session carries on in
+        # @param grace [Integer] seconds before the agent is made to stop
+        # @return [Agentilda::Execution::Executor::Compaction]
+        def compact!(model: nil, grace: Control::GRACE)
+          @mutex.synchronize do
+            return @compaction if @compaction && !@compaction.finished?
+
+            @compaction = Compaction.new(model:)
+            if @closed
+              @compaction.refuse!("the agent finished before it could be compacted")
+              return @compaction
+            end
+            @requested = @compaction
+          end
+          Control.write(control, Control::INTERRUPT) if control
+          stop_after(grace, child)
+          @compaction
+        end
+
+        # @return [Agentilda::Execution::Executor::Compaction, nil] the request
+        #   to act on now, handed out once
+        def take_compaction = @mutex.synchronize { @requested.tap { @requested = nil } }
+
+        # The invocation is over: a request that arrives now, or one that came
+        # too late to be acted on, is refused rather than left waiting.
+        #
+        # @return [void]
+        def close!
+          @mutex.synchronize do
+            @closed = true
+            @requested&.refuse!("the agent finished before it could be compacted")
+            @requested = nil
+          end
+        end
+
+        private
+
+        # @param grace [Integer]
+        # @param process [Agentilda::Execution::Child, nil] the one asked to stop
+        # @return [void]
+        def stop_after(grace, process)
+          return unless process
+
+          Thread.new do
+            sleep(grace) if grace.positive?
+            process.kill("KILL") if process.equal?(child) && process.alive?
+          end
+        end
+      end
+
+      # The transcripts of one invocation's sessions, added up: the agent's own
+      # and, once compacted, the `/compact` and the continuation after it. One
+      # car on the board, so one meter, which must not drop when the second
+      # session starts counting from zero.
+      class Sessions
+        def initialize = @all = []
+
+        # @param transcript [Agentilda::Execution::Transcript]
+        # @return [Agentilda::Execution::Executor::Sessions]
+        def <<(transcript)
+          @all << transcript
+          self
+        end
+
+        # @return [Agentilda::Execution::Transcript] the session running now
+        def current = @all.last
+
+        # @return [Agentilda::Execution::Transcript, nil] the one before it
+        def previous = @all[-2]
+
+        # @return [Integer]
+        def up = @all.sum(&:up)
+
+        # @return [Integer]
+        def down = @all.sum(&:down)
+
+        # @return [Integer]
+        def cached = @all.sum(&:cached)
+
+        # @return [Integer]
+        def fresh = up - cached + down
+
+        # @return [Integer]
+        def spawned = @all.sum(&:spawned)
+
+        # @return [Integer]
+        def delegated = @all.sum(&:delegated)
+
+        # @return [Integer]
+        def tools = @all.sum(&:tools)
+
+        # What the sessions already over spent, added to the running one's
+        # progress so the meter carries on rather than starting again.
+        #
+        # @param progress [Agentilda::Execution::Transcript::Progress]
+        # @return [Agentilda::Execution::Transcript::Progress]
+        def carry(progress)
+          before = @all[0...-1]
+          progress.with(up: progress.up + before.sum(&:up),
+            down: progress.down + before.sum(&:down),
+            subagents: progress.subagents + before.sum(&:spawned))
+        end
       end
 
       # Tools no agent may use under this autonomy level, whatever its definition
@@ -297,58 +464,56 @@ module Agentilda
         before = head(root)
         trace = trace_path(agent, subject)
         profile = profile_for(agent, subject)
-        transcript = profile.adapter.transcript(trace:, &on_progress)
         control = Control.register(@trace_dir, "#{subject.feature.ordinal}-#{agent.name}")
         handle.control = control
         argv = invocation(agent, subject, root:, control:, round:, successor:, partners:)
-
-        child = @spawn.call(argv, chdir: root, env: profile.adapter.environment)
-        handle.child = child
-        transcript.pid = child.pid
+        sessions = Sessions.new
+        child = launch(argv, root:, profile:, trace:, handle:, sessions:, &on_progress)
         clock = Clock.new(seconds: timeout_for(agent),
           control:,
           on_expire: -> { handle.kill!(grace: 0, reason: :timeout) })
         handle.clock = clock
         clock.start
 
-        child.each_chunk do |out|
-          transcript.push(out)
-          abort_if_over(transcript, handle)
+        status = drain(child, sessions, handle)
+        while (compaction = handle.take_compaction)
+          resumed = carry_on(compaction, agent, subject, root:, profile:, trace:, handle:, sessions:, &on_progress)
+          status = resumed if resumed
         end
-        status = child.wait
-        transcript.finish
+        handle.close!
+        transcript = sessions.current
         clock.stop
         Control.release(control)
 
         if handle.killed
-          return spent(transcript,
+          return spent(sessions,
             started,
             ok:     false,
-            pid:    child.pid,
+            pid:    handle.pid,
             killed: handle.killed,
             note:   "#{killed_note(handle.killed, clock)}, last seen #{transcript.activity || "starting up"} - trace: #{trace}")
         end
         unless status.success?
-          return failure(transcript,
+          return failure(sessions,
             started,
             "#{profile.adapter.executable} exited #{status.exitstatus}: #{said(transcript)} - trace: #{trace}",
-            pid: child.pid)
+            pid: handle.pid)
         end
         if transcript.failed?
-          return failure(transcript,
+          return failure(sessions,
             started,
             "#{profile.adapter.executable} reported: #{transcript.error} - trace: #{trace}",
-            pid: child.pid)
+            pid: handle.pid)
         end
 
         violation = boundary_violation(before, root)
-        return failure(transcript, started, violation, pid: child.pid) if violation
+        return failure(sessions, started, violation, pid: handle.pid) if violation
 
-        spent(transcript,
+        spent(sessions,
           started,
           ok:   true,
-          pid:  child.pid,
-          note: "completed#{" - #{transcript.tools} tool calls" if transcript.tools.positive?}")
+          pid:  handle.pid,
+          note: "completed#{" - #{sessions.tools} tool calls" if sessions.tools.positive?}")
       end
 
       # A failed invocation still spent what it spent, and a run that burned two
@@ -442,6 +607,122 @@ module Agentilda
 
       private
 
+      # Start one session's process and the transcript that reads it. Every
+      # session of an invocation shares its trace file, which is opened for
+      # appending, so a compacted run reads back as one stream.
+      #
+      # @return [Agentilda::Execution::Child]
+      def launch(argv, root:, profile:, trace:, handle:, sessions:, &on_progress)
+        transcript = profile.adapter.transcript(trace:) do |progress|
+          handle.session ||= progress.session
+          on_progress&.call(sessions.carry(progress))
+        end
+        sessions << transcript
+        child = @spawn.call(argv, chdir: root, env: profile.adapter.environment)
+        handle.child = child
+        transcript.pid = child.pid
+        child
+      end
+
+      # @return [Process::Status]
+      def drain(child, sessions, handle)
+        child.each_chunk do |out|
+          sessions.current.push(out)
+          abort_if_over(sessions, handle)
+        end
+        status = child.wait
+        sessions.current.finish
+        status
+      end
+
+      # The agent has stopped for its compaction (W28): its session is
+      # compacted, then resumed with {Prompt#continuation}, on the model the
+      # request names or the one it was on, under the same handle. The
+      # request is answered once the continuation has started, which is the
+      # moment a person can see it carry on.
+      #
+      # @param compaction [Agentilda::Execution::Executor::Compaction]
+      # @return [Process::Status, nil] how the continuation ended; nil when
+      #   there was none, and the agent's own stop stands
+      def carry_on(compaction, agent, subject, root:, profile:, trace:, handle:, sessions:, &)
+        model = compaction.model || profile.model
+        if handle.killed
+          compaction.refuse!("#{agent.name} was stopped first (#{handle.killed})")
+          return nil
+        end
+        unless (why = uncompactable(handle, profile))
+          compacted = compact(agent, model, root:, profile:, trace:, handle:, sessions:)
+          why = compacted unless compacted == true
+        end
+        if why
+          compaction.refuse!("could not compact #{agent.name}: #{why}", restart: !handle.killed)
+          return nil
+        end
+
+        Control.write(handle.control, "")
+        prompt = Prompt.new(agent:, subject:, root:, profile:, control: handle.control).continuation
+        child = launch(resumption(agent, profile, root:, session: handle.session, prompt:, model:),
+          root:, profile:, trace:, handle:, sessions:,
+          &)
+        compaction.done!(compacted_note(agent, sessions, model, compaction))
+        drain(child, sessions, handle)
+      end
+
+      # @return [String, nil] why the session cannot be compacted, if it cannot
+      def uncompactable(handle, profile)
+        return "#{profile.adapter.name} cannot resume a session" unless profile.adapter.compacts?
+
+        "no session id to resume" unless handle.session
+      end
+
+      # `/compact` sent into the stopped session.
+      #
+      # @return [true, String] true, or why it failed
+      def compact(agent, model, root:, profile:, trace:, handle:, sessions:)
+        argv = resumption(agent,
+          profile,
+          root:,
+          session: handle.session,
+          prompt: profile.adapter.compact_prompt,
+          model:,
+          slash_commands: true)
+        status = drain(launch(argv, root:, profile:, trace:, handle:, sessions:), sessions, handle)
+        transcript = sessions.current
+        return "the agent was stopped during /compact (#{handle.killed})" if handle.killed
+        return "/compact exited #{status.exitstatus}: #{said(transcript)}" unless status.success?
+        return "/compact reported: #{transcript.error}" if transcript.failed?
+        return "/compact did not compact: #{said(transcript)}" unless transcript.compacted
+
+        true
+      end
+
+      # @return [String] the reply a person reads
+      def compacted_note(agent, sessions, model, compaction)
+        sizes = sessions.previous.compacted.values_at("pre_tokens", "post_tokens")
+        tokens = sizes.all? ? " from #{sizes.first} to #{sizes.last} tokens" : ""
+        "#{agent.name} compacted#{tokens} and carries on#{" on #{model}" if compaction.model}"
+      end
+
+      # The argv that carries an existing session on, with the boundary flags
+      # every invocation gets.
+      #
+      # @return [Array<String>]
+      def resumption(agent, profile, root:, session:, prompt:, model:, slash_commands: false)
+        profile.adapter.argv(
+          Adapters::Invocation.new(prompt:,
+            root:,
+            model:,
+            effort:          profile.effort,
+            allowed_tools:   agent.allowed_tools,
+            denied_tools:    denied_for(agent),
+            denied_commands: denied_commands(agent),
+            network:         agent.network,
+            lean:            @lean,
+            resume:          session,
+            slash_commands:)
+        )
+      end
+
       # One file per invocation. The plan number and the agent's name make it
       # findable; the pid and the clock keep two concurrent runs from writing to
       # the same one. See {TRACE_DIR} for how to read one back.
@@ -487,7 +768,7 @@ module Agentilda
       # The token budget crossed, or the grace period after `q` spent. Both go
       # through the handle so the kill is the same kill a keypress makes.
       #
-      # @param transcript [Agentilda::Execution::Transcript]
+      # @param transcript [Agentilda::Execution::Executor::Sessions]
       # @param handle [Agentilda::Execution::Executor::Handle]
       # @return [void]
       def abort_if_over(transcript, handle)
