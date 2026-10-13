@@ -589,6 +589,52 @@ RSpec.describe Agentilda::Engine::Dispatcher, :tree do
     end
   end
 
+  describe "a build finished in a run that opens no pull request" do
+    let!(:built) do
+      plans do |t|
+        t.plan "001.00", :new, "tic-tac-toe", files: { "spec.md" => "---\nlane: quick\n---\n#{spec_body}" }
+      end
+    end
+
+    let(:status) { tree.reload.subjects.first.status.key }
+
+    # The executor reads these from the agent's thread. Memoized first, here,
+    # so it does not wait on the let! below, which holds RSpec's memo lock
+    # for as long as the run takes.
+    before { [calls, stamp] }
+
+    context "when the builder signs Completed" do
+      let!(:attempts) { runner_with(executor_with { |_, _, _| "Completed" }, agents: agents.only("r2d2-mechanic")).call }
+
+      it "stays at 🟡, done for this run, and says it waits for a pull request" do
+        aggregate_failures do
+          expect(status).to eq(:building)
+          expect(attempts.map(&:ok)).to eq([true])
+          expect(attempts.first.note).to include("built locally, no pull request in this run")
+        end
+      end
+    end
+
+    context "when the builder's note says approved" do
+      let!(:attempts) do
+        approving = executor_with do |agent, subject, round|
+          Agentilda::Plans::Ledger.append(File.join(subject.feature.path, agent.ledger.first),
+            "> [#{stamp}] [ agent: #{agent.name}   status: Completed, round #{round} (approved) ]")
+          nil
+        end
+        runner_with(approving, agents: agents.only("r2d2-mechanic")).call
+      end
+
+      it "is not taken as a review verdict" do
+        aggregate_failures do
+          expect(status).to eq(:building)
+          expect(attempts.first.note).not_to include("awaiting merge")
+          expect(attempts.first.note).to include("built locally")
+        end
+      end
+    end
+  end
+
   describe "the reviewer's verdicts" do
     let!(:built) do
       plans { |t|

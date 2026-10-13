@@ -461,7 +461,7 @@ module Agentilda
         if isolation != :worktree || options[:git_push] == false
           unless quiet?(options)
             warn("No pull request will be opened (#{isolation == :worktree ? "--no-git-push" : "--isolation shared"}), " \
-                 "so plans stop at 🟢 Ready for Review:\nhansolo-reviewer reviews a pull request, and waits until one is open.")
+                 "so a finished build stays at 🟡 Building:\n🟢 Ready for Review needs an open pull request, and hansolo-reviewer reviews one.")
           end
           return nil
         end

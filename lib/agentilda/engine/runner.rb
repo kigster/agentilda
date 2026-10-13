@@ -81,6 +81,13 @@ module Agentilda
       # @return [Boolean]
       def dry_run? = @dry_run
 
+      # Whether a finished build is pushed and its pull request opened. Not
+      # with `--isolation shared` or `--no-git-push`, the local-only runs, where
+      # a plan can never hold the open pull request 🟢 requires.
+      #
+      # @return [Boolean]
+      def publishes? = !@publisher.nil?
+
       # @return [String] the repository root
       def root = isolated? ? worktree.root : shared_root
 
