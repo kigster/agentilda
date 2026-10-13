@@ -135,8 +135,16 @@ What it has to say:
 
 ## Merged pull requests
 
-- An approved plan waits at Pull request with its PR link, CI passing and an **approved** chip. Its status-bar pill is light green with ✓: ready to merge, not finished.
-- **Purple means merged on GitHub, and nothing less.** Approval, a green CI or a ready-to-merge label never turns anything purple. Only when GitHub reports the PR merged do the PR link and a **merged** chip take GitHub's merged purple (`--merged`, #8250DF light, #A371F7 dark), CI drops away, and the plan is complete (its folder moves to the done state). Its pill turns **solid green with ✅**, the one pill that means finished.
-- The summary reads "N merged, N ready to merge, N blocked".
-- **Merged pills leave the bar when it runs out of room**, oldest merge first, each only after it has been shown at least five minutes (30 s in the mockup), with a short fade. Approved, working and blocked pills never leave.
-- Other machines' merged plans show the same way, in their tab and their pills.
+- **A row wears its state.** Lane colours while it works; **green** once approved (PR link, CI passing, **approved** chip), with a light green ✓ pill: ready to merge, not finished.
+- **Purple means merged on GitHub, and nothing less.** Approval, a green CI or a label never turns anything purple. When GitHub reports the merge, the row, its PR link and a **merged** chip take GitHub's merged purple (`--merged`, #8250DF light, #A371F7 dark), CI drops away, and the plan is complete (its folder moves to the done state). Its pill turns solid green with ✅.
+- **The merged row stays 10 seconds, then fades and folds away over one second**, slowly, making room for the plans still in progress. The machine band's plan count drops with it.
+- **Its pill then turns purple, keeping the ✅.** It stays on the bar until the bar runs out of room; then purple pills leave, oldest first, each only after at least five minutes (30 s in the mockup), with a short fade. Working, blocked and approved pills never leave.
+- The summary reads "N merged, N ready to merge, N blocked". Other machines' merged plans show the same way.
+
+## Action menu
+
+**New idea** is now **Action ▾**, a menu (`role="menu"`, arrow keys, Home/End, Esc back to the button):
+
+- **New idea** — "Describe it here; plans are created for you": the idea dialog, as before.
+- **Choose an existing plan** — "Add a plan from .plans to this run": the same menu swaps its items for the plans this machine may take, with ← Back at the top. A plan is offered when it is **not complete** and **not being worked on by any machine**, this one included (no W26 claim on it). **Blocked plans are offered**, marked 🅱️: the person adding one is right here to answer it, and its question goes straight to Needs you. Each item shows the plan's station and lane. A note at the bottom names what was left out and why ("001, 002 in this run; 008 on alex@build-01; 011 complete").
+- Choosing a plan claims it (`SET agentilda:<repo>:claim:<plan> <node> NX EX 60`) before it joins the run, so two machines choosing the same plan at once cannot both get it; the one that loses the race is told the plan was just taken.

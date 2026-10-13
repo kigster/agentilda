@@ -518,6 +518,10 @@
   .pill.is-merged { background: var(--go); border-color: var(--go); color: #fff; }
   .pill.is-merged .pill-time { color: rgb(255 255 255 / 85%); }
   .pill.is-merged:hover { background: color-mix(in srgb, var(--go) 85%, #000); }
+  /* Its row has left the board: the pill takes GitHub's merged purple, keeping the checkbox. */
+  .pill.is-gone { background: var(--merged); border-color: var(--merged); color: #fff; }
+  .pill.is-gone .pill-time { color: rgb(255 255 255 / 85%); }
+  .pill.is-gone:hover { background: color-mix(in srgb, var(--merged) 85%, #000); }
   .pill.is-done .pill-mark { color: var(--go); font-weight: 800; }
   .pill-text { display: flex; flex-direction: column; line-height: 1.15; }
   .pill-id { font-size: 13px; font-weight: 800; }
@@ -535,6 +539,17 @@
   .start { width: min(1120px, calc(100vw - 32px)); max-height: calc(100vh - 48px); padding: 0; border: 1px solid var(--hairline);
            border-radius: 14px; background: var(--plate); color: var(--ink); box-shadow: 0 24px 80px rgb(0 0 0 / 35%); }
   .start::backdrop { background: rgb(8 12 20 / 55%); backdrop-filter: blur(2px); }
+  .action-wrap { position: relative; }
+  .menu { position: absolute; right: 0; top: calc(100% + 6px); z-index: 40; width: 340px; max-height: 70vh; overflow-y: auto; padding: 6px;
+          background: var(--plate); border: 1px solid var(--hairline); border-radius: 12px; box-shadow: 0 12px 32px rgb(0 0 0 / 28%); }
+  .menu[hidden] { display: none; }
+  .menu-item { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; width: 100%; min-height: 44px; padding: 8px 12px;
+               border: 0; border-radius: 8px; background: transparent; color: var(--ink); font: inherit; text-align: left; cursor: pointer; }
+  .menu-item:hover, .menu-item:focus-visible { background: color-mix(in srgb, var(--ink) 9%, transparent); outline: none; }
+  .menu-title { font-weight: 700; }
+  .menu-sub { font-size: 12px; color: var(--ink-soft); }
+  .menu-back { min-height: 36px; color: var(--ink-soft); }
+  .menu-note { margin: 6px 12px 4px; font-size: 12px; color: var(--ink-soft); }
   .help-pill { min-width: 40px; padding-inline: 0; border: 1px solid color-mix(in srgb, var(--ink) 30%, transparent); border-radius: 999px; font-weight: 800; }
   .help { width: min(620px, calc(100vw - 32px)); }
   .help-body { padding: 4px 24px 8px; overflow-y: auto; font-size: 15px; line-height: 1.6; }
@@ -655,7 +670,10 @@
   <span class="sample">Sample data</span>
   <span class="topbar-spacer"></span>
   <button class="btn btn-quiet" id="merge" type="button" aria-pressed="false" title="Show every machine's plans on one board: ours first, theirs below and faded">All machines</button>
-  <button class="btn" id="new-idea" type="button">New idea</button>
+  <div class="action-wrap">
+    <button class="btn" id="action" type="button" aria-haspopup="menu" aria-expanded="false" aria-controls="action-list">Action <span aria-hidden="true">▾</span></button>
+    <div class="menu" id="action-list" role="menu" aria-labelledby="action" hidden></div>
+  </div>
   <button class="btn btn-quiet btn-icon" id="theme" type="button" aria-label="Switch to dark theme"></button>
   <button class="btn btn-alarm" type="button" id="stop-all" aria-haspopup="dialog" title="Stops every agent on this machine. Other machines keep running.">Stop All Local</button>
   <button class="btn btn-quiet help-pill" id="help-open" type="button" aria-haspopup="dialog" aria-label="How this works">?</button>
@@ -956,6 +974,13 @@
   }
 
   // Purple means merged on GitHub and nothing less: an approved PR keeps its approved chip until GitHub reports the merge.
+  // A row wears its state: lane colours while it works, green once approved, purple once GitHub reports the merge.
+  function rowColors(plan) {
+    if (plan.mergedAt) return ["var(--merged)", "color-mix(in srgb, var(--merged) 16%, var(--plate))"];
+    if (plan.at === 6) return ["var(--go)", "color-mix(in srgb, var(--go) 14%, var(--plate))"];
+    return [LANES[plan.lane].color, LANES[plan.lane].bg];
+  }
+  function tint(row, plan) { const [c, bg] = rowColors(plan); row.style.setProperty("--lane-color", c); row.style.setProperty("--lane-bg", bg); }
   function terminus(plan) {
     return plan.mergedAt
       ? `<div class="terminus">${prLink(plan)}<span class="chip chip-merged">merged</span></div>`
@@ -965,6 +990,7 @@
     const box = plan.el.querySelector("[data-cars]");
     box.innerHTML = "";
     paintNumbers(plan);
+    tint(plan.el, plan);
     if (plan.at === 6) {
       box.innerHTML = terminus(plan);
       return;
@@ -1687,6 +1713,7 @@
   let finishedSeq = Math.max(0, ...plans.map(p => p.doneAt || 0));
   const span = s => s < 3600 ? clock(s) : Math.floor(s / 3600) + "h " + String(Math.floor(s / 60) % 60).padStart(2, "0") + "m";
   function pillState(plan) {
+    if (plan.goneAt !== undefined) return { cls: "is-gone", mark: "✅", say: `PR #${plan.pr} merged on GitHub, plan complete` };
     if (plan.mergedAt) return { cls: "is-merged", mark: "✅", say: `PR #${plan.pr} merged on GitHub, plan complete` };
     if (plan.at === 6) return { cls: "is-done", mark: "✓", say: `reviewed, PR #${plan.pr} ready to merge` };
     if (plan.interrupted) return { cls: "is-blocked", mark: "⭕️", say: "needs a decision: keep or discard the interrupted agent's work" };
@@ -1774,7 +1801,7 @@
     }
     // When the bar runs out of room, merged plans leave it, oldest first, once each has been shown for a while.
     if (list.scrollWidth > list.clientWidth + 1) {
-      const leaving = plans.filter(p => p.mergedAt && !p.offBar && tick - p.mergedAt >= MERGED_STAYS).sort((a, b) => a.mergedAt - b.mergedAt)[0];
+      const leaving = plans.filter(p => p.goneAt !== undefined && !p.offBar && tick - p.goneAt >= MERGED_STAYS).sort((a, b) => a.goneAt - b.goneAt)[0];
       if (leaving) {
         leaving.offBar = true;
         const go = () => { leaving.pill.remove(); paintPills(); };
@@ -1789,8 +1816,19 @@
   // the PR's merged state. A merged pill stays on the bar at least MERGED_STAYS seconds (five minutes in the real one).
   const MERGED_STAYS = 30;
   let tick = 0; // simulation seconds, read by the pill bar before the clock below starts
+  // A merged row stays, purple, for ROW_STAYS seconds, then fades and folds away over a second to make room for the
+  // plans still in progress. From then on only its pill remains: purple with a checkbox, until the bar needs the room.
+  const ROW_STAYS = 10;
+  function retire(plan) {
+    const done = () => { plan.el.remove(); plan.goneAt = tick; paintPills(); paintTheirs(); };
+    if (reduced) { done(); return; }
+    const h = plan.el.offsetHeight;
+    plan.el.animate([{ opacity: 1, height: `${h}px` }, { opacity: 0, height: `${h}px`, offset: .6 }, { opacity: 0, height: "0px", paddingTop: 0, paddingBottom: 0 }],
+      { duration: 1000, easing: "ease-in-out" }).finished.then(done);
+  }
   function merge(plan) {
     plan.mergedAt = tick;
+    setTimeout(() => retire(plan), ROW_STAYS * 1000);
     paintCars(plan); paintPills();
     $("announcer").textContent = `PR #${plan.pr} was merged on GitHub. ${plan.id} is complete.`;
     log("github", "info", `PR #${plan.pr} merged into main on GitHub; ${plan.id} done (git mv)`);
@@ -2146,7 +2184,81 @@
   $("help").addEventListener("click", e => { if (e.target === $("help")) $("help").close(); });
   $("help").addEventListener("close", () => $("help-open").focus());
   function openStart() { drafted ? showDrafted() : showIdea(); $("start").showModal(); }
-  $("new-idea").addEventListener("click", openStart);
+  // Action: start from a new idea, or add an existing plan to this run. The second swaps the same menu for the plans
+  // this machine may take: not complete, and not being worked on here or on another machine (W26's claim). Blocked
+  // plans are offered too, since a person is right here to unblock them.
+  const BACKLOG = [
+    { id: "004", title: "Web control room", lane: "full", at: 2 },
+    { id: "012", title: "Export the ledger to CSV", lane: "plan", at: 3, blocked: "Should the export include voided entries, or only posted ones?" },
+    { id: "013", title: "Retire the scroll-height flag", lane: "quick", at: 3 },
+    { id: "014", title: "Mirror blocked plans to Linear", lane: "full", at: 1 },
+  ];
+  const slug = t => t.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+  function menuItem(title, sub, onPick, extra = "") {
+    const b = document.createElement("button");
+    b.type = "button"; b.setAttribute("role", "menuitem"); b.className = `menu-item ${extra}`;
+    b.innerHTML = `<span class="menu-title"></span>${sub ? `<span class="menu-sub"></span>` : ""}`;
+    b.querySelector(".menu-title").textContent = title;
+    if (sub) b.querySelector(".menu-sub").textContent = sub;
+    b.addEventListener("click", onPick);
+    return b;
+  }
+  function menuMain() {
+    $("action-list").replaceChildren(
+      menuItem("New idea", "Describe it here; plans are created for you", () => { closeMenu(); openStart(); }),
+      menuItem("Choose an existing plan", "Add a plan from .plans to this run", () => { menuPlans(); focusItem(0); }));
+  }
+  function menuPlans() {
+    const theirs = NODES.flatMap(n => n.plans.map(p => ({ ...p, on: who(n) })));
+    const taken = new Set([...plans.map(p => p.id), ...theirs.map(p => p.id)]);
+    const open = BACKLOG.filter(p => !taken.has(p.id));
+    const items = [menuItem("← Back", "", () => { menuMain(); focusItem(1); }, "menu-back")];
+    for (const p of open) {
+      const where = `${STATIONS[p.at].name}, ${LANES[p.lane].label.toLowerCase()}${p.blocked ? ", blocked 🅱️" : ""}`;
+      items.push(menuItem(`${p.id} ${p.title}`, where, () => addExisting(p)));
+    }
+    if (!open.length) items.push(Object.assign(document.createElement("p"), { className: "menu-note", textContent: "Nothing to add: every open plan is already being worked on." }));
+    const busy = theirs.filter(p => p.at < 6).map(p => `${p.id} on ${p.on}`);
+    const mine = plans.filter(p => !p.mergedAt).map(p => p.id);
+    const complete = [...plans.filter(p => p.mergedAt), ...theirs.filter(p => p.mergedAt)].map(p => p.id);
+    const note = document.createElement("p");
+    note.className = "menu-note";
+    note.textContent = `Not listed: ${[mine.length && `${mine.join(", ")} in this run`, busy.length && busy.join(", "), complete.length && `${complete.join(", ")} complete`].filter(Boolean).join("; ")}.`;
+    note.setAttribute("role", "none");
+    items.push(note);
+    $("action-list").replaceChildren(...items);
+  }
+  function addExisting(p) {
+    closeMenu();
+    const key = `agentilda:github.com/kigster/agentilda:claim:${p.id}-${slug(p.title)}`;
+    log("engine", "info", `SET ${key} 5e0c41d2a7b39f80c1d4e6a2 NX EX 60 -> OK, ${p.id} claimed for this machine`);
+    BACKLOG.splice(BACKLOG.indexOf(p), 1);
+    const plan = { id: p.id, title: p.title, lane: p.lane, at: p.at, spent: [0, 0], secs: 0, fresh: true };
+    plans.push(plan);
+    addRow(plan);
+    if (p.blocked && plan.cars[0]) block(plan, plan.cars[0], p.blocked);
+    paintPills(); paintTheirs();
+    selectTab($("tab-board"));
+    plan.el.scrollIntoView({ behavior: reduced ? "auto" : "smooth", block: "center" });
+    $("announcer").textContent = `${p.id} added to this run${p.blocked ? "; it is blocked and needs you" : ""}.`;
+  }
+  const menuItems = () => [...$("action-list").querySelectorAll("[role=menuitem]")];
+  const focusItem = i => menuItems().at(i)?.focus();
+  function openMenu() { menuMain(); $("action-list").hidden = false; $("action").setAttribute("aria-expanded", "true"); focusItem(0); }
+  function closeMenu(back) { $("action-list").hidden = true; $("action").setAttribute("aria-expanded", "false"); if (back) $("action").focus(); }
+  $("action").addEventListener("click", () => $("action-list").hidden ? openMenu() : closeMenu());
+  $("action-list").addEventListener("keydown", e => {
+    const items = menuItems(), i = items.indexOf(document.activeElement);
+    if (e.key === "ArrowDown") { e.preventDefault(); items[(i + 1) % items.length].focus(); }
+    else if (e.key === "ArrowUp") { e.preventDefault(); items.at(i - 1).focus(); }
+    else if (e.key === "Home") { e.preventDefault(); items[0].focus(); }
+    else if (e.key === "End") { e.preventDefault(); items.at(-1).focus(); }
+    else if (e.key === "Escape") { e.preventDefault(); e.stopPropagation(); closeMenu(true); }
+    else if (e.key === "Tab") closeMenu();
+  });
+  // The path, not e.target: choosing "Choose an existing plan" replaces the item that was clicked, so by now the
+  // target is detached and would look like a click outside.
+  document.addEventListener("click", e => { if (!e.composedPath().some(el => el.classList?.contains("action-wrap"))) closeMenu(); });
   // tilda start opens the page at #start (decision W19).
   if (location.hash === "#start") openStart();
 
@@ -2206,6 +2318,7 @@
     row.className = "plan" + (faded ? " is-theirs" : "");
     row.style.setProperty("--lane-color", lane.color);
     row.style.setProperty("--lane-bg", lane.bg);
+    tint(row, plan);
     const cars = plan.at === 6
       ? terminus(plan)
       : plan.cars.map(c => `<div class="car is-readonly"><div class="car-top"><span class="car-agent">${c.agent}</span><span class="car-model">${modelName(c.model)}</span></div>
@@ -2264,9 +2377,9 @@
         });
         $("pills-theirs").append(plan.pill);
       }
-      const done = plan.at === 6, b = plan.pill.querySelector("button");
+      const done = plan.at === 6, b = plan.pill.querySelector("button"); // their merged plans left their board long ago
       b.classList.toggle("is-done", done && !plan.mergedAt);
-      b.classList.toggle("is-merged", Boolean(plan.mergedAt));
+      b.classList.toggle("is-gone", Boolean(plan.mergedAt));
       b.querySelector(".pill-mark").textContent = plan.mergedAt ? "✅" : done ? "✓" : "🖥️";
       b.querySelector(".pill-time").textContent = span(plan.secs);
       b.title = `${plan.id} ${plan.title}: on ${who(n)}, ${plan.mergedAt ? "merged on GitHub, complete" : done ? "reviewed, ready to merge" : `at ${STATIONS[plan.at].name}`}. Read only.`;
@@ -2276,18 +2389,18 @@
     paintTheirPills();
     for (const n of NODES) {
       n.panel.querySelector(".machine-note").innerHTML = `Read only. <strong>${who(n)}</strong> (${n.ip}) is working on these in ${n.path}; this machine will not start them. Last seen ${n.seen}s ago.`;
-      n.panel.querySelector("[data-rows]").replaceChildren(...n.plans.map(p => theirRow(p, n, false)));
+      n.panel.querySelector("[data-rows]").replaceChildren(...n.plans.filter(p => !p.mergedAt).map(p => theirRow(p, n, false)));
     }
     let box = $("theirs");
     $("ours-head")?.remove();
     if (!merged) { box?.remove(); return; }
-    const ours = machineHead("dana@studio-mini", ["10.0.4.12", `${plans.length} plans`, "this machine"], true);
+    const ours = machineHead("dana@studio-mini", ["10.0.4.12", `${plans.filter(p => p.goneAt === undefined).length} plans`, "this machine"], true);
     ours.id = "ours-head";
     $("plans").before(ours);
     if (!box) { box = Object.assign(document.createElement("div"), { id: "theirs" }); $("plans").after(box); }
     box.replaceChildren(...NODES.flatMap(n => [
-      machineHead(who(n), [n.ip, `${n.plans.length} plans`, "read only", `last seen ${n.seen}s ago`]),
-      ...n.plans.map(p => theirRow(p, n, true))]));
+      machineHead(who(n), [n.ip, `${n.plans.filter(p => !p.mergedAt).length} plans`, "read only", `last seen ${n.seen}s ago`]),
+      ...n.plans.filter(p => !p.mergedAt).map(p => theirRow(p, n, true))]));
   }
   function setMerged(on) {
     merged = on;
