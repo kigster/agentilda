@@ -192,7 +192,7 @@
           transform: translateX(calc(var(--col) * var(--colw) + var(--colw) / 2 - 22px));
           transition: transform 700ms cubic-bezier(.6,0,.2,1); width: max-content; }
   .car {
-    display: block; text-align: left; width: 248px; padding: 10px 12px; cursor: pointer;
+    position: relative; display: block; text-align: left; width: 248px; padding: 10px 12px; cursor: pointer;
     --car-tint: var(--go);
     background: color-mix(in srgb, var(--car-tint) 13%, transparent);
     border: 1px solid color-mix(in srgb, var(--car-tint) 32%, transparent); border-left: 3px solid var(--lane-color);
@@ -207,8 +207,8 @@
                                   display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
   .car:hover { border-color: color-mix(in srgb, var(--car-tint) 70%, transparent); }
   .car[aria-expanded="true"] { border-color: var(--ink); }
-  .car:hover, .car[aria-expanded="true"] { border-left-color: var(--lane-color); }
-  .car.is-blocked:hover, .car.is-blocked[aria-expanded="true"] { border-left-color: var(--alarm); }
+  .car:hover, .car:has([aria-expanded="true"]) { border-left-color: var(--lane-color); }
+  .car.is-blocked:hover, .car.is-blocked:has([aria-expanded="true"]) { border-left-color: var(--alarm); }
   .car-top { display: flex; justify-content: space-between; gap: 8px; font-size: 14px; }
   .car-agent { font-weight: 800; letter-spacing: -0.01em; }
   .car-model { color: var(--ink-soft); font-size: 13px; }
@@ -216,6 +216,16 @@
   .car-stats { display: flex; gap: 12px; font-size: 13px; }
   .car-stats span:last-child { margin-left: auto; color: var(--ink-soft); }
   .car.is-queued { border-left-style: dashed; cursor: default; }
+  /* The whole card opens the drawer through its name's button; the model picker sits above that layer. */
+  .car-open { all: unset; cursor: pointer; font-weight: 800; letter-spacing: -0.01em; }
+  .car-open::after { content: ""; position: absolute; inset: 0; border-radius: inherit; }
+  .car:has(.car-open:focus-visible) { outline: 2px solid var(--focus); outline-offset: 2px; }
+  .car-pick { position: relative; z-index: 1; max-width: 118px; padding: 1px 2px; margin: -2px -4px 0 0; border: 1px solid transparent; border-radius: 6px;
+              background: transparent; color: var(--ink-soft); font: 13px var(--sans); cursor: pointer; }
+  .car-pick:hover { border-color: var(--hairline); background: var(--plate); color: var(--ink); }
+  .car-pick:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px; }
+  .car-pick.is-changed { color: var(--ink); font-weight: 700; }
+  .car.is-blocked .car-pick { display: none; }
 
   .cars:has(.terminus) { flex-direction: row; }
   /* Near the end of the line the cars hang leftwards, so they never run off the board. */
@@ -415,7 +425,7 @@
   @media (max-width: 720px) { .statusbar h2, .statusbar-sum { display: none; } }
 
   /* Start dialog (decision W19): tilda start, and New idea during a run. One dialog, three views: the idea, the split, one plan. */
-  .start { width: min(860px, calc(100vw - 32px)); max-height: calc(100vh - 48px); padding: 0; border: 1px solid var(--hairline);
+  .start { width: min(1120px, calc(100vw - 32px)); max-height: calc(100vh - 48px); padding: 0; border: 1px solid var(--hairline);
            border-radius: 14px; background: var(--plate); color: var(--ink); box-shadow: 0 24px 80px rgb(0 0 0 / 35%); }
   .start::backdrop { background: rgb(8 12 20 / 55%); backdrop-filter: blur(2px); }
   .start-inner { display: flex; flex-direction: column; max-height: calc(100vh - 50px); }
@@ -444,11 +454,18 @@
   /* Frontmatter as controls above the editor (W5): the editor holds only the body of spec.md. */
   .fm-form { display: flex; flex-wrap: wrap; gap: 14px 22px; align-items: flex-end; margin: 0 0 14px; }
   .fm-form fieldset { border: 0; margin: 0; padding: 0; min-width: 0; }
+  .fm-row { width: 100%; display: grid; gap: 14px 22px;
+            grid-template-columns: minmax(min-content, 1fr) minmax(min-content, 1.75fr) minmax(min-content, 1fr) minmax(min-content, 1fr); }
+  .fm-row fieldset { display: flex; flex-direction: column; align-items: flex-start; }
+  /* What the current choice means, two lines tall so the row does not jump as choices change. */
+  .choice-help { margin: 7px 0 0; min-height: calc(2 * 1.4em); font-size: 12.5px; line-height: 1.4; color: var(--ink-soft); }
+  .choice label:has(input:disabled) { opacity: .45; cursor: not-allowed; }
+  @media (max-width: 760px) { .fm-row { grid-template-columns: 1fr 1fr; } }
   .fm-form legend, .fm-form .lbl { display: block; font-size: 12px; font-weight: 700; color: var(--ink-soft); margin-bottom: 5px; padding: 0; }
   .choice { display: inline-flex; border: 1px solid var(--hairline); border-radius: 8px; overflow: hidden; }
   .choice label { position: relative; }
   .choice input { position: absolute; opacity: 0; inset: 0; margin: 0; cursor: pointer; }
-  .choice span { display: block; padding: 7px 12px; font-size: 13px; font-weight: 600; border-right: 1px solid var(--hairline); }
+  .choice span { display: block; white-space: nowrap; padding: 7px 12px; font-size: 13px; font-weight: 600; border-right: 1px solid var(--hairline); }
   .choice label:last-child span { border-right: 0; }
   .choice input:checked + span { background: var(--ink); color: var(--plate); }
   .choice input:focus-visible + span { outline: 2px solid var(--focus); outline-offset: -2px; }
@@ -626,9 +643,18 @@
     plan: { label: "Plan lane", color: "var(--lane-plan)", bg: "var(--lane-plan-bg)", from: 2, skip: [] },
     quick: { label: "Quick lane", color: "var(--lane-quick)", bg: "var(--lane-quick-bg)", from: 3, skip: [4], agents: { 3: ["r2d2-mechanic"] } },
   };
+  // The models an agent can be moved to, most capable first. Sample list: the real one is the adapter's catalog (W24).
+  const CLAUDE_MODELS = [
+    ["claude-fable-5-1", "Fable 5.1"], ["claude-fable-5", "Fable 5"], ["claude-opus-5-5", "Opus 5.5"], ["claude-opus-5", "Opus 5"],
+    ["claude-sonnet-5-5", "Sonnet 5.5"], ["claude-haiku-5-5", "Haiku 5.5"], ["claude-haiku-5", "Haiku 5"],
+  ];
+  const ALIAS = { opus: "claude-opus-5-5", sonnet: "claude-sonnet-5-5", haiku: "claude-haiku-5-5" };
+  const modelName = id => (CLAUDE_MODELS.find(([m]) => m === (ALIAS[id] || id)) || [, id])[1];
   const MODELS = { "leah-researcher": "haiku", "yoda-writer": "sonnet", "palpatine-planner": "opus", "luke-backend": "opus",
                    "rey-frontend": "sonnet", "hansolo-reviewer": "sonnet", "r2d2-mechanic": "sonnet" };
-  const RATES = { haiku: [1, 5], sonnet: [3, 15], opus: [5, 25] };
+  // Sample prices per million tokens in and out, keyed like CLAUDE_MODELS; the real ones come with the adapter's catalog.
+  const RATES = { "claude-fable-5-1": [15, 75], "claude-fable-5": [12, 60], "claude-opus-5-5": [5, 25], "claude-opus-5": [5, 25],
+                  "claude-sonnet-5-5": [3, 15], "claude-haiku-5-5": [1, 5], "claude-haiku-5": [0.8, 4] };
   const CHATTER = {
     "leah-researcher": ["Reading docs/decisions/…", "Searching for Redis Streams consumer groups", "Comparing redis-client and redis"],
     "yoda-writer": ["Rewriting spec.md: Why it matters", "Folding research.md into the spec", "Checking every claim has a source"],
@@ -695,7 +721,7 @@
     plan.cars = plan.interrupted || plan.at === 6 ? [] :
       agentsAt(plan, plan.at).map(a => {
         const secs = plan.fresh ? 0 : 60 + Math.floor(Math.random() * 500);
-        return { agent: a, model: MODELS[a], up: secs * 1700, down: secs * 120, secs, log: [pick(CHATTER[a])] };
+        return { agent: a, model: ALIAS[MODELS[a]] || MODELS[a], up: secs * 1700, down: secs * 120, secs, log: [pick(CHATTER[a])] };
       });
   }
 
@@ -763,16 +789,22 @@
       return;
     }
     for (const car of plan.cars) {
-      const b = document.createElement("button");
-      b.type = "button";
-      b.className = "car";
-      b.setAttribute("aria-expanded", "false");
-      b.innerHTML = `<div class="car-top"><span class="car-agent">${car.agent}</span><span class="car-model" data-model></span></div>
+      const el = document.createElement("div");
+      el.className = "car";
+      el.innerHTML = `<div class="car-top"><button type="button" class="car-open" aria-expanded="false"></button>
+          <span class="car-model" data-model></span><select class="car-pick" name="model-${plan.id}-${car.agent}"></select></div>
         <div class="car-activity" data-act></div>
         <div class="car-stats"><span title="Tokens in">↑ <b data-up></b></span><span title="Tokens out">↓ <b data-down></b></span><span data-secs></span></div>`;
-      b.addEventListener("click", () => openDrawer(plan, car, b));
-      car.el = b;
-      box.append(b);
+      const open = el.querySelector(".car-open");
+      open.textContent = car.agent;
+      open.addEventListener("click", () => openDrawer(plan, car, open));
+      const pick = el.querySelector(".car-pick");
+      pick.setAttribute("aria-label", `Model for ${car.agent}. Changes apply from its next round.`);
+      for (const [id, name] of CLAUDE_MODELS) pick.append(new Option(name, id, false, id === (car.next || car.model)));
+      pick.classList.toggle("is-changed", Boolean(car.next));
+      pick.addEventListener("change", () => setModel(plan, car, pick));
+      car.el = el;
+      box.append(el);
     }
     if (plan.pr && plan.at === 5) {
       const t = document.createElement("div");
@@ -793,7 +825,7 @@
       car.el.querySelector("[data-down]").textContent = fmt(car.down);
       car.el.querySelector("[data-secs]").textContent = clock(car.secs);
       car.el.classList.toggle("is-blocked", Boolean(car.blocked));
-      car.el.querySelector("[data-model]").textContent = car.blocked ? "needs you" : car.model;
+      car.el.querySelector("[data-model]").textContent = car.blocked ? "needs you" : "";
       const act = car.el.querySelector("[data-act]");
       act.textContent = car.blocked || (car.run ? `Running ${car.run.cmd}: ${car.run.done} of ${car.run.total}` : car.log[0]);
       act.title = car.blocked || "";
@@ -883,6 +915,19 @@
     settle(ask, note);
   }
 
+  // A running claude -p cannot change model, so the choice is queued for the agent's next invocation (W24).
+  function setModel(plan, car, pick) {
+    const to = pick.value;
+    car.next = to === car.model ? null : to;
+    pick.classList.toggle("is-changed", Boolean(car.next));
+    const up = CLAUDE_MODELS.findIndex(([m]) => m === to) < CLAUDE_MODELS.findIndex(([m]) => m === car.model);
+    const said = car.next ? `${up ? "Upgrade" : "Downgrade"} to ${modelName(to)} queued; it applies from the next round.` : `Staying on ${modelName(car.model)}.`;
+    car.log.unshift(`you: ${said}`);
+    log("api", "info", `POST /api/commands set_model ${plan.id}/${car.agent} ${to} accepted`);
+    $("announcer").textContent = `${car.agent}: ${said}`;
+    if (watching && watching.car === car) openDrawer(plan, car, watching.button);
+  }
+
   // Drawer
   let watching = null;
   function openDrawer(plan, car, button) {
@@ -891,7 +936,7 @@
     button.setAttribute("aria-expanded", "true");
     $("rail").hidden = true; $("drawer").hidden = false;
     $("drawer-title").textContent = car.agent;
-    $("drawer-meta").textContent = `${plan.id} ${plan.title}. Model ${car.model}.`;
+    $("drawer-meta").textContent = `${plan.id} ${plan.title}. Model ${modelName(car.model)}${car.next ? `, ${modelName(car.next)} from its next round` : ""}.`;
     $("d-label").textContent = `Message ${car.agent}`;
     paintDrawer();
     $("drawer-close").focus();
@@ -1373,7 +1418,7 @@
           <span class="pill-text"><span class="pill-id">${plan.id}</span><span class="pill-time"></span></span></button>`;
         li.querySelector("button").addEventListener("click", () => {
           plan.el.scrollIntoView({ behavior: reduced ? "auto" : "smooth", block: "center" });
-          plan.el.querySelector(".car, .pr-link")?.focus({ preventScroll: true });
+          plan.el.querySelector(".car-open, .pr-link")?.focus({ preventScroll: true });
         });
         plan.pill = li;
       }
@@ -1464,30 +1509,62 @@
 
 
   // Frontmatter controls. The vocabulary is Plans::Spec's; the real form is generated from its JSON Schema (W5).
-  const FM_DEFAULTS = () => ({ lane: "full", frontend: "auto", depth: "auto", phases: {}, suggestions: "", requirements: "", done: "", verify: "" });
+  const FM_DEFAULTS = () => ({ lane: "full", research: "false", frontend: "auto", depth: "auto", phases: {}, suggestions: "", requirements: "", done: "", verify: "" });
+  // What each choice means, shown under its control. Depth's efforts are the defaults .tilda.yml will be able to remap (W25).
+  const HELP = {
+    lane: { full: "Complex feature engaging all agents; costs the most in tokens.",
+            plan: "A spec you already trust: skip research and go straight to the plan.",
+            quick: "A small task for a junior engineer, not a feature. Cheapest and fastest." },
+    research: { true: "Yes adds a research section to the spec. It takes more time, but provides additional context when needed.",
+                false: "No sends the spec straight to the copywriter, with no additional research. For when you know what you are doing.",
+                skipped: "The plan and quick lanes skip research, so there is nothing to choose." },
+    frontend: { auto: "Plans UI work automatically, when it improves the final result.",
+                true: "A full-stack feature with a front-end component.",
+                false: "A back-end-only feature or task." },
+    depth: { auto: "Maps to the model's effort; the default comes from the plan.", fast: "Low effort.", medium: "High effort.", deep: "xHigh effort." },
+  };
   const PHASES = ["research", "plan", "build", "review"];
   let fmSeq = 0;
   function fmForm(fm, { full, partOf }) {
     const id = `fm${++fmSeq}`;
     const form = document.createElement("div");
     form.className = "fm-form";
+    const fields = {};
     const seg = (name, legend, options) => {
       const f = document.createElement("fieldset");
-      f.innerHTML = `<legend>${legend}</legend><div class="choice"></div>`;
+      f.innerHTML = `<legend>${legend}</legend><div class="choice"></div><p class="choice-help" id="${id}-${name}-help"></p>`;
+      f.setAttribute("aria-describedby", `${id}-${name}-help`);
       for (const [value, text, dot] of options) {
         const l = document.createElement("label");
         l.innerHTML = `<input type="radio" name="${id}-${name}" value="${value}"><span>${dot ? `<i class="dot" style="background:${dot}"></i>` : ""}${text}</span>`;
         const input = l.querySelector("input");
         input.checked = fm[name] === value;
-        input.addEventListener("change", () => { fm[name] = value; });
-        f.lastChild.append(l);
+        input.addEventListener("change", () => { fm[name] = value; explain(); });
+        f.querySelector(".choice").append(l);
       }
+      fields[name] = f;
       return f;
     };
-    form.append(
+    // Research only happens on the full lane; elsewhere the control shows why it is off.
+    const explain = () => {
+      const skipped = fm.lane !== "full";
+      for (const input of fields.research.querySelectorAll("input")) {
+        input.disabled = skipped;
+        input.checked = skipped ? input.value === "false" : fm.research === input.value;
+      }
+      for (const [name, f] of Object.entries(fields)) {
+        f.querySelector(".choice-help").textContent = name === "research" && skipped ? HELP.research.skipped : HELP[name][fm[name]];
+      }
+    };
+    const row = document.createElement("div");
+    row.className = "fm-row";
+    row.append(
       seg("lane", "Lane", [["full", "Full", LANES.full.color], ["plan", "Plan", LANES.plan.color], ["quick", "Quick", LANES.quick.color]]),
+      seg("research", "Research?", [["true", "Yes"], ["false", "No"]]),
       seg("frontend", "Front end", [["auto", "Plan decides"], ["true", "Yes"], ["false", "No"]]),
       seg("depth", "Depth", [["auto", "Default"], ["fast", "Fast"], ["medium", "Medium"], ["deep", "Deep"]]));
+    form.append(row);
+    explain();
     if (partOf) form.append(Object.assign(document.createElement("span"), { className: "fm-part", textContent: `Part of ${partOf}` }));
     if (!full) return form;
     const more = document.createElement("details");
@@ -1530,6 +1607,7 @@
     const lines = [];
     if (partOf) lines.push(`part_of: "${partOf}"`);
     if (fm.lane !== "full") lines.push(`lane: ${fm.lane}`);
+    if (fm.lane === "full" && fm.research === "true") lines.push("research: true");
     if (fm.frontend !== "auto") lines.push(`frontend: ${fm.frontend}`);
     if (fm.depth !== "auto") lines.push(`depth: ${fm.depth}`);
     const ph = Object.entries(fm.phases).filter(([, v]) => v.adapter || v.model || v.effort);
@@ -1695,7 +1773,7 @@
       cost += (p.spent[0] * 3 + p.spent[1] * 15) / 1e6;
       for (const c of p.cars) {
         working++; up += c.up; down += c.down;
-        const [ri, ro] = RATES[c.model]; cost += (c.up * ri + c.down * ro) / 1e6;
+        const [ri, ro] = RATES[c.model] || RATES["claude-sonnet-5-5"]; cost += (c.up * ri + c.down * ro) / 1e6;
       }
     }
     $("run-clock").textContent = Math.floor(runSecs / 60) + " min";

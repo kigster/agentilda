@@ -14,7 +14,7 @@ The state machine already has the shape of a transit line. The spine is the trun
 
 - The station columns come from `StateMachine::SPINE`, and the agent under each station from `Agents::Registry` (`handles:`). Neither is hard-coded in the front end (decision W4).
 - A **filled line** marks travelled stations. A **hollow ring** is a station the plan's lane skips. A **dotted line** is the road ahead.
-- The **agents at work** hang under the plan's current station as cars. A pair (luke and rey) is two cars side by side. Each car shows the agent, its model, elapsed time, tokens in (↑) and out (↓), and its latest activity line.
+- The **agents at work** hang under the plan's current station as cars. A pair (luke and rey) is two cars side by side. Each car shows the agent, its model, elapsed time, tokens in (↑) and out (↓), and its latest activity line. The model is a small borderless dropdown in the car's top-right corner (decision W24): the adapter's models, most capable first, with the current one selected. A change is queued for the agent's next round, so the car shows it in bold and the drawer reads "Sonnet 5.5, Fable 5.1 from its next round". The agent's name is the button that opens the drawer, and its hit area covers the whole car, so the dropdown sits on a layer above it rather than inside a button.
 - The **PR terminus** shows the PR number, the CI result and the review label from plan 005 (L1).
 
 ## Tokens
@@ -79,7 +79,7 @@ The review labels keep the colours of plan 005 (L1).
 - **`tilda start`** opens the page at `#start`, and **New idea** opens the same dialog during a run (decision W19). It is a native `<dialog>`: focus stays inside, and Esc steps back one view (plan editor → plans → idea) instead of discarding anything.
 - **Three views in one dialog.** The idea ("What is the product or feature you'd like to build?"); the split, "Here is your idea broken up into plans. Confirm?", with one row per plan (`[009 Accounts and imports] [Accept] [Modify]`) and sub-plans indented under their parent; and one plan in the editor, titled "Editing 010: Import bank statements as CSV", with **Revert ↶** and **Save ✔**. Saving accepts the plan. **Create N plans** stays disabled until every plan is accepted.
 - **The editor** is a transparent textarea over a highlighted copy of its own text, so typing, selection, undo and spellcheck stay native. Overpass Mono, the second place it appears, because Markdown source is code. Headings in the full-lane blue, code in the plan-lane amber, list marks in red, links in green.
-- **Frontmatter is a form above the editor, never text in it.** Lane, front end and depth are segmented controls (the lane options carry their lane colours); "More settings" opens per-phase adapter, model and effort and the four list fields. The idea dialog shows the first three as defaults for every plan it becomes.
+- **Frontmatter is a form above the editor, never text in it.** Lane, research, front end and depth are segmented controls in one row (the lane options carry their lane colours). Under each, two lines of soft text say what the current choice means and change with it (decision W23); they hold two lines' height even when shorter, so the row never jumps. Research is disabled, and says why, on the plan and quick lanes; "More settings" opens per-phase adapter, model and effort and the four list fields. The idea dialog shows the first three as defaults for every plan it becomes.
 - **Plan numbers are plain `NNN`** everywhere in the mockup (decision W21).
 
 ## Principles
