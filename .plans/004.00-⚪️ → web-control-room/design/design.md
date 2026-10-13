@@ -111,3 +111,8 @@ The review labels keep the colours of plan 005 (L1).
 - React with shadcn/ui primitives: `Sheet` for the drawer, `Tooltip`, `Textarea`, `Button`, `Badge`. They are restyled with the tokens above, not left with the default shadcn look.
 - Motion `layout` and `layoutId` move a car between stations; the line fill is a CSS transition on the segment. Under `prefers-reduced-motion`, both jump instead.
 - One `EventSource` on the `board` stream (decision W13). Counters render straight from each snapshot; there is no client-side interpolation.
+
+## Agent drawer: model and context
+
+- **Model**, at the top of the drawer, switches that one agent now: the harness stops it at its next safe point, resumes the same session on the chosen model and runs `/compact` first. Its car's dropdown follows. The car's own dropdown still queues a change for the next round (W24); the drawer's is for an agent that is stuck or struggling now (W27).
+- **Context** shows how full the agent's window is, as a bar with a highlight-colour mark at 40%, where every agent autocompacts (W28). An autocompaction lands in the transcript and the log ("Autocompacted at 40% of its context: 80.2k → 17.6k").

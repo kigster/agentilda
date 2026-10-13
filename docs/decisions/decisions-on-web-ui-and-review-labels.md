@@ -253,6 +253,24 @@ Several machines, say three, may run agentilda on the same repository against on
 
 **Known gap.** Plan folders move by renames in each machine's own checkout, so a plan's state reaches the other machines' trees only through git, when the branch is pushed and pulled. Redis shows the live state; the folders catch up later. Making the claim the source of truth for which state a plan is in is not part of this decision.
 
+### W27. The agent drawer switches one agent's model now, and compacts it
+
+Settled by the author on 2026-10-13.
+
+- The drawer an agent opens into carries a model dropdown at the top. Choosing a model switches **that agent only**, at once rather than from its next round, and runs `/compact` on its session straight after.
+- The harness does it as a `switch_model` command (W9): stop the agent at its next safe point (between tool calls, never mid-edit), resume the same session with `--resume <session-id> --model <id>`, and send `/compact` as the first input. A blocked agent is already at a safe point, which is the case this exists for: a stuck agent gets a stronger model and a smaller context in one move.
+- It also records the model in the plan's `phases:` override, as W24's queued change does, so a restart keeps it. The car's dropdown is unchanged: it still queues for the next round.
+- Research must confirm that a resumed `claude -p` session accepts `--model` and a leading `/compact`; codex and pi need their own equivalent through their adapters.
+
+### W28. Every agent autocompacts at 40% of its context
+
+Settled by the author on 2026-10-13.
+
+- Every agent the harness starts compacts automatically once its context reaches 40% of the model's window, instead of the CLI's default near the limit. Agents work in long sessions over large files, and the quality of a session drops well before the window is full.
+- For Claude the executor sets the threshold in the child's environment (`CLAUDE_AUTOCOMPACT_PCT_OVERRIDE=40`; research confirms the name and that headless runs honour it). Other adapters map it to their own setting, or report that they cannot.
+- `.tilda.yml` may override it later (`autocompact: 50`); 40 is the default.
+- The drawer shows the agent's context as a bar with the 40% mark, and each autocompaction is written to the transcript and the log.
+
 ### W12. Order of work
 
 0. Plan `003.00` lands first, or at least its phases B and C: the JSON mailbox, Redis Streams, the hook and `last-known-state`.
@@ -264,6 +282,7 @@ Several machines, say three, may run agentilda on the same repository against on
 6. The new-feature form and the spec editor (W5, W23, W25), then `tilda start` and the idea dialog (W19), then `tilda init` (W20).
 7. The model dropdown on each car (W24), once commands reach the engine (W9).
 8. Machines sharing one Redis (W26): the node and repository names land with the Redis store in step 2, since they are its key layout; the claim lands with the dispatcher's next change; the Other machines tab comes after the read-only board.
+9. Autocompact at 40% (W28) with the executor's next change, since it is one environment variable; the drawer's model switch (W27) after W24, once a session can be resumed on another model.
 
 ## Review labels
 

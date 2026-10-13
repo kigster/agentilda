@@ -308,6 +308,17 @@
   .drawer[hidden], .rail[hidden] { display: none; }
   .drawer-head { display: flex; justify-content: space-between; align-items: start; gap: 12px; }
   .drawer-meta { color: var(--ink-soft); font-size: 13px; margin: 0 0 12px; }
+  .d-model { display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: center; gap: 4px 10px; margin: 0 0 4px; }
+  .d-model label { font-weight: 700; font-size: 14px; }
+  .d-model select { min-height: 36px; padding: 4px 8px; border: 1px solid var(--hairline); border-radius: 8px; background: var(--enamel); color: var(--ink); font: inherit; }
+  .d-model-help { grid-column: 2; margin: 0; font-size: 12px; color: var(--ink-soft); }
+  .d-context { margin: 0 0 16px; font-size: 13px; color: var(--ink-soft); }
+  .d-context p { margin: 0 0 6px; }
+  .d-context strong { color: var(--ink); }
+  .d-ctx-bar { position: relative; height: 8px; border-radius: 999px; background: color-mix(in srgb, var(--ink) 10%, transparent); }
+  .d-ctx-bar i { position: absolute; inset: 0 auto 0 0; border-radius: 999px; background: var(--lane-full); transition: width .4s ease; }
+  .d-ctx-bar b { position: absolute; top: -3px; bottom: -3px; left: 40%; width: 2px; background: var(--highlight); }
+  @media (prefers-reduced-motion: reduce) { .d-ctx-bar i { transition: none; } }
   .drawer-stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin: 12px 0 16px; }
   .drawer-stats div { font-size: 13px; color: var(--ink-soft); }
   .drawer-stats strong { display: block; font-size: 20px; color: var(--ink); font-weight: 800; }
@@ -686,10 +697,19 @@
       </div>
       <button class="btn btn-quiet" id="drawer-close" type="button">Close</button>
     </div>
+    <div class="d-model">
+      <label for="d-model">Model</label>
+      <select id="d-model"></select>
+      <p class="d-model-help" id="d-model-help">Switches this agent now, then runs /compact.</p>
+    </div>
     <div class="drawer-stats">
       <div>Tokens in<strong id="d-in"></strong></div>
       <div>Tokens out<strong id="d-out"></strong></div>
       <div>Elapsed<strong id="d-time"></strong></div>
+    </div>
+    <div class="d-context">
+      <p>Context <strong id="d-ctx"></strong> <span id="d-ctx-of"></span></p>
+      <div class="d-ctx-bar" aria-hidden="true"><i id="d-ctx-fill"></i><b title="Autocompacts here"></b></div>
     </div>
     <div class="d-block" id="d-block" hidden>
       <p><strong>Blocked on your answer.</strong> <span id="d-block-q"></span></p>
@@ -1116,6 +1136,26 @@
   }
 
   // A running claude -p cannot change model, so the choice is queued for the agent's next invocation (W24).
+  // Every agent runs with autocompact at 40% of its context window (W28); the mockup's window is 200k for every model.
+  const CONTEXT = 200000, AUTOCOMPACT = 0.4;
+  const compact = (car, ratio) => { const was = car.ctx; car.ctx = Math.floor(was * ratio); return `${fmt(was)} → ${fmt(car.ctx)}`; };
+  // The drawer's dropdown switches the agent now, not from its next round: the harness stops it at a safe point,
+  // resumes the same session on the new model and runs /compact first (W27). The car's dropdown still queues.
+  function switchNow(plan, car, to) {
+    if (to === car.model) return;
+    const from = car.model;
+    car.model = to; car.next = null;
+    const shrunk = compact(car, 0.25);
+    const said = `Switched from ${modelName(from)} to ${modelName(to)} and ran /compact: ${shrunk}.`;
+    car.log.unshift(`you: ${said}`);
+    log("api", "info", `POST /api/commands switch_model ${plan.id}/${car.agent} ${to} accepted`);
+    log("engine", "info", `${plan.id}/${car.agent} resumed on ${to}, /compact ${shrunk}`);
+    const pick = car.el?.querySelector(".car-pick");
+    if (pick) { pick.value = to; pick.classList.remove("is-changed"); }
+    $("announcer").textContent = `${car.agent}: ${said}`;
+    openDrawer(plan, car, watching.button);
+    $("d-model").focus();
+  }
   function setModel(plan, car, pick) {
     const to = pick.value;
     car.next = to === car.model ? null : to;
@@ -1138,6 +1178,7 @@
     $("drawer-title").textContent = car.agent;
     $("drawer-meta").textContent = `${plan.id} ${plan.title}. Model ${modelName(car.model)}${car.next ? `, ${modelName(car.next)} from its next round` : ""}.`;
     $("d-label").textContent = `Message ${car.agent}`;
+    $("d-model").replaceChildren(...CLAUDE_MODELS.map(([id, name]) => new Option(name, id, false, id === car.model)));
     paintDrawer();
     $("drawer-close").focus();
   }
@@ -1155,12 +1196,17 @@
     $("d-in").textContent = fmt(car.up);
     $("d-out").textContent = fmt(car.down);
     $("d-time").textContent = clock(car.secs);
+    car.ctx ??= Math.floor(CONTEXT * (0.08 + Math.random() * 0.27));
+    $("d-ctx").textContent = `${Math.round(car.ctx / CONTEXT * 100)}%`;
+    $("d-ctx-of").textContent = `of ${fmt(CONTEXT)}, ${fmt(car.ctx)} used. Autocompacts at ${AUTOCOMPACT * 100}%.`;
+    $("d-ctx-fill").style.width = `${car.ctx / CONTEXT * 100}%`;
     const open = asks.find(a => !a.done && a.plan === watching.plan.id && a.agent === car.agent);
     $("d-block").hidden = !(car.blocked && open);
     if (open) $("d-block-q").textContent = open.text;
     $("d-transcript").replaceChildren(...car.log.map(line => Object.assign(document.createElement("li"), { textContent: line })));
   }
   $("drawer-close").addEventListener("click", closeDrawer);
+  $("d-model").addEventListener("change", e => { if (watching) switchNow(watching.plan, watching.car, e.target.value); });
   $("d-answer").placeholder = `Your answer. ${SEND_KEYS} sends it.`;
   $("d-message").placeholder = `It reads this at its next step. ${SEND_KEYS} sends it.`;
   for (const b of [$("d-answer-send"), document.querySelector("#composer .btn-primary")]) b.setAttribute("aria-keyshortcuts", MAC ? "Meta+Enter" : "Control+Enter");
@@ -2194,6 +2240,12 @@
         if (c.blocked) continue; // waiting on a person costs no tokens and says nothing new
         c.up += 900 + Math.floor(Math.random() * 2600);
         c.down += 40 + Math.floor(Math.random() * 220);
+        c.ctx = (c.ctx ?? Math.floor(CONTEXT * (0.08 + Math.random() * 0.27))) + 200 + Math.floor(Math.random() * 500);
+        if (c.ctx >= CONTEXT * AUTOCOMPACT) {
+          const shrunk = compact(c, 0.22);
+          c.log.unshift(`Autocompacted at ${AUTOCOMPACT * 100}% of its context: ${shrunk}`);
+          log("engine", "info", `${p.id}/${c.agent} autocompacted at ${AUTOCOMPACT * 100}%: ${shrunk}`);
+        }
         const said = pick(CHATTER[c.agent]);
         if (Math.random() < 0.18 && said !== c.log[0]) c.log.unshift(said);
         c.log.length = Math.min(c.log.length, 30);
