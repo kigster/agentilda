@@ -292,6 +292,21 @@
   /* Logs */
   .logs { background: var(--plate); border: 1px solid var(--hairline); border-radius: var(--radius-plate); }
   .logs[hidden], .board[hidden] { display: none; }
+
+  /* Other machines (W26): read-only boards, one tab per machine, and the merged view under ours. */
+  .node { font-size: 12px; color: var(--ink-soft); }
+  .node strong { color: var(--ink); font-weight: 700; }
+  .btn-icon { display: inline-grid; place-items: center; width: 44px; padding: 0; }
+  .btn[aria-pressed="true"] { background: var(--ink); color: var(--plate); border-color: var(--ink); }
+  .tab-machine::before { content: "🔒"; margin-right: 6px; font-size: 12px; }
+  .machine-note { margin: 0 0 6px; padding: 12px 16px 0; font-size: 13px; color: var(--ink-soft); }
+  .machine-note strong { color: var(--ink); }
+  .car.is-readonly { cursor: default; }
+  .car.is-readonly:hover { border-color: color-mix(in srgb, var(--car-tint) 32%, transparent); border-left-color: var(--lane-color); }
+  .theirs-head { margin: 26px 0 4px; padding: 0 16px; font-size: 15px; font-weight: 800; color: var(--ink-soft); }
+  .theirs-head span { font-weight: 600; }
+  /* Their rows in the merged board: a 75% cut in opacity, so ours stay the thing you read. */
+  .plan.is-theirs { opacity: .25; }
   .log-tools { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; padding: 12px 16px; border-bottom: 1px solid var(--hairline); }
   .log-tools fieldset { border: 0; margin: 0; padding: 0; display: flex; gap: 6px; align-items: center; }
   .log-tools legend { float: left; margin-right: 6px; font-size: 13px; color: var(--ink-soft); }
@@ -513,7 +528,8 @@
     <!-- The project is agentilda itself, and the logo beside it already says so; W18 drops the title then. -->
     <h1 class="sr-only">Agentilda control room</h1>
     <p class="project-meta"><span>A web-based software factory: spec, plan, build, review</span>
-      <span class="project-path" title="Title and summary from agentilda.gemspec">~/github/kigster/agentic-workflow/agentilda</span></p>
+      <span class="project-path" title="Title and summary from agentilda.gemspec">~/github/kigster/agentic-workflow/agentilda</span>
+      <span class="node" id="node" title="Node 5e0c41d2a7b39f80c1d4e6a2, the first 96 bits of SHA-256(&quot;dana@studio-mini&quot;). Redis redis://:•••@redis.internal:6379/0">On <strong>dana@studio-mini</strong></span></p>
   </div>
   <span class="topbar-stat">Run <strong id="run-clock">0 min</strong></span>
   <span class="topbar-stat"><strong id="run-working">0</strong> agents working</span>
@@ -521,8 +537,9 @@
   <span class="topbar-stat"><strong id="run-cost">$0.00</strong> so far</span>
   <span class="sample">Sample data</span>
   <span class="topbar-spacer"></span>
+  <button class="btn btn-quiet" id="merge" type="button" aria-pressed="false" title="Show every machine's plans on one board: ours first, theirs below and faded">All machines</button>
   <button class="btn" id="new-idea" type="button">New idea</button>
-  <button class="btn btn-quiet" id="theme" type="button">Dark</button>
+  <button class="btn btn-quiet btn-icon" id="theme" type="button" aria-label="Switch to dark theme"></button>
   <button class="btn btn-alarm" type="button">Stop run</button>
 </header>
 
@@ -539,6 +556,7 @@
     </div>
   </section>
 
+  <!-- One read-only board per other machine (W26), added by the script after the Board tab. -->
   <section class="logs" id="panel-logs" role="tabpanel" aria-labelledby="tab-logs" hidden>
     <div class="log-tools">
       <fieldset><legend>Show</legend>
@@ -1745,6 +1763,10 @@
     if (editing) { e.preventDefault(); editing.plan.body = editing.original; editing.plan.fm = editing.originalFm; showDrafted(); }
     else if (drafted) { e.preventDefault(); showIdea(); }
   });
+  const THEME_ICONS = {
+    sun: `<svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>`,
+    moon: `<svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z"/></svg>`,
+  };
   function openStart() { drafted ? showDrafted() : showIdea(); $("start").showModal(); }
   $("new-idea").addEventListener("click", openStart);
   // tilda start opens the page at #start (decision W19).
@@ -1754,8 +1776,10 @@
   const isDark = () => document.documentElement.dataset.theme
     ? document.documentElement.dataset.theme === "dark" : matchMedia("(prefers-color-scheme: dark)").matches;
   const labelTheme = () => {
-    $("theme").textContent = isDark() ? "Light" : "Dark";
+    // The icon shows where the button takes you: a sun on the dark theme, a moon on the light one.
+    $("theme").innerHTML = isDark() ? THEME_ICONS.sun : THEME_ICONS.moon;
     $("theme").setAttribute("aria-label", isDark() ? "Switch to light theme" : "Switch to dark theme");
+    $("theme").title = $("theme").getAttribute("aria-label");
   };
   labelTheme();
   $("theme").addEventListener("click", () => {
@@ -1782,6 +1806,98 @@
     $("run-out").textContent = fmt(down);
     $("run-cost").textContent = "$" + cost.toFixed(2);
   }
+  // Other machines on the same repository and Redis (W26). The real page reads agentilda:<repo>:nodes and each
+  // node's meta and board; it never writes them, and it offers no control over their plans.
+  const NODES = [
+    { user: "alex", host: "build-01", node: "3f9a0c7be21d44a8f6031c5e", path: "~/src/agentilda", seen: 3, plans: [
+      { id: "008", title: "Export the ledger to Linear", lane: "full", at: 2, secs: 52 * 60 + 9,
+        cars: [{ agent: "palpatine-planner", model: "claude-opus-5-5", up: 702000, down: 48100, secs: 611, act: "Splitting the export into four work units" }] },
+      { id: "009", title: "Trim stale worktrees on start", lane: "quick", at: 3, secs: 14 * 60 + 2,
+        cars: [{ agent: "r2d2-mechanic", model: "claude-sonnet-5-5", up: 188000, down: 12900, secs: 402, act: "bundle exec rspec spec/agentilda/vcs" }] },
+    ] },
+    { user: "sam", host: "ci-runner-2", node: "c07d5e1a99b2f3046e8a1d7b", path: "/srv/checkouts/agentilda", seen: 11, plans: [
+      { id: "010", title: "Cache agent registry lookups", lane: "plan", at: 5, secs: 1 * 3600 + 7 * 60, pr: 47,
+        cars: [{ agent: "hansolo-reviewer", model: "claude-opus-5-5", up: 233000, down: 15400, secs: 288, act: "gh pr diff 47" }] },
+      { id: "011", title: "Document the lanes in the README", lane: "quick", at: 6, secs: 19 * 60 + 44, pr: 46, cars: [] },
+    ] },
+  ];
+  const who = n => `${n.user}@${n.host}`;
+  function theirRow(plan, node, faded) {
+    const lane = LANES[plan.lane];
+    const row = document.createElement("article");
+    row.className = "plan" + (faded ? " is-theirs" : "");
+    row.style.setProperty("--lane-color", lane.color);
+    row.style.setProperty("--lane-bg", lane.bg);
+    const cars = plan.at === 6
+      ? `<div class="terminus">${prLink(plan)}<span class="ci-pass">CI passing</span><span class="chip chip-approved">approved</span></div>`
+      : plan.cars.map(c => `<div class="car is-readonly"><div class="car-top"><span class="car-agent">${c.agent}</span><span class="car-model">${modelName(c.model)}</span></div>
+          <div class="car-activity">${c.act}</div>
+          <div class="car-stats"><span title="Tokens in">↑ <b>${fmt(c.up)}</b></span><span title="Tokens out">↓ <b>${fmt(c.down)}</b></span><span>${clock(c.secs)}</span></div></div>`).join("");
+    row.innerHTML = `
+      <div class="plan-head">
+        <div class="plan-id">${plan.id}</div>
+        <h3 class="plan-title">${plan.title}</h3>
+        <div class="plan-meta"><span class="lane">${lane.label}</span><span>on ${who(node)}</span></div>
+      </div>
+      <div class="route">
+        <div class="track">${STATIONS.slice(0, -1).map((_, i) => `<span class="seg" style="--i:${i}"></span>`).join("")}
+          ${STATIONS.map((_, i) => `<span class="stop" style="--i:${i}"></span>`).join("")}</div>
+        <div class="cars" data-cars>${cars}</div>
+      </div>`;
+    if (faded) row.setAttribute("aria-label", `${plan.id} ${plan.title}, on ${who(node)}, read only`);
+    paintRoute({ ...plan, el: row });
+    return row;
+  }
+  // One tab and one read-only board per machine, after the Board tab.
+  for (const n of NODES) {
+    const id = n.node.slice(0, 8);
+    const tab = document.createElement("button");
+    Object.assign(tab, { className: "tab tab-machine", type: "button", id: `tab-node-${id}`, tabIndex: -1, textContent: who(n) });
+    tab.setAttribute("role", "tab"); tab.setAttribute("aria-selected", "false"); tab.setAttribute("aria-controls", `panel-node-${id}`);
+    tab.title = `Read only: what ${who(n)} is working on`;
+    ([...document.querySelectorAll(".tab-machine")].at(-1) || $("tab-board")).after(tab);
+    const panel = document.createElement("section");
+    Object.assign(panel, { className: "board", id: `panel-node-${id}`, hidden: true });
+    panel.setAttribute("role", "tabpanel"); panel.setAttribute("aria-labelledby", tab.id);
+    panel.innerHTML = `<p class="machine-note"></p><div class="board-inner"><div class="stations">${$("stations").innerHTML}</div><div data-rows></div></div>`;
+    $("panel-logs").before(panel);
+    n.panel = panel;
+  }
+  let merged = false;
+  try { merged = localStorage.getItem("agentilda-mockup-merged") === "1"; } catch { /* private window */ }
+  function paintTheirs() {
+    for (const n of NODES) {
+      n.panel.querySelector(".machine-note").innerHTML = `Read only. <strong>${who(n)}</strong> is working on these in ${n.path}; this machine will not start them. Last seen ${n.seen}s ago.`;
+      n.panel.querySelector("[data-rows]").replaceChildren(...n.plans.map(p => theirRow(p, n, false)));
+    }
+    let box = $("theirs");
+    if (!merged) { box?.remove(); return; }
+    if (!box) { box = Object.assign(document.createElement("div"), { id: "theirs" }); $("plans").after(box); }
+    box.replaceChildren(...NODES.flatMap(n => [
+      Object.assign(document.createElement("h2"), { className: "theirs-head", innerHTML: `${who(n)} <span>read only</span>` }),
+      ...n.plans.map(p => theirRow(p, n, true))]));
+  }
+  function setMerged(on) {
+    merged = on;
+    $("merge").setAttribute("aria-pressed", String(on));
+    try { localStorage.setItem("agentilda-mockup-merged", on ? "1" : "0"); } catch { /* private window */ }
+    if (on) selectTab($("tab-board"));
+    paintTheirs();
+    $("announcer").textContent = on ? "Showing every machine's plans. Theirs are below ours, read only." : "Showing this machine's plans only.";
+  }
+  $("merge").addEventListener("click", () => setMerged(!merged));
+  setMerged(merged);
+  setInterval(() => {
+    for (const n of NODES) {
+      n.seen = n.seen >= 15 ? 0 : n.seen + 1; // the heartbeat refreshes seen_at every 15 s
+      for (const p of n.plans) if (p.at < 6) {
+        p.secs++;
+        for (const c of p.cars) { c.secs++; c.up += 900 + Math.floor(Math.random() * 2600); c.down += 40 + Math.floor(Math.random() * 220); }
+      }
+    }
+    paintTheirs();
+  }, 1000);
+
   function advance() {
     const movable = plans.filter(p => p.cars.length && p.at < 5 && !p.cars.some(c => c.blocked || c.run));
     if (!movable.length) return;
