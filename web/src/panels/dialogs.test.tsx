@@ -11,7 +11,7 @@ describe("StopAllDialog", () => {
     const { container } = renderPanel(<StopAllDialog agents={4} plans={3} onCommand={recorder().onCommand} />);
     await user.click(screen.getByRole("button", { name: "Stop All Local" }));
     const dialog = await screen.findByRole("dialog", { name: "Stop all local agents?" });
-    expect(dialog).toHaveAccessibleDescription("Are you sure you want to shut down 4 agents currently working on 3 plans? Their engine and this control room stop with them. This only affects this machine.");
+    expect(dialog).toHaveAccessibleDescription("Are you sure you want to shut down 4 agents currently working on 3 plans? Their engine stops with them, and so does this control room if that engine started it. This only affects this machine.");
     expect(screen.getByRole("button", { name: "Cancel" })).toHaveFocus();
     expect(await axe(container.ownerDocument.body)).toHaveNoViolations();
     await user.keyboard("{Enter}");

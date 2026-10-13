@@ -60,7 +60,7 @@ export function StopAllDialog({ agents, plans, onCommand, ...openable }: StopAll
       >
         <div className="help-body">
           <Dialog.Description>
-            Are you sure you want to shut down {agents} agents currently working on {plans} plans? Their engine and this control room stop with them. This only affects this machine.
+            Are you sure you want to shut down {agents} agents currently working on {plans} plans? Their engine stops with them, and so does this control room if that engine started it. This only affects this machine.
           </Dialog.Description>
           <Feedback outcome={command.outcome?.tone === "refused" ? command.outcome : null} announced={command.announced} />
         </div>

@@ -253,9 +253,9 @@ tilda start --rescan 10                    # look for new or hand-edited plans e
 
 `tilda start` is `tilda run` that does not stop at a fixed point. When a plan blocks, it idles, puts the questions in **Needs You** on the page, takes your answer from there, folds it in and hands the plan back to its agent, with no restart. Plans created on the page, by `tilda create` in another terminal, or edited by hand are picked up on the next rescan (every 5 s, or at once after anything you do on the page).
 
-Every decision goes through the page: answers, hold, wrap up and stop on an agent, model changes, new plans. **Stop All** stops the agents, then the engine, then the page. The terminal only prints the URL and the progress log.
+Every decision goes through the page: answers, hold, wrap up and stop on an agent, model changes, new plans. **Stop All** stops the agents, then the engine, then the page if `start` launched it; a `tilda web` it joined stays up and waits for the next engine. The terminal only prints the URL and the progress log.
 
-It never ends on its own, not even once every plan is finished: the next idea arrives through the page. It needs no plans to start, and makes `.plans/` (or the `dir:` that `.tilda.yml` names under `commands: start:`) when it is missing; the page then opens on **New idea**. Only **Stop All**, Ctrl-C, `SIGTERM` or the control room going away end it, each with the same graceful stop as `run`, and exit 0. It takes `run`'s flags except `-n` and `--no-web`, and needs Redis: without it, it refuses (exit 69) rather than going headless.
+It never ends on its own, not even once every plan is finished: the next idea arrives through the page. It needs no plans to start, and makes `.plans/` (or the `dir:` that `.tilda.yml` names under `commands: start:`) when it is missing; the page then opens on **New idea**. Only **Stop All**, Ctrl-C, `SIGTERM` or the control room going away end it (a joined `tilda web` outlives it), each with the same graceful stop as `run`, and exit 0. It takes `run`'s flags except `-n` and `--no-web`, and needs Redis: without it, it refuses (exit 69) rather than going headless.
 
 ### `tilda run`: to a fixed point
 

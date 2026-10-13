@@ -305,7 +305,7 @@ RSpec.describe "A staying run", :tree do
     it "stops the agents, and the run with them" do
       aggregate_failures do
         expect(Agentilda::Execution::Control.quit?).to be(true)
-        expect(JSON.parse(store.hget(session.keys.done, "01STOP"))["reason"]).to include("then the engine and the control room")
+        expect(JSON.parse(store.hget(session.keys.done, "01STOP"))["reason"]).to include("then the engine and any control room it started")
       end
     end
   end

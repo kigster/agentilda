@@ -322,14 +322,15 @@ module Agentilda
 
       # Stop All ends the run, under `tilda start` as under `tilda run`: the
       # agents stop with their work written down, then the engine, then the
-      # control room it serves. It is one of the only two ways a run with a
-      # page ends; the other is the page going away.
+      # control room if the engine started it. A `tilda web` the run joined
+      # stays up and goes back to waiting for an engine. It is one of the
+      # only two ways a run with a page ends; the other is the page going away.
       #
       # @return [String]
       def stop_all(_command, dispatcher)
         Execution::Control.quit!
         count = dispatcher.running.size
-        "stopping #{count} agent#{"s" unless count == 1} on #{@node.label}, then the engine and the control room"
+        "stopping #{count} agent#{"s" unless count == 1} on #{@node.label}, then the engine and any control room it started"
       end
 
       # The model for the agent's next round on this plan (W24).

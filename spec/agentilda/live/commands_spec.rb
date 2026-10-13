@@ -390,7 +390,7 @@ RSpec.describe Agentilda::Live::Commands, :tree do
     it "stops everything on this node" do
       send_command("stop_all")
       aggregate_failures do
-        expect(apply.map(&:reason)).to eq(["stopping 1 agent on dana@studio-mini, then the engine and the control room"])
+        expect(apply.map(&:reason)).to eq(["stopping 1 agent on dana@studio-mini, then the engine and any control room it started"])
         expect(Agentilda::Execution::Control.quit?).to be(true)
       end
     end
