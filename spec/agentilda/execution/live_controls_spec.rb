@@ -2,7 +2,7 @@
 
 RSpec.describe "The live controls on one invocation" do
   # What the live run adds to one invocation: the adapter's environment on the
-  # child, a model a person chose, and the words HOLD and COMPACT.
+  # child, a model a person chose, and the word HOLD.
   describe Agentilda::Execution::Executor, :tree do
     subject(:executor) { described_class.new(root:, spawn:, trace_dir: traces) }
 
@@ -77,10 +77,13 @@ RSpec.describe "The live controls on one invocation" do
       Agentilda::Plans::Tree.new(dir: plans_root).subjects.first
     end
 
-    it "explains HOLD and COMPACT beside the other control words" do
-      expect(prompt_for("luke-backend")).to include("HOLD means a person wants to say something to you",
-        "mail read --dir",
-        "COMPACT means run `/compact` now")
+    it "explains HOLD beside the other control words" do
+      expect(prompt_for("luke-backend")).to include("HOLD means a person wants to say something to you", "mail read --dir")
+    end
+
+    # `/compact` is the caller's command; an agent told to run it cannot.
+    it "asks no agent to compact itself" do
+      expect(prompt_for("luke-backend")).not_to include("/compact")
     end
 
     it "tells an agent that writes blocked.md how to mark a yes/no question (W30)" do
@@ -94,7 +97,7 @@ RSpec.describe "The live controls on one invocation" do
 
   describe Agentilda::Execution::Control do
     it "maps each word a person may send to one agent" do
-      expect(described_class::WORDS).to eq("hold" => "HOLD", "wrap_up" => "WRAP_UP", "stop" => "STOP", "compact" => "COMPACT")
+      expect(described_class::WORDS).to eq("hold" => "HOLD", "wrap_up" => "WRAP_UP", "stop" => "STOP")
     end
   end
 end

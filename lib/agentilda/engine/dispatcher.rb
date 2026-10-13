@@ -195,6 +195,31 @@ module Agentilda
         true
       end
 
+      # Compact one running agent's session and carry it on (W28): stopped
+      # with INTERRUPT, its session compacted with `--resume`, then resumed
+      # under the same handle, so the board shows one car carrying on. The
+      # executor does the work, on the agent's own thread.
+      #
+      # @param key [String]
+      # @param model [String, nil] what the session carries on in; nil keeps
+      #   the model it was on
+      # @return [Agentilda::Execution::Executor::Compaction, nil] answered once
+      #   the continuation has started; nil when nothing by that key is running
+      def compact(key, model: nil) = job(key)&.handle&.compact!(model:)
+
+      # The CLI a running agent was started on, which is what decides whether
+      # its session can be resumed.
+      #
+      # @param job [Agentilda::Engine::Dispatcher::Job]
+      # @return [Agentilda::Adapters::Base]
+      def adapter_for(job)
+        executor = @runner.executor
+        agent = job.task.agent
+        return Adapters.for(agent.adapter) unless executor.respond_to?(:profile_for)
+
+        executor.profile_for(agent, job.task.subject).adapter
+      end
+
       # Hand back the round an interrupted agent lost, so a person's "resume"
       # starts it again even when it had no rounds left.
       #
@@ -453,7 +478,8 @@ module Agentilda
           subagents: job.subagents.to_i,
           history: job.history || [],
           context: job.context,
-          since: job.started_at)
+          since: job.started_at,
+          session: job.handle.session)
       end
 
       # @param task [Agentilda::Engine::Runner::Task]
@@ -705,7 +731,8 @@ module Agentilda
             file:   job.file,
             up:     job.up,
             down:   job.down,
-            pid:    job.handle.pid)
+            pid:    job.handle.pid,
+            **{ session: job.handle.session }.compact)
         end
       end
 
@@ -723,7 +750,10 @@ module Agentilda
         @running.select(&:finished?).each do |job|
           @running.delete(job)
           attempt = settle(job)
-          forget_round(job) if @requeued.delete(job.key)
+          # A requeue, or a compaction that stopped the agent and then could
+          # not happen, hands the round back: the stop was a person's choice.
+          requeued = @requeued.delete(job.key)
+          forget_round(job) if requeued || job.handle.compaction&.restart
           @attempts << attempt
           row = row_for(job)
           @recent << { at: UI.monotonic, row: row.with(state: attempt.ok ? :done : :failed,

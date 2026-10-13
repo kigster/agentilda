@@ -93,6 +93,31 @@ module Agentilda
         PROMPT
       end
 
+      # What a compacted agent is told when its session is resumed (W28). Its
+      # own instructions survive in the compacted summary; what it needs is
+      # to know that the INTERRUPT it just obeyed is over, and that the
+      # session it is in is the same one.
+      #
+      # @return [String]
+      def continuation
+        plans_dir = File.dirname(subject.feature.path)
+        <<~PROMPT
+          Your context was just compacted at a person's request. This is the same
+          session and the same round on plan #{subject.feature.ordinal}.
+
+          The INTERRUPT you were sent was only to pause you for the compaction.
+          It is over: do not end your turn because of it. Read your RESUME note,
+
+              #{cli} mail read --dir "#{plans_dir}" --plan #{subject.feature.ordinal} --for #{agent.name}
+
+          then carry on from its exact next step, as your original instructions
+          say, and sign your ledger when the work is done, as before. If you had
+          already finished and signed Completed, end your turn now.
+
+          #{"Your control file is still #{control}, now empty. Keep polling it between steps." if control}
+        PROMPT
+      end
+
       private
 
       attr_reader :agent, :subject, :root, :profile, :round, :successor, :partners, :control
@@ -287,8 +312,6 @@ module Agentilda
           before you do anything else; check every thirty seconds:
 
               #{cli} mail read --dir "#{plans_dir}" --plan #{plan} --for #{agent.name}
-
-          COMPACT means run `/compact` now, then carry on where you were.
 
           INTERRUPT means the operator pressed Ctrl-C and the run will be started
           again later. Start nothing new. Finish the write you are in the middle

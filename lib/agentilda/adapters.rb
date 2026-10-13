@@ -39,6 +39,11 @@ module Agentilda
     # @!attribute [r] lean
     #   @return [Boolean] start without the operator's personal plugins,
     #     skills, hooks and MCP servers
+    # @!attribute [r] resume
+    #   @return [String, nil] a session to carry on rather than start afresh
+    # @!attribute [r] slash_commands
+    #   @return [Boolean] keep the CLI's slash commands even when lean, which
+    #     only the `/compact` sent into a resumed session needs
     Invocation = Data.define(:prompt,
       :root,
       :model,
@@ -47,9 +52,11 @@ module Agentilda
       :denied_tools,
       :denied_commands,
       :network,
-      :lean) do
+      :lean,
+      :resume,
+      :slash_commands) do
       def initialize(allowed_tools: [], denied_tools: [], denied_commands: [], network: false, lean: true,
-        model: nil, effort: nil, **rest)
+        model: nil, effort: nil, resume: nil, slash_commands: false, **rest)
         super
       end
     end

@@ -259,4 +259,34 @@ RSpec.describe Agentilda::Execution::Transcript do
       expect(seen).to eq(["running bundle exec rspec"])
     end
   end
+
+  # What a compaction resumes, and how it knows `/compact` did anything (W28).
+  describe "the session" do
+    def system_event(subtype, **rest) = { type: "system", subtype:, session_id: "sess-1", **rest }.to_json + "\n"
+
+    it "is unknown until the stream starts" do
+      expect([transcript.session, transcript.progress.session]).to eq([nil, nil])
+    end
+
+    context "when the init event has gone past" do
+      subject(:transcript) { described_class.new { |progress| sessions << progress.session } }
+
+      let(:sessions) { [] }
+
+      before { feed(system_event("init"), system_event("init", session_id: "sess-2")) }
+
+      it "is the first one named, handed on with the progress" do
+        expect([transcript.session, sessions.last]).to eq(%w[sess-1 sess-1])
+      end
+    end
+
+    it "has not been compacted until a compact_boundary says so" do
+      expect(transcript.compacted).to be_nil
+    end
+
+    it "keeps what the compact_boundary reported" do
+      feed(system_event("compact_boundary", compact_metadata: { pre_tokens: 46_599, post_tokens: 7240 }))
+      expect(transcript.compacted).to include("pre_tokens" => 46_599, "post_tokens" => 7240)
+    end
+  end
 end

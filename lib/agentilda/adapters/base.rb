@@ -47,6 +47,17 @@ module Agentilda
       # @return [Agentilda::Adapters::Model, nil]
       def model_entry(name) = models.find { |m| m.id == name.to_s }
 
+      # What, sent into a resumed session, makes this CLI compact it (W28);
+      # nil for a CLI that cannot resume one, whose agents are therefore never
+      # compacted mid-round.
+      #
+      # @return [String, nil]
+      def compact_prompt = nil
+
+      # @return [Boolean] whether an agent on this CLI can be compacted and
+      #   carried on in the same session
+      def compacts? = !compact_prompt.nil?
+
       # Whether the CLI itself refuses the denied tools, rather than only being
       # asked not to use them. The prompt says which, because telling an agent
       # a guard exists when it does not is how it stops being careful.
