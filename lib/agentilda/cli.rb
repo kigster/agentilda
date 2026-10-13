@@ -19,6 +19,7 @@ require_relative "cli/linear/subcommands/import"
 require_relative "cli/docs/docs"
 require_relative "cli/eval/eval"
 require_relative "cli/run/run"
+require_relative "cli/start/start"
 require_relative "cli/unblock/unblock"
 require_relative "cli/version/version"
 require_relative "cli/web/web"
@@ -77,7 +78,7 @@ module Agentilda
       width [90, TTY::Screen.width - 2].min
 
       group "Plans", "init", "create", "list-plans", "index", "resync", "unblock", "worktree"
-      group "Agents", "run", "web", "agents", "describe", "mail", "state", "eval"
+      group "Agents", "start", "run", "web", "agents", "describe", "mail", "state", "eval"
       group "Reference", "docs", "states", "linear", "skills", "completion", "version"
     end
 
@@ -88,6 +89,7 @@ module Agentilda
     # prompts and scripts call this by name.
     register "list-plans", ListPlans, aliases: %w[status st]
     register "run", Run
+    register "start", Start
     register "web", Web
     register "unblock", Unblock
     register "eval", Eval

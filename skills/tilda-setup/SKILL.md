@@ -1,9 +1,9 @@
 ---
-name: tilda-start
-description: "Start a project on tilda: check the prerequisites, run `tilda init`, install the skills, and create the first plan. Use when the user wants to start a new project with tilda, set up tilda, bring an existing repository onto it, or when a tilda command exits 66 with no project root."
+name: tilda-setup
+description: "Set a project up on tilda: check the prerequisites, run `tilda init`, install the skills, and create the first plan. Use when the user wants to set up a new project on tilda, bring an existing repository onto it, or when a tilda command exits 66 with no project root."
 ---
 
-# tilda-start: put a project on tilda
+# tilda-setup: put a project on tilda
 
 Load the `tilda` skill first if it is not in context. Read `<command> --help` before using a flag here.
 
@@ -19,7 +19,7 @@ Check each, then report every gap at once with its fix. Ask before installing an
 | the agents' CLI: `command -v claude`, the default adapter, or `codex` / `pi` when the plans' `spec.md` select them per phase | install the CLI the plans use; `tilda agents list` shows each agent's adapter |
 | Redis answers at the URL tilda will use (order below): `url=$(ruby -ryaml -e 'puts((YAML.safe_load_file(".tilda.yml") rescue {}).to_h["redis_url"])' 2>/dev/null); redis-cli -u "${url:-${REDIS_URL:-redis://localhost:6379/0}}" ping` | start `redis-server`, or point tilda at another Redis (below) |
 
-Redis carries the control room, its commands and plan claims. Without it `tilda run` still works, headless, and says so. tilda looks for it in `--redis-url`, then `redis_url:` in `.tilda.yml`, then `$REDIS_URL`, then `redis://localhost:6379/0`; `tilda web` checks `$AGENTILDA_REDIS_URL` before all of those but the flag.
+Redis carries the control room, its commands and plan claims. `tilda start` refuses to run without it (exit 69); `tilda run` still works, headless, and says so. tilda looks for it in `--redis-url`, then `redis_url:` in `.tilda.yml`, then `$REDIS_URL`, then `redis://localhost:6379/0`; `tilda web` checks `$AGENTILDA_REDIS_URL` before all of those but the flag.
 
 ## 2. `tilda init`
 
@@ -61,3 +61,4 @@ and offer `tilda-run` to start the agents.
 - [ ] `tilda status` lists the plan.
 - [ ] `tilda run -n --plan 000` names its first agent.
 - [ ] With Redis up, `tilda web --demo` opens the control room on a sample run (Ctrl-C to stop).
+- [ ] `tilda start` is running: the factory and its control room, up until every plan is finished. From here the user works on the page (see `tilda-run`).

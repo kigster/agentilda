@@ -39,7 +39,7 @@ eval "$(tilda completion zsh)"
 eval "$(alock completion zsh)"
 ```
 
-To give your coding agents the bundled `tilda` skills, copy them into the shared skill store. There are seven: `tilda` (how the factory works, and which of the others to load), `tilda-start` (put a project on tilda), `tilda-spec` (create a plan and write its spec), `tilda-documents` (the files in a plan folder and the formats tilda parses), `tilda-run` (run the agents, clear blocks), `tilda-status` (where plans stand, the control room) and `tilda-sync` (folder names, PR titles, Linear).
+To give your coding agents the bundled `tilda` skills, copy them into the shared skill store. There are seven: `tilda` (how the factory works, and which of the others to load), `tilda-setup` (put a project on tilda), `tilda-spec` (create a plan and write its spec), `tilda-documents` (the files in a plan folder and the formats tilda parses), `tilda-run` (`tilda start` and `tilda run`, clear blocks), `tilda-status` (where plans stand, the control room) and `tilda-sync` (folder names, PR titles, Linear).
 
 ```bash
 tilda skills install          # copies skills/* into ~/.agents/skills; -h lists them
@@ -59,7 +59,7 @@ tilda init                  # writes .tilda.yml and creates .plans/; asks on a t
 tilda create tax rule dsl   # creates .plans/000.00-⚪️ → tax-rule-dsl/spec.md and opens it
                             # finish the brief in spec.md, then save it
 tilda run -n                # dry run: shows which agent would take which plan
-tilda run                   # runs the agents until no plan changes state
+tilda start                 # the factory and its control room, up until every plan is finished
 
 tilda list-plans            # every plan, its state and its pull requests
 ```
@@ -228,7 +228,8 @@ tilda list-plans                       # every plan, its state and its pull requ
 tilda index                            # write .plans/INDEX.md
 tilda states                           # the state machine, as a diagram
 tilda docs -o docs/WORKFLOW.md         # regenerate the conventions from the code
-tilda run --plan 003                   # run the agents on specific plans
+tilda start                            # the factory as a service: agents plus the control room, until every plan is finished
+tilda run --plan 003                   # run the agents on specific plans, until no plan changes state
 tilda unblock 003                      # fold answered blocks back in
 tilda worktree 003                     # create and seed a worktree for one plan
 tilda resync dirs                      # rename folders whose emoji their contents contradict
@@ -241,6 +242,22 @@ tilda skills install                   # copy the bundled skills into ~/.agents/
 > **Every command does the work it is named for.** Add `-n` / `--dry-run` to `run`, `unblock`, `resync dirs`, `resync prs` or `linear import` to see what it would do first, with nothing changed.
 
 ## Running the agents
+
+### `tilda start`: the factory with its control room
+
+```bash
+tilda start                                # engine plus control room on http://127.0.0.1:4747
+tilda start --no-open --port 4848          # print the URL instead of opening it, on another port
+tilda start --rescan 10                    # look for new or hand-edited plans every 10 s while idle
+```
+
+`tilda start` is `tilda run` that does not stop at a fixed point. When a plan blocks, it idles, puts the questions in **Needs You** on the page, takes your answer from there, folds it in and hands the plan back to its agent, with no restart. Plans created on the page, by `tilda create` in another terminal, or edited by hand are picked up on the next rescan (every 5 s, or at once after anything you do on the page).
+
+Every decision goes through the page: answers, hold, wrap up and stop on an agent, model changes, new plans. **Stop All** stops the agents but keeps the engine and page up; the next answer, added plan or resume starts agents again. The terminal only prints the URL and the progress log.
+
+It ends on its own, with exit 0, once every plan in scope is finished: ✅ Approved & Merged, 😎 Deployed or ❌ Discarded. A project with no plans waits for the first. Ctrl-C or `SIGTERM` stops it early, with the same graceful stop as `run`. It takes `run`'s flags except `-n` and `--no-web`, and needs Redis: without it, it refuses (exit 69) rather than going headless.
+
+### `tilda run`: to a fixed point
 
 ```bash
 tilda run -n                               # dry run: who would take what

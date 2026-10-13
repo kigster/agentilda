@@ -138,20 +138,24 @@ module Agentilda
         # A trap handler may not take a mutex, so the first press hands
         # {#interrupt!} to a thread; the second raises, as Ctrl-C always has.
         #
+        # @param signals [Array<String>] each handled as Ctrl-C is; `tilda
+        #   start` adds TERM, so a service manager's stop is as graceful
         # @yieldreturn [Object]
         # @return [Object] the block's value
-        def on_interrupt
-          previous = Signal.trap("INT") do
-            # A plain read, not {#interrupted?}: a trap handler may not lock.
-            raise Interrupt if @interrupted || @pending_interrupt
+        def on_interrupt(signals = %w[INT])
+          previous = signals.to_h do |signal|
+            [signal, Signal.trap(signal) do
+              # A plain read, not {#interrupted?}: a trap handler may not lock.
+              raise Interrupt if @interrupted || @pending_interrupt
 
-            @pending_interrupt = true
-            Thread.new { interrupt! }
+              @pending_interrupt = true
+              Thread.new { interrupt! }
+            end]
           end
           yield
         ensure
           @pending_interrupt = false
-          Signal.trap("INT", previous || "DEFAULT")
+          previous&.each { |signal, handler| Signal.trap(signal, handler || "DEFAULT") }
         end
 
         # @return [Boolean] whether the grace period after `q` has run out

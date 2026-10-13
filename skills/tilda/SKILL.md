@@ -1,6 +1,6 @@
 ---
 name: tilda
-description: The agentilda software factory (`tilda` CLI) that drives `.plans/` folders through spec → plan → build → review with specialist agents. Use when a project has `.plans/` or `.tilda.yml`, when the user mentions tilda, agentilda, plan folders or the factory, or asks how a plan moves between states, or wants to start a project or set up tilda. Loads before tilda-start, tilda-spec, tilda-documents, tilda-run, tilda-status and tilda-sync.
+description: The agentilda software factory (`tilda` CLI) that drives `.plans/` folders through spec → plan → build → review with specialist agents. Use when a project has `.plans/` or `.tilda.yml`, when the user mentions tilda, agentilda, plan folders or the factory, or asks how a plan moves between states, or wants to set up a project on tilda or start the factory. Loads before tilda-setup, tilda-spec, tilda-documents, tilda-run, tilda-status and tilda-sync.
 ---
 
 # tilda: the software factory
@@ -11,17 +11,17 @@ description: The agentilda software factory (`tilda` CLI) that drives `.plans/` 
 
 | The user wants to                                            | Load           |
 | ------------------------------------------------------------ | -------------- |
-| start a project on tilda, or fix a missing project root (exit 66) | `tilda-start` |
+| set a project up on tilda, or fix a missing project root (exit 66) | `tilda-setup` |
 | start a feature or task, pick its lane, add implementation detail | `tilda-spec`   |
 | write or fix a file in a plan folder: `blocked.md`, `spec.md`, `pull-requests.md` | `tilda-documents` |
-| run the agents until the plans are done; clear a blocked plan | `tilda-run`    |
+| start the factory (`tilda start`) or run the agents until the plans are done; clear a blocked plan | `tilda-run`    |
 | see where plans stand, a plan's history, an agent's mailbox, the control room | `tilda-status` |
 | fix folder names, PR titles, or export to Linear             | `tilda-sync`   |
 
 ## Before any command
 
 1. `command -v tilda` must answer. Otherwise tell the user to install the gem (`gem install agentilda`) and stop. These skills ship inside the gem; after a gem upgrade, `tilda skills install --overwrite` refreshes them in `~/.agents/skills`.
-1. `tilda` finds the project root by itself: the nearest ancestor holding `.tilda.yml` or `.plans/`, else the nearest `.git`. With none of them, project commands exit 66; load `tilda-start`. `init`, `docs`, `states`, `agents`, `describe`, `skills`, `eval`, `completion` and `version` need no project and still work.
+1. `tilda` finds the project root by itself: the nearest ancestor holding `.tilda.yml` or `.plans/`, else the nearest `.git`. With none of them, project commands exit 66; load `tilda-setup`. `init`, `docs`, `states`, `agents`, `describe`, `skills`, `eval`, `completion` and `version` need no project and still work.
 1. Bundler errors inside a Ruby project (a Gemfile that is not agentilda's) come from the calling shell's Bundler variables. Re-run in a subshell: `(unset BUNDLE_GEMFILE BUNDLE_BIN_PATH BUNDLER_SETUP BUNDLER_VERSION RUBYOPT RUBYLIB; tilda …)`.
 1. A flag these skills use being rejected (`-n`, or output saying `Re-run with --commit`) means the `tilda` on PATH is older than the skills: an rbenv shim or a stale gem shadowing the one that installed them. `which -a tilda` and `tilda version` show which; call the right one by its full path and tell the user.
 1. `--help` on any command or subcommand is the source of truth for flags (`tilda resync dirs --help`). Read it rather than guessing a flag.

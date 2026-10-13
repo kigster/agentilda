@@ -68,3 +68,4 @@ Decided 2026-10-13.
 - The leftover `skills/tilda-factory/` draft is reworked into `tilda-documents`: what each file in a plan folder is for, the formats the code parses (B1/A1, spec frontmatter, `pull-requests.md`, the retroactive provenance line), and templates matching what `tilda create` and the agents write.
 - Renamed because the umbrella `tilda` skill already calls itself the software factory; a second skill with "factory" in its name would compete for the same trigger while covering something narrower. "Documents" names what it covers.
 - Which state requires which file is never copied into a skill; they point at `tilda docs` and `tilda states`.
+- 2026-10-13, later: `tilda-start` is renamed `tilda-setup`. It is about setting a project up, and `tilda start` is now the command that runs the factory with its control room. `tilda-run` documents that command, and `tilda-setup` ends with it running.

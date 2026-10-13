@@ -159,6 +159,8 @@ A slug from a manifest is passed through `Plans::Feature.titleize`, so `agentild
 
 A sub-plan is an ordinary plan with its own number. Its frontmatter names its parent (`part_of: "002"`), and it depends on the plans before it in the list **(the field name is proposed)**.
 
+**Amended 2026-10-13: `tilda start` stays up.** The command now exists, as the factory running as a service: `run` with the control room required, idling instead of ending at a fixed point. A blocked plan (palpatine-planner's questions included) waits in Needs You, the answer from the page is drained, and the plan goes back to its agent, all without a restart. It opens the page at `#start` only when no plan is unfinished; otherwise on the board, and it starts agents on existing plans at once rather than waiting for a confirmation. It ends on its own once every plan in scope is ✅, 😎 or ❌, and on Ctrl-C or SIGTERM. Without Redis it refuses (exit 69); it has no `-n` and no `--no-web`. Stop All stops the agents and keeps the engine up. The idea dialog's split and confirmation (steps 2 to 4) are unchanged and still to come.
+
 ### W20. `tilda init` ends in `tilda start`
 
 `tilda init` arrives in PR #53, where it writes `.tilda.yml` and creates `.plans/`. This decision extends it: it also checks that Redis answers, and installs the `agent-lock` gem when `alock` is missing or older than the version agentilda needs, so the two always arrive together (settled by the author, 2026-10-12). It then runs `tilda start`, so a new project goes straight from setup to the idea dialog. `--no-start` stops after setup, for scripts and CI.

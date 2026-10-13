@@ -156,21 +156,77 @@ module Agentilda
           dry_run:   dry_run?(options),
           publisher: publisher_for(root, isolation, options),
           on_board:  live&.on_board,
-          claims:    live&.claims
+          claims:    live&.claims,
+          **staying(options)
         )
 
         started  = UI.monotonic
         attempts = begin
-          Execution.on_interrupt { runner.call { |dispatcher| live&.attach(dispatcher) } }
+          Execution.on_interrupt(signals:) { runner.call { |dispatcher| live&.attach(dispatcher) } }
         ensure
           live&.close
           web&.stop
         end
-        report(runner, attempts, options, seconds: UI.monotonic - started)
-        exit(failures(attempts).empty? ? 0 : 1)
+        finish(runner, attempts, options, seconds: UI.monotonic - started)
       end
 
       private
+
+      # What the runner is told about idling past its fixed points. `run`
+      # ends at one; {Start} stays.
+      #
+      # @param _options [Hash]
+      # @return [Hash] `stay:` and `rescan:` for {Engine::Runner}, or nothing
+      def staying(_options) = {}
+
+      # Signals that stop the run gracefully, the way the first Ctrl-C does.
+      #
+      # @return [Array<String>]
+      def signals = %w[INT]
+
+      # The closing report, and the exit status: 1 when any attempt failed.
+      #
+      # @param runner [Agentilda::Engine::Runner]
+      # @param attempts [Array<Agentilda::Engine::Runner::Attempt>]
+      # @param options [Hash]
+      # @param seconds [Float]
+      # @return [void]
+      def finish(runner, attempts, options, seconds:)
+        report(runner, attempts, options, seconds:)
+        exit(failures(attempts).empty? ? 0 : 1)
+      end
+
+      # Where the browser is sent once the control room answers.
+      #
+      # @param web [Agentilda::Web::Launcher]
+      # @param _tree [Agentilda::Plans::Tree]
+      # @return [String]
+      def browser_url(web, _tree) = web.url
+
+      # A live board this run cannot do without. `run` goes on headless, and
+      # {Start}, whose page is its only way in, refuses instead.
+      #
+      # @param message [String] why there is no board
+      # @param options [Hash]
+      # @return [nil]
+      def without_live(message, options)
+        return nil if quiet?(options)
+
+        warn("#{message}\n\nThe run goes on without the live board: no page, no commands from it, and no " \
+             "plan claims shared with other machines. Start redis-server, or pass --redis-url.")
+        nil
+      end
+
+      # @param web [Agentilda::Web::Launcher] one that did not answer
+      # @param _live [Agentilda::Live::Session]
+      # @param options [Hash]
+      # @return [nil]
+      def without_web(web, _live, options)
+        return nil if quiet?(options)
+
+        warn("The control room did not answer on #{web.url}, so the run goes on without it. Its log: #{web.log}")
+        nil
+      end
 
       # The live board (W6, W13, W26), when this run has one: not on a dry
       # run, which must leave nothing behind, and not without Redis, where
@@ -198,11 +254,7 @@ module Agentilda
           info("Live board: #{session.describe}") unless quiet?(options)
         end
       rescue Live::Unavailable => e
-        unless quiet?(options)
-          warn("#{e.message}\n\nThe run goes on without the live board: no page, no commands from it, and no " \
-               "plan claims shared with other machines. Start redis-server, or pass --redis-url.")
-        end
-        nil
+        without_live(e.message, options)
       end
 
       # The control room (W1, W7): `agentilda web` as its own process beside
@@ -225,15 +277,11 @@ module Agentilda
           redis_url: live.store.url).start
         unless web.ready?
           web.stop
-          unless quiet?(options)
-            warn("The control room did not answer on #{web.url}, so the run goes on without it. " \
-                 "Its log: #{web.log}")
-          end
-          return nil
+          return without_web(web, live, options)
         end
 
         info("Control room: #{web.url}") unless quiet?(options)
-        Agentilda::Web.open(web.url) unless options[:open] == false
+        Agentilda::Web.open(browser_url(web, tree)) unless options[:open] == false
         web
       end
 
