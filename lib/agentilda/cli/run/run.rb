@@ -228,7 +228,7 @@ module Agentilda
       def without_web(web, _live, options)
         return nil if quiet?(options)
 
-        warn("The control room did not answer on #{web.url}, so the run goes on without it. Its log: #{web.log}")
+        warn(web.collision ? "#{web.collision} The run goes on without a control room." : "The control room did not answer on #{web.url}, so the run goes on without it. Its log: #{web.log}")
         nil
       end
 
@@ -278,7 +278,8 @@ module Agentilda
         web = Agentilda::Web.launcher(root:,
           plans_dir: tree.dir,
           port:      options[:port] || Agentilda::Web::DEFAULT_PORT,
-          redis_url: live.store.url).start
+          redis_url: live.store.url,
+          repo:      live.keys.repo).start
         unless web.ready?
           web.stop
           return without_web(web, live, options)

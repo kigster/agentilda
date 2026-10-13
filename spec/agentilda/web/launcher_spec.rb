@@ -167,6 +167,69 @@ RSpec.describe Agentilda::Web::Launcher do
     end
   end
 
+  # Joined only when it is this repository's control room, on this run's
+  # Redis: anything else on the port would never show what the run publishes.
+  context "when a server already on the port serves something else" do
+    subject(:launcher) do
+      described_class.new(root: dir,
+        plans_dir: File.join(dir, ".plans"),
+        port:,
+        redis_url: "redis://localhost:6379/9",
+        log:       File.join(dir, "web.log"),
+        probe:     -> { true },
+        repo:      "github.com/acme/widgets",
+        identify:  -> { theirs })
+    end
+
+    let(:listener) { TCPServer.new(Agentilda::Web::HOST, 0) }
+    let(:port) { listener.addr[1] }
+
+    before { launcher.start }
+
+    after { listener.close }
+
+    context "when it is this repository's, on this Redis" do
+      let(:theirs) { ["github.com/acme/widgets", "redis://localhost:6379/9"] }
+
+      it "joins it" do
+        expect([launcher.ready?, launcher.collision]).to eq([true, nil])
+      end
+    end
+
+    context "when it is another repository's" do
+      let(:theirs) { ["github.com/acme/gadgets", "redis://localhost:6379/9"] }
+
+      it "reports the collision instead of joining" do
+        aggregate_failures do
+          expect(launcher.ready?).to be(false)
+          expect(launcher.collision).to include("Port #{port} is taken by github.com/acme/gadgets", "--port")
+        end
+      end
+    end
+
+    context "when it is on another Redis" do
+      let(:theirs) { ["github.com/acme/widgets", "redis://elsewhere:6379/0"] }
+
+      it "reports the collision" do
+        expect(launcher.collision).to include("redis://elsewhere:6379/0")
+      end
+    end
+
+    context "when it is not a control room at all" do
+      let(:theirs) { nil }
+
+      it "says so" do
+        expect(launcher.collision).to include("something that is not a tilda control room")
+      end
+    end
+  end
+
+  describe "#identity, against nothing listening" do
+    subject(:identity) { described_class.new(root: dir, plans_dir: dir, port: 1, redis_url: "x").send(:identity) }
+
+    it { is_expected.to be_nil }
+  end
+
   describe "#healthy?, against nothing listening" do
     subject(:probe) { described_class.new(root: dir, plans_dir: dir, port: 1, redis_url: "x") }
 

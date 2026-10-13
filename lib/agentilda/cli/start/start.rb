@@ -99,8 +99,7 @@ module Agentilda
       # @return [void]
       def without_web(web, live, _options)
         live.close
-        refuse("The control room did not answer on #{web.url}, and tilda start is no use without it. " \
-               "Its log: #{web.log}",
+        refuse(web.collision ? "#{web.collision} tilda start is no use without its control room." : "The control room did not answer on #{web.url}, and tilda start is no use without it. Its log: #{web.log}",
           UNAVAILABLE)
       end
 

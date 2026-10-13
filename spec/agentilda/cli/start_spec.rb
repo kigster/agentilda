@@ -13,12 +13,13 @@ RSpec.describe Agentilda::CLI::Start, :tree do
   let(:live_store) { Agentilda::Live.memory_store }
   let(:web) do
     instance_double(Agentilda::Web::Launcher,
-      ready?:   true,
-      url:      "http://127.0.0.1:4747",
-      log:      "/tmp/web.log",
-      stop:     nil,
-      joined?:  false,
-      serving?: true)
+      ready?:    true,
+      url:       "http://127.0.0.1:4747",
+      log:       "/tmp/web.log",
+      stop:      nil,
+      joined?:   false,
+      collision: nil,
+      serving?:  true)
   end
   let(:executor) { instance_double(Agentilda::Execution::Executor) }
 
@@ -211,6 +212,19 @@ RSpec.describe Agentilda::CLI::Start, :tree do
 
     it "never starts the engine" do
       expect(Agentilda::Engine::Runner).not_to have_received(:new)
+    end
+  end
+
+  describe "when another repository's control room holds the port" do
+    before do
+      asked
+      allow(web).to receive_messages(ready?: false, collision: "Port 4747 is taken by github.com/acme/gadgets.")
+    end
+
+    let!(:result) { start }
+
+    it "refuses with exit 69, naming the collision" do
+      expect([result.last, result[1]]).to match([69, include("Port 4747 is taken by github.com/acme/gadgets.")])
     end
   end
 

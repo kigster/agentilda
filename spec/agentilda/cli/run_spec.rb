@@ -19,12 +19,13 @@ RSpec.describe Agentilda::CLI::Run, :tree do
   # never opens a browser.
   let(:web) do
     instance_double(Agentilda::Web::Launcher,
-      ready?:   true,
-      url:      "http://127.0.0.1:4747",
-      log:      "/tmp/web.log",
-      stop:     nil,
-      joined?:  false,
-      serving?: false)
+      ready?:    true,
+      url:       "http://127.0.0.1:4747",
+      log:       "/tmp/web.log",
+      stop:      nil,
+      joined?:   false,
+      collision: nil,
+      serving?:  false)
   end
 
   before do
@@ -667,7 +668,7 @@ RSpec.describe Agentilda::CLI::Run, :tree do
     it "starts beside the run on the store the board is published to, and prints its URL" do
       result
       aggregate_failures do
-        expect(Agentilda::Web).to have_received(:launcher).with(root: File.dirname(plans_root), plans_dir: plans_root, port: "4848", redis_url: "memory://")
+        expect(Agentilda::Web).to have_received(:launcher).with(root: File.dirname(plans_root), plans_dir: plans_root, port: "4848", redis_url: "memory://", repo: a_string_matching(%r{\Alocal/}))
         expect(stderr).to include("Control room: http://127.0.0.1:4747")
       end
     end
@@ -748,6 +749,16 @@ RSpec.describe Agentilda::CLI::Run, :tree do
           expect(Agentilda::Web).not_to have_received(:open)
           expect(web).to have_received(:stop)
         end
+      end
+    end
+
+    context "when another repository's control room holds the port" do
+      before do
+        allow(web).to receive_messages(ready?: false, collision: "Port 4747 is taken by github.com/acme/gadgets.")
+      end
+
+      it "names the collision and goes on without a control room" do
+        expect(stderr).to include("Port 4747 is taken by github.com/acme/gadgets. The run goes on without a control room.")
       end
     end
   end
