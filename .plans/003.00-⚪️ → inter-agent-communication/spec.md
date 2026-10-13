@@ -55,13 +55,15 @@ Surface the unacked count on the dashboard. An agent that stopped acking is an a
 
 ### D4. Redis is required, and it carries Streams
 
-Redis is a hard dependency with a clear error when absent, not a silent degrade. Local Redis with no auth, or `$REDIS_URL`.
+Redis is a hard dependency with a clear error when absent, not a silent degrade. Local Redis with no auth by default. The address comes from `--redis-url`, the configuration file's `redis_url:` or `AGENTILDA_REDIS_URL`, never from `REDIS_URL`, which belongs to the host application (amended by W16 in `docs/decisions/decisions-on-web-ui-and-review-labels.md`).
 
 **Streams (`XADD` / `XREADGROUP`), not pub/sub.** Same effort, and it gives three things pub/sub cannot: a message survives the reader being down, a stream replays what an agent missed, and consumer groups ack delivery.
 
 TTL: Streams have no per-message TTL. The equivalent of the 60-minute window is `XTRIM <key> MINID <now - 60min>` on each write plus `EXPIRE` on the stream key. Nothing is lost by trimming, because the committed JSON is the durable record and Redis is only the transport.
 
 **Key naming must include the checkout, not just the plan ordinal.** Ten sessions run at once here, and two worktrees of this repo both running `001.00` would otherwise cross-talk into each other's streams.
+
+The checkout is identified by its absolute path, resolved through symlinks (`File.realpath`), hashed to keep keys short: `agentilda:<checkout>:<plan>:<stream>`, where `<checkout>` is the first 12 hex digits of the path's SHA-256. The path itself is stored beside the keys, in the hash `agentilda:<checkout>:meta`, so `redis-cli` and the web page can show which checkout a key belongs to. Every worktree has its own path, so two worktrees never share keys. The remote URL plus the worktree name was considered and rejected: two plain clones of one repository, with no worktree name, would collide. Moving a checkout changes its keys, which costs nothing, because the engine flushes the run to disk (W6) and reloads it from there (decided by the author, 2026-10-12, in `docs/decisions/decisions-on-web-ui-and-review-labels.md`).
 
 ### D5. No broker process. The harness thread is the single writer
 
