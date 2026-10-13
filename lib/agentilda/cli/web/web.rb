@@ -30,6 +30,10 @@ module Agentilda
         "--port 4848      # somewhere other than 4747"
       ]
 
+      # What the terminal and the page say while no engine publishes.
+      ENGINE_HINT = "No engine is running for this project. Please use `tilda start`, or start an engine " \
+                    "in another terminal by running `tilda run`."
+
       # @param options [Hash]
       # @return [void]
       def call(**options)
@@ -43,7 +47,7 @@ module Agentilda
         demo = Agentilda::Web.demo(store: stores.current, keys:).start if options[:demo]
         context = Agentilda::Web.context(stores:, keys:, plans_dir: tree.dir, url: stores.current.url, node:, demo:)
         server = Agentilda::Web.server(app: Agentilda::Web.app(context), context:, port: options[:port])
-        serve(server, options, keys:, node:, url: stores.current.url)
+        serve(server, options, keys:, node:, store: stores.current)
       ensure
         demo&.stop
       end
@@ -76,10 +80,26 @@ module Agentilda
         Agentilda::Web::Stores.shared(Live.memory_store)
       end
 
+      # `tilda web` serves a page, not a run: without an engine publishing
+      # for this checkout the board stays empty, so say how to get one
+      # rather than leave a page that never moves. The page says it too.
+      #
+      # @return [void]
+      def engine_hint(options, store:, keys:)
+        # Spawned by `tilda run` or `tilda start`, whose engine publishes its
+        # first board a tick after this server answers.
+        return if quiet?(options) || ENV.key?(Agentilda::Web::Launcher::REDIS_URL_ENV)
+        return if Live.board(store:, keys:)[:me]
+
+        warn(ENGINE_HINT)
+      rescue Live::Unavailable
+        nil
+      end
+
       # Listen until INT or TERM.
       #
       # @return [void]
-      def serve(server, options, keys:, node:, url:)
+      def serve(server, options, keys:, node:, store:)
         begin
           server.start
         rescue Errno::EADDRINUSE
@@ -90,8 +110,9 @@ module Agentilda
         %w[INT TERM].each { |name| Signal.trap(name) { Thread.new { server.stop } } }
         unless quiet?(options)
           info("Control room: #{server.url}#{" (demo)" if options[:demo]}\n" \
-               "Redis: #{Live.mask(url)} as #{node.label} (#{keys.node}), repository #{keys.repo}")
+               "Redis: #{Live.mask(store.url)} as #{node.label} (#{keys.node}), repository #{keys.repo}")
         end
+        engine_hint(options, store:, keys:) unless options[:demo]
         Agentilda::Web.open(server.url) if options[:open]
         server.wait
       end

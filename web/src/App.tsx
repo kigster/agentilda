@@ -272,10 +272,17 @@ export default function App() {
             Could not load the board: {error.message}. Is tilda run (or tilda web --demo) running?
           </main>
         ) : (
-          // The server answered with no engine on the board yet (`tilda web` before `tilda run`): the stream brings
-          // the first snapshot, and the page draws itself then.
+          // The server answered with no engine on the board (`tilda web` on its own): say how to start one. The stream
+          // brings the first snapshot once one runs, and the page draws itself then.
           <main className="loading" aria-busy="true">
-            {waiting ? "Waiting for the engine to publish…" : "Connecting to the engine…"}
+            {waiting ? (
+              <>
+                No engine is running for this project. Please use <code>tilda start</code>, or start an engine in another
+                terminal by running <code>tilda run</code>.
+              </>
+            ) : (
+              "Connecting to the engine…"
+            )}
           </main>
         )}
       </AnnouncerProvider>

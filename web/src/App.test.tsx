@@ -218,10 +218,14 @@ describe("live", () => {
     }
   });
 
-  it("waits for the engine to publish when the server has no board yet, then draws it", async () => {
+  it("says how to start an engine when the server has no board yet, then draws it", async () => {
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(json({ me: null, others: [] })));
     renderApp();
-    expect(await screen.findByText("Waiting for the engine to publish…")).toHaveAttribute("aria-busy", "true");
+    const waiting = await screen.findByText(/No engine is running for this project/);
+    expect(waiting).toHaveAttribute("aria-busy", "true");
+    expect(waiting).toHaveTextContent(
+      "Please use tilda start, or start an engine in another terminal by running tilda run.",
+    );
     act(() => streams.at(-1)!.onBoard(sampleBoard()));
     expect(await screen.findByRole("tab", { name: "Board" })).toBeInTheDocument();
   });
