@@ -152,9 +152,7 @@ module Agentilda
           headline(subjects),
           jobs:   1,
           label:  method(:label),
-          fields: method(:log_fields),
-          file:   ->(_) { "blocked.md" },
-          root:) do |subject, progress|
+          fields: method(:log_fields)) do |subject, progress|
           # After ctrl-c the plans not yet started stay as they are, blocked.md
           # untouched, so the next run picks them up from the beginning.
           next [false, "not started: interrupted by ctrl-c"] if Execution::Control.interrupted?
@@ -169,12 +167,10 @@ module Agentilda
       private
 
       # @param subject [Agentilda::Plans::Subject]
-      # @param progress [Agentilda::UI::Line] a dashboard row carries the
-      #   executor handle its kill and extend keys act on; a plain line does not
+      # @param progress [Agentilda::UI::Line]
       # @return [Array(Boolean, String)]
       def invoke(subject, progress)
-        handle = progress.handle if progress.is_a?(Presentation::Dashboard::Tracker)
-        @executor.call(agent, subject, root:, handle:, &progress)
+        @executor.call(agent, subject, root:, &progress)
       rescue StandardError => e
         [false, "#{e.class}: #{e.message.lines.first.to_s.strip}"]
       end

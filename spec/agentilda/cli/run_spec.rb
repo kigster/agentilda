@@ -11,10 +11,7 @@
 RSpec.describe Agentilda::CLI::Run, :tree do
   subject(:command) { described_class.new }
 
-  # A suite run from a terminal must never have the listener put that
-  # terminal into raw mode and eat the developer's keys byte by byte.
   before {
-    allow(Agentilda::Presentation::Keyboard).to receive(:listen).and_return(nil)
     allow(Agentilda::Engine::Runner).to receive(:new).and_wrap_original do |original, **keywords|
       original.call(**keywords, sleeper: ->(_) {})
     end
@@ -192,14 +189,6 @@ RSpec.describe Agentilda::CLI::Run, :tree do
       run
 
       expect(Dir.children(plans_root).grep(/stays-put/)).to eq(["002.00-⭐️ → stays-put"])
-    end
-
-    # Every key speaks to a running agent, and listening puts the terminal
-    # in raw mode, which is what made the report staircase down the screen.
-    it "listens for no keys, since there is no agent for a key to reach" do
-      run
-
-      expect(Agentilda::Presentation::Keyboard).not_to have_received(:listen)
     end
 
     it "says where the progress log is going before the loop starts" do
@@ -452,70 +441,19 @@ RSpec.describe Agentilda::CLI::Run, :tree do
     end
   end
 
-  describe "the dashboard" do
-    let(:fake_screen) { instance_double(Agentilda::Presentation::Screen::Ratatui, attach_keyboard: nil, open: nil, close: nil, draw: nil) }
+  describe "the publisher" do
+    subject(:publisher) { command.send(:publisher_for, plans_root, :worktree, options) }
 
-    before { allow(Agentilda::UI).to receive(:animate?).and_return(true) }
+    context "with the default options" do
+      let(:options) { { commit: true } }
 
-    context "when the run is committed" do
-      before do
-        allow(Agentilda::Presentation::Screen::Ratatui).to receive(:new).and_return(fake_screen)
-        allow(Agentilda::Presentation::Keyboard).to receive(:new).and_call_original
-        run(commit: true)
-      end
-
-      it { expect(Agentilda::Presentation::Screen::Ratatui).to have_received(:new) }
-      it { expect(Agentilda::Presentation::Keyboard).to have_received(:new) }
-      it("never starts the keyboard listener") { expect(Agentilda::Presentation::Keyboard).not_to have_received(:listen) }
-      it { expect(fake_screen).to have_received(:attach_keyboard) }
+      it { is_expected.to be_a(Agentilda::Vcs::Publisher) }
     end
 
-    context "with --scroll-height" do
-      before do
-        allow(Agentilda::Presentation::Screen::Ratatui).to receive(:new).and_return(fake_screen)
-        run(commit: true, scroll_height: "5")
-      end
+    context "with --no-git-push" do
+      let(:options) { { commit: true, git_push: false } }
 
-      it "hands it to the screen" do
-        expect(Agentilda::Presentation::Screen::Ratatui).to have_received(:new).with(scroll_height: 5)
-      end
-    end
-
-    context "with an --scroll-height that is not a positive whole number" do
-      subject(:result) { run(commit: true, scroll_height: "0") }
-
-      let(:err) { result[1] }
-      let(:status) { result[2] }
-
-      it { expect(status).to eq(64) }
-      it { expect(unwrapped(err)).to include("--scroll-height") }
-    end
-
-    describe "the publisher" do
-      subject(:publisher) { command.send(:publisher_for, plans_root, :worktree, options) }
-
-      context "with the default options" do
-        let(:options) { { commit: true } }
-
-        it { is_expected.to be_a(Agentilda::Vcs::Publisher) }
-      end
-
-      context "with --no-git-push" do
-        let(:options) { { commit: true, git_push: false } }
-
-        it { is_expected.to be_nil }
-      end
-    end
-
-    context "when the run is dry" do
-      before do
-        allow(Agentilda::Presentation::Screen::Ratatui).to receive(:new)
-        run
-      end
-
-      it "draws nothing" do
-        expect(Agentilda::Presentation::Screen::Ratatui).not_to have_received(:new)
-      end
+      it { is_expected.to be_nil }
     end
   end
 

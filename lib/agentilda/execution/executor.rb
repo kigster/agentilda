@@ -204,14 +204,10 @@ module Agentilda
       #   is true. nil is unmetered.
       # @param fresh_budget [Boolean] count only new tokens against
       #   +max_tokens+, leaving out cache reads; what `eval --live` uses
-      # @param interactive [Boolean] whether someone is at the keyboard, which
-      #   the keyboard help reads. Every invocation gets a control file either
-      #   way, because the clock writes its own warnings into it regardless of
-      #   whether anyone is watching.
       # @param lean [Boolean] start agents without the operator's personal
       #   plugins, skills, hooks and MCP servers; `run --user-config` turns it off
       def initialize(root:, spawn: Child.method(:spawn), timeout: nil, dry_run: false,
-        trace_dir: TRACE_DIR, instructions: nil, model: nil, max_tokens: nil, interactive: false, lean: true,
+        trace_dir: TRACE_DIR, instructions: nil, model: nil, max_tokens: nil, lean: true,
         fresh_budget: false)
         @root = File.expand_path(root)
         @spawn = spawn
@@ -221,7 +217,6 @@ module Agentilda
         @instructions = instructions.to_s.strip
         @model = model
         @max_tokens = max_tokens
-        @interactive = interactive
         @lean = lean
         @fresh_budget = fresh_budget
       end
@@ -373,7 +368,7 @@ module Agentilda
         when :timeout then "timed out (killed #{Clock::GRACE}s after STOP)"
         when :budget then "token budget of #{@max_tokens} exceeded"
         when :quit then "still running after #{Control.interrupted? ? "ctrl-c" : "q"}, killed once the grace period ran out"
-        else "killed from the keyboard"
+        else "killed by request"
         end
       end
 

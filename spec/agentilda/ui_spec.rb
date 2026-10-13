@@ -458,9 +458,6 @@ RSpec.describe Agentilda::UI do
     context "on a terminal" do
       before do
         allow(described_class).to receive(:tty?).and_return(true)
-        allow(Agentilda::Presentation::Screen::Ratatui).to receive(:new).and_return(
-          instance_double(Agentilda::Presentation::Screen::Ratatui, attach_keyboard: nil, open: nil, close: nil, draw: nil)
-        )
       end
 
       it "still returns every result for a single item" do
@@ -563,31 +560,16 @@ RSpec.describe Agentilda::UI do
     end
   end
 
-  # On a terminal the work is drawn on the ratatui dashboard. The screen is
-  # a double: the suite has no terminal for ratatui to take over.
+  # On a terminal the work is a spinner task list, with the same contract as
+  # everywhere else: input order, one failure contained, at most `jobs` at once.
   describe ".concurrently on a terminal" do
-    let(:screen) { instance_double(Agentilda::Presentation::Screen::Ratatui, attach_keyboard: nil, open: nil, close: nil, draw: nil) }
-
-    before do
-      allow(described_class).to receive(:tty?).and_return(true)
-      allow(Agentilda::Presentation::Screen::Ratatui).to receive(:new).and_return(screen)
-    end
+    before { allow(described_class).to receive(:tty?).and_return(true) }
 
     context "with every item succeeding" do
       subject(:result) { described_class.concurrently(%i[a b], "round", jobs: 2) { |item, _line| item } }
 
       it "returns results in input order" do
         expect(result).to eq(%i[a b])
-      end
-
-      it "opens the dashboard once" do
-        result
-        expect(screen).to have_received(:open).once
-      end
-
-      it "closes the dashboard once" do
-        result
-        expect(screen).to have_received(:close).once
       end
     end
 
@@ -615,11 +597,6 @@ RSpec.describe Agentilda::UI do
       it "lets the exception propagate" do
         expect(run).to raise_error("boom")
       end
-
-      it "still closes the screen" do
-        expect(run).to raise_error("boom")
-        expect(screen).to have_received(:close)
-      end
     end
 
     context "with more items than jobs" do
@@ -645,50 +622,8 @@ RSpec.describe Agentilda::UI do
 
       before { described_class.concurrently(%i[a b], "round", jobs: 2) { |_item, line| seen << line } }
 
-      it "hands each item a dashboard row" do
-        expect(seen).to all(be_a(Agentilda::Presentation::Dashboard::Tracker))
-      end
-
-      it "gives each row an executor handle" do
-        expect(seen.map(&:handle)).to all(be_a(Agentilda::Execution::Executor::Handle))
-      end
-    end
-
-    context "when drawing the final frame" do
-      let!(:boards) { [] }
-      let(:failure) { ->(result) { result if result.is_a?(String) } }
-      let(:progress) { Agentilda::Execution::Transcript::Progress.new(activity: "reading blocked.md", up: 10, down: 2, subagents: 0) }
-      let(:rows) { boards.last.rows.sort_by(&:ordinal) }
-
-      before do
-        allow(screen).to receive(:draw) { |board| boards << board }
-        # Forced here, not inside the worker threads.
-        progress
-        described_class.concurrently(%i[a b],
-          "round",
-          jobs:    2,
-          failure:,
-          fields:  ->(item) { { plan: "00#{item}", agent: "lando-broker" } },
-          file:    ->(_) { "blocked.md" }) do |item, line|
-          line.call(progress)
-          item == :a ? "timed out after 900s" : :ok
-        end
-      end
-
-      it "shows each row's state" do
-        expect(rows.map(&:state)).to eq(%i[failed done])
-      end
-
-      it "shows each row's file" do
-        expect(rows.map(&:file)).to all(eq("blocked.md"))
-      end
-
-      it "shows each row's failure or activity" do
-        expect(rows.map(&:message)).to eq(["timed out after 900s", "reading blocked.md"])
-      end
-
-      it "carries the token counts" do
-        expect(rows.last.up).to eq(10)
+      it "hands each item a line of its own" do
+        expect(seen).to all(be_a(Agentilda::UI::Line))
       end
     end
   end
@@ -698,7 +633,6 @@ RSpec.describe Agentilda::UI do
 
     before do
       allow(described_class).to receive(:tty?).and_return(true)
-      allow(Agentilda::Presentation::Dashboard).to receive(:open)
       described_class.quiet = true
     end
 
@@ -708,11 +642,6 @@ RSpec.describe Agentilda::UI do
 
     it "still returns every result" do
       expect(result).to eq(%i[a b])
-    end
-
-    it "opens no dashboard" do
-      result
-      expect(Agentilda::Presentation::Dashboard).not_to have_received(:open)
     end
   end
 

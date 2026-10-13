@@ -215,10 +215,8 @@ module Agentilda
         feature = Plans::Feature.parse(path)
         ok, note = on_agent_row("Writing spec.md from #{UI.paint(File.basename(path).to_s, :yellow)}",
           agent: agent.name,
-          plan:  feature.ordinal.to_s,
-          root:) do |line|
-          handle = line.handle if line.is_a?(Presentation::Dashboard::Tracker)
-          Execution.executor(root:).call(agent, Plans.subject(feature), handle:, &line)
+          plan:  feature.ordinal.to_s) do |line|
+          Execution.executor(root:).call(agent, Plans.subject(feature), &line)
         end
         warn_about(note) unless ok
 
@@ -249,7 +247,7 @@ module Agentilda
           # half-agent reads as one of them on the terminal.
           label =
             "#{UI.paint(Lifecycle::Brief::AGENT_NAME, :yellow, :bold)} drafting spec.md from #{seed}"
-          ok, note = on_agent_row(label, agent: Lifecycle::Brief::AGENT_NAME, plan: feature.ordinal.to_s, root:) { brief.attempt! }
+          ok, note = on_agent_row(label, agent: Lifecycle::Brief::AGENT_NAME, plan: feature.ordinal.to_s) { brief.attempt! }
           warn_about_draft(note) unless ok
         end
 
@@ -258,24 +256,20 @@ module Agentilda
         path
       end
 
-      # One agent writing spec.md, drawn as a row on the ratatui dashboard on
-      # a terminal and as a spinner line anywhere else.
+      # One agent writing spec.md, drawn as a spinner line.
       #
       # @param label [String] the spinner line's text
       # @param agent [String]
       # @param plan [String]
-      # @param root [String]
       # @yieldparam line [Agentilda::UI::Line]
       # @return [Object] the block's value
-      def on_agent_row(label, agent:, plan:, root:, &block)
+      def on_agent_row(label, agent:, plan:, &block)
         Execution.on_interrupt do
           UI.concurrently([plan],
             label,
             jobs:   1,
             label:  ->(_) { label },
-            fields: ->(_) { { plan:, agent: } },
-            file:   ->(_) { "spec.md" },
-            root:) { |_, line| block.call(line) }.first
+            fields: ->(_) { { plan:, agent: } }) { |_, line| block.call(line) }.first
         end
       end
 
