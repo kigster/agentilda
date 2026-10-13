@@ -1,0 +1,113 @@
+/* The transit board, ported from design/control-room.html. The mockup fixes seven stations; here --stations comes from
+   the snapshot (StateMachine::SPINE), so every "7" in the mockup reads var(--stations). */
+.board { background: var(--plate); border: 1px solid var(--hairline); border-radius: var(--radius-plate); overflow-x: auto; container-type: inline-size; }
+.board[hidden] { display: none; }
+.board-inner { --stations: 7; --colw: max(128px, (100cqw - var(--gutter) - 24px) / var(--stations)); }
+.board-inner { min-width: calc(var(--gutter) + var(--stations) * var(--colw) + 24px); padding: 8px 0 12px; }
+
+.stations { display: grid; grid-template-columns: var(--gutter) repeat(var(--stations), var(--colw)); padding: 10px 0 6px; position: sticky; top: 0; }
+.station-name { text-align: center; font-weight: 800; font-size: 13px; letter-spacing: -0.01em; line-height: 1.15; }
+.station-agent { display: block; font-weight: 400; color: var(--ink-soft); font-size: 12px; margin-top: 2px; }
+
+/* One plan */
+.plan { position: relative; display: grid; grid-template-columns: var(--gutter) auto; padding: 18px 0 20px; background: var(--lane-bg); }
+/* A groove pressed into the board between lanes: a dark channel, shadowed along its top edge, catching light along its bottom. */
+.plan::before { content: ""; position: absolute; z-index: 1; left: 10px; right: 10px; top: -3px; height: 6px; border-radius: 3px;
+                background: var(--groove); pointer-events: none;
+                box-shadow: inset 0 2px 3px var(--groove-shade), inset 0 -1px 0 var(--groove-light), 0 1px 0 var(--groove-light); }
+.plan.is-retiring { overflow: hidden; }
+.plan-head { padding: 0 16px 0 20px; }
+.plan-id { font-weight: 800; font-size: 13px; color: var(--ink-soft); }
+.plan-title { font-weight: 600; font-size: 16px; line-height: 1.25; margin: 2px 0 6px; }
+.plan-meta { font-size: 13px; color: var(--ink-soft); display: flex; flex-wrap: wrap; gap: 4px 12px; }
+.lane { display: inline-flex; align-items: center; gap: 6px; }
+.lane::before { content: ""; width: 14px; height: 4px; border-radius: 2px; background: var(--lane-color); }
+
+.route { position: relative; width: calc(var(--stations) * var(--colw)); }
+.track { position: relative; height: 22px; }
+.seg { position: absolute; top: 9px; height: 4px; width: var(--colw); left: calc(var(--i) * var(--colw) + var(--colw) / 2);
+       background-image: radial-gradient(circle, var(--road) 1.2px, transparent 1.6px); background-size: 8px 4px; }
+.seg::after { content: ""; position: absolute; inset: 0; background: var(--lane-color); border-radius: 2px;
+              transform-origin: left; transform: scaleX(0); transition: transform 700ms cubic-bezier(.6,0,.2,1); }
+.seg.is-done::after { transform: scaleX(1); }
+.seg.is-off { background-image: none; }
+.stop { position: absolute; top: 3px; width: 16px; height: 16px; margin-left: -8px; left: calc(var(--i) * var(--colw) + var(--colw) / 2);
+        border-radius: 50%; background: var(--plate); border: 3px solid var(--road); transition: border-color 300ms, background 300ms; }
+.stop.is-done { border-color: var(--lane-color); background: var(--lane-color); }
+.stop.is-here { border-color: var(--lane-color); background: var(--plate); box-shadow: 0 0 0 4px color-mix(in srgb, var(--lane-color) 22%, transparent); }
+.stop.is-skip { border-width: 2px; border-style: dashed; width: 12px; height: 12px; margin-left: -6px; top: 5px; }
+.stop.is-off { opacity: .35; border-width: 2px; }
+
+.cars { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; margin-top: 12px; padding-left: 8px;
+        transform: translateX(calc(var(--col) * var(--colw) + var(--colw) / 2 - 22px));
+        transition: transform 700ms cubic-bezier(.6,0,.2,1); width: max-content; }
+.car {
+  position: relative; display: block; text-align: left; width: 248px; padding: 10px 12px; cursor: pointer;
+  --car-tint: var(--go);
+  background: color-mix(in srgb, var(--car-tint) 13%, transparent);
+  border: 1px solid color-mix(in srgb, var(--car-tint) 32%, transparent); border-left: 3px solid var(--lane-color);
+  border-radius: var(--radius-car);
+  transition: background-color 400ms, border-color 400ms;
+}
+/* A car whose agent is blocked turns red until someone answers it. */
+.car.is-blocked { --car-tint: var(--alarm); border-left-color: var(--alarm); }
+.car.is-blocked .car-model { color: var(--alarm); font-weight: 600; }
+/* The reason a car is red is its question, so it gets two lines and plain type, not one line of terminal. */
+.car.is-blocked .car-activity { color: var(--ink); font: 13px/1.35 var(--sans); white-space: normal;
+                                display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+.car:hover { border-color: color-mix(in srgb, var(--car-tint) 70%, transparent); }
+.car:has(.car-open[aria-expanded="true"]) { border-color: var(--ink); }
+.car:hover, .car:has(.car-open[aria-expanded="true"]) { border-left-color: var(--lane-color); }
+.car.is-blocked:hover, .car.is-blocked:has(.car-open[aria-expanded="true"]) { border-left-color: var(--alarm); }
+.car-top { display: flex; justify-content: space-between; gap: 8px; font-size: 14px; }
+.car-agent { font-weight: 800; letter-spacing: -0.01em; }
+.car-model { color: var(--ink-soft); font-size: 13px; }
+.car-activity { font: 12px/1.4 var(--mono); color: var(--ink-soft); margin: 6px 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.car-stats { display: flex; gap: 12px; font-size: 13px; }
+.car-stats span:last-child { margin-left: auto; color: var(--ink-soft); }
+.car.is-queued { border-left-style: dashed; cursor: default; }
+/* The whole card opens the drawer through its name's button; the model picker sits above that layer. */
+.car-open { all: unset; cursor: pointer; font-weight: 800; letter-spacing: -0.01em; }
+.car-open::after { content: ""; position: absolute; inset: 0; border-radius: inherit; }
+.car:has(.car-open:focus-visible) { outline: 2px solid var(--focus); outline-offset: 2px; }
+/* The model slot (ModelSelect, from src/panels) sits on a layer above the card's hit area. */
+.car-slot { position: relative; z-index: 1; display: inline-flex; }
+
+.cars:has(.terminus) { flex-direction: row; }
+/* Near the end of the line the cars hang leftwards, so they never run off the board. */
+.cars.is-late { transform: translateX(calc(var(--stations) * var(--colw) - 100% - 8px)); }
+.terminus { font-size: 13px; display: flex; flex-direction: column; gap: 6px; align-items: flex-start; }
+.chip { display: inline-block; padding: 2px 10px; border-radius: 999px; font-size: 12px; font-weight: 600; border: 1px solid var(--hairline); }
+.chip-progress { background: var(--label-progress); border-color: transparent; color: var(--ink); }
+.chip-approved { background: var(--label-approved); border-color: transparent; color: #fff; }
+.chip-rejected { background: var(--alarm); border-color: transparent; color: #fff; }
+.pr-link { font-weight: 800; color: var(--ink); text-decoration: underline; text-decoration-thickness: 1px;
+           text-underline-offset: 3px; text-decoration-color: var(--road); }
+.pr-link:hover { text-decoration-color: currentColor; }
+.pr-link::after { content: "↗"; margin-left: 3px; font-weight: 400; color: var(--ink-soft); }
+.pr-link.is-merged { color: var(--merged); }
+.chip-merged { background: var(--merged); border-color: transparent; color: #fff; }
+.ci-pass { color: var(--go); font-weight: 600; }
+.ci-run { color: var(--ink-soft); }
+.ci-fail { color: var(--alarm); font-weight: 600; }
+
+/* Other machines (W26) */
+.machine-note { margin: 0 0 6px; padding: 12px 16px 0; font-size: 13px; color: var(--ink-soft); }
+.machine-note strong { color: var(--ink); }
+.car.is-readonly { cursor: default; }
+.car.is-readonly:hover { border-color: color-mix(in srgb, var(--car-tint) 32%, transparent); border-left-color: var(--lane-color); }
+/* A band per machine in the merged board, in the highlight colour so the break between machines is unmissable. */
+.machine-head { display: flex; align-items: baseline; flex-wrap: wrap; gap: 4px 16px; margin: 0 0 2px; padding: 8px 18px 12px;
+                background: var(--highlight); color: var(--on-highlight); border-radius: 10px; }
+.plan + .machine-head { margin-top: 22px; }
+.machine-head { font-family: var(--condensed); font-weight: 600; }
+.machine-head h2 { margin: 0; font-size: 24px; font-weight: 600; letter-spacing: 0.01em; }
+.machine-head h2::before { content: "🖥️"; margin-right: 8px; font-size: 18px; }
+.machine-head p { margin: 0; font-size: 18px; font-weight: 600; letter-spacing: 0.02em; color: var(--on-highlight); display: flex; flex-wrap: wrap; gap: 0 14px; }
+/* Their rows in the merged board, slightly faded so ours stay the thing you read. */
+.plan.is-theirs { opacity: .85; }
+.board-empty { padding: 16px 20px; color: var(--ink-soft); }
+
+@media (prefers-reduced-motion: reduce) {
+  .seg::after, .cars, .stop, .car { transition: none; }
+}

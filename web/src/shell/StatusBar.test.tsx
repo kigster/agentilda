@@ -1,0 +1,98 @@
+import { act, render, screen, within } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import { axe } from "vitest-axe";
+import { StatusBar, type StatusBarProps } from "./StatusBar";
+import { sampleBoard, samplePlan, samplePr, sampleQuestion } from "../board/sample";
+import type { GonePlan } from "../board/useLifecycle";
+
+const board = sampleBoard();
+const props = (over: Partial<StatusBarProps> = {}): StatusBarProps => ({
+  plans: board.me.plans,
+  stations: board.me.stations,
+  others: board.others,
+  gone: new Map(),
+  offBar: new Set(),
+  finishOrder: new Map(),
+  unblocking: null,
+  onToggleUnblock: vi.fn(),
+  onShowPlan: vi.fn(),
+  onOpenMachine: vi.fn(),
+  onDropGone: vi.fn(),
+  ...over,
+});
+const ours = () => within(screen.getAllByRole("list")[0]);
+
+it("draws a pill per plan with the mockup's states and the summary, accessibly", async () => {
+  const { container } = render(<StatusBar {...props({ unblocking: "001.00" })} />);
+  const pill = screen.getByRole("button", { name: /^001, needs technical decision/ });
+  expect(pill).toHaveClass("pill is-blocked");
+  expect(pill).toHaveAttribute("aria-expanded", "true");
+  expect(screen.getByRole("button", { name: "005, working, at Review, 1h 38m" })).not.toHaveAttribute("aria-expanded");
+  expect(screen.getByText("0 merged, 0 ready to merge, 2 blocked")).toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "010 on sam@ci-runner-2, read only, at Review, 1h 38m" })).toBeInTheDocument();
+  expect(await axe(container)).toHaveNoViolations();
+});
+
+it("toggles the unblock widget from a red pill and shows the plan from any other", async () => {
+  const p = props();
+  render(<StatusBar {...p} />);
+  await userEvent.click(screen.getByRole("button", { name: /^001,/ }));
+  expect(p.onToggleUnblock).toHaveBeenCalledWith(expect.objectContaining({ ordinal: "001.00" }));
+  await userEvent.click(screen.getByRole("button", { name: /^005,/ }));
+  expect(p.onShowPlan).toHaveBeenCalledWith(expect.objectContaining({ ordinal: "005.00" }));
+  await userEvent.click(screen.getByTitle(/^010 Cache agent registry lookups: on sam@ci-runner-2, at Review. Read only./));
+  expect(p.onOpenMachine).toHaveBeenCalledWith(board.others[0].node.id);
+});
+
+it("puts finished plans after a divider, in the order they finished, gone ones purple", () => {
+  const plans = [
+    samplePlan({ ordinal: "001.00" }),
+    samplePlan({ ordinal: "002.00", pr: samplePr({ state: "approved" }) }),
+    samplePlan({ ordinal: "003.00", pr: samplePr({ state: "merged" }) }),
+    samplePlan({ ordinal: "004.00", questions: [sampleQuestion({ held: true })] }),
+  ];
+  const gone = new Map<string, GonePlan>([
+    ["009.00", { plan: samplePlan({ ordinal: "009.00", pr: samplePr({ state: "merged", number: 9 }) }), at: 0 }],
+    ["008.00", { plan: samplePlan({ ordinal: "008.00" }), at: 0 }],
+  ]);
+  const finishOrder = new Map([["003.00", 1], ["002.00", 2], ["009.00", 3]]);
+  const { container } = render(<StatusBar {...props({ plans, gone, offBar: new Set(["008.00"]), finishOrder, others: [] })} />);
+  const ids = [...container.querySelectorAll(".pills:not(.pills-theirs) > li")].map(li => li.querySelector(".pill-id")?.textContent ?? "|");
+  expect(ids).toEqual(["001", "004", "|", "003", "002", "009"]);
+  expect(ours().getByRole("button", { name: /^004, held blocked/ })).toHaveClass("is-held");
+  expect(ours().getByRole("button", { name: /^009,/ })).toHaveClass("is-gone");
+  expect(screen.getByText("2 merged, 1 ready to merge, 1 blocked")).toBeInTheDocument();
+});
+
+it("marks other machines' approved and merged plans", () => {
+  const others = structuredClone(board.others);
+  others[0].plans = [
+    samplePlan({ ordinal: "010.00", pr: samplePr({ state: "approved" }) }),
+    samplePlan({ ordinal: "011.00", pr: samplePr({ state: "merged" }) }),
+    samplePlan({ ordinal: "012.00", station: "somewhere" }),
+  ];
+  render(<StatusBar {...props({ others })} />);
+  expect(screen.getByTitle(/^010 .*reviewed, ready to merge/)).toHaveClass("is-done");
+  expect(screen.getByTitle(/^011 .*merged on GitHub, complete/)).toHaveClass("is-gone");
+  expect(screen.getByTitle(/^012 .*at somewhere/)).toBeInTheDocument();
+});
+
+it("takes the oldest purple pill off an overflowing bar once it has stayed long enough", () => {
+  vi.useFakeTimers();
+  const now = Date.now();
+  const gone = new Map<string, GonePlan>([
+    ["007.00", { plan: samplePlan({ ordinal: "007.00" }), at: now - 10 * 60_000 }],
+    ["006.00", { plan: samplePlan({ ordinal: "006.00" }), at: now - 20 * 60_000 }],
+    ["005.00", { plan: samplePlan({ ordinal: "005.00" }), at: now }],
+  ]);
+  const onDropGone = vi.fn();
+  const width = vi.spyOn(HTMLElement.prototype, "scrollWidth", "get").mockReturnValue(500);
+  render(<StatusBar {...props({ plans: [], gone, onDropGone })} />);
+  expect(onDropGone).toHaveBeenCalledWith("006.00");
+  onDropGone.mockClear();
+  width.mockReturnValue(0);
+  act(() => vi.advanceTimersByTime(15_000));
+  expect(onDropGone).not.toHaveBeenCalled();
+  width.mockRestore();
+  vi.useRealTimers();
+});

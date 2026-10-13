@@ -1,0 +1,62 @@
+// The event stream (contract.md, `GET /api/events`) through @microsoft/fetch-event-source, which reconnects after a
+// dropped connection instead of giving up the way a bare EventSource does on a non-200.
+import { fetchEventSource, type EventSourceMessage } from "@microsoft/fetch-event-source";
+import type { Board, Reply } from "./types";
+
+export type ConnectionState = "live" | "reconnecting" | "offline";
+
+export interface StreamHandlers {
+  onBoard(board: Board): void;
+  onReply(reply: Reply): void;
+  onState(state: ConnectionState): void;
+  /** Called on every open after the first: whatever happened while the stream was down is fetched once. */
+  onReconnect(): void;
+}
+
+/** After this many failed attempts in a row the header says offline rather than reconnecting. It still retries. */
+export const OFFLINE_AFTER = 4;
+
+/** 1 s, 2 s, 4 s … capped at 30 s. */
+export const backoff = (attempt: number): number => Math.min(30_000, 1000 * 2 ** Math.max(0, attempt - 1));
+
+class Retry extends Error {}
+
+/** Opens the stream; the returned function closes it for good. */
+export function openStream(handlers: StreamHandlers, url = "/api/events"): () => void {
+  const controller = new AbortController();
+  let opened = false;
+  let failures = 0;
+
+  void fetchEventSource(url, {
+    signal: controller.signal,
+    openWhenHidden: true,
+    headers: { Accept: "text/event-stream" },
+    async onopen(res) {
+      if (!res.ok || !(res.headers.get("content-type") ?? "").includes("text/event-stream")) {
+        throw new Retry(`GET ${url} answered ${res.status}`);
+      }
+      failures = 0;
+      handlers.onState("live");
+      if (opened) handlers.onReconnect();
+      opened = true;
+    },
+    onmessage(message: EventSourceMessage) {
+      if (!message.data) return;
+      if (message.event === "board") handlers.onBoard(JSON.parse(message.data) as Board);
+      else if (message.event === "reply") handlers.onReply(JSON.parse(message.data) as Reply);
+    },
+    onclose() {
+      // The server closed a stream that should never end (a restart): treat it like any other drop.
+      throw new Retry("stream closed");
+    },
+    onerror() {
+      failures += 1;
+      handlers.onState(failures >= OFFLINE_AFTER ? "offline" : "reconnecting");
+      return backoff(failures);
+    },
+  }).catch(() => {
+    // Only an abort ends the loop above, since onerror never throws; nothing to report.
+  });
+
+  return () => controller.abort();
+}
