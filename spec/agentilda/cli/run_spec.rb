@@ -15,11 +15,20 @@ RSpec.describe Agentilda::CLI::Run, :tree do
   # Redis a developer's machine happens to run.
   let(:live_store) { Agentilda::Live.memory_store }
 
+  # The control room is a process of its own; the suite never spawns it, and
+  # never opens a browser.
+  let(:web) do
+    instance_double(Agentilda::Web::Launcher, ready?: true, url: "http://127.0.0.1:4747", log: "/tmp/web.log", stop: nil)
+  end
+
   before do
     allow(Agentilda::Engine::Runner).to receive(:new).and_wrap_original do |original, **keywords|
       original.call(**keywords, sleeper: ->(_) {})
     end
     allow(Agentilda::Live).to receive(:connect).and_return(live_store)
+    allow(web).to receive(:start).and_return(web)
+    allow(Agentilda::Web).to receive(:launcher).and_return(web)
+    allow(Agentilda::Web).to receive(:open)
   end
 
   # The loop sleeps a second between ticks. Every example hands the runner
@@ -623,6 +632,81 @@ RSpec.describe Agentilda::CLI::Run, :tree do
         aggregate_failures do
           expect(stderr).to include("Dry run: the live board is off")
           expect(Agentilda::Live).not_to have_received(:connect)
+        end
+      end
+
+      it "starts no control room" do
+        result
+        expect(Agentilda::Web).not_to have_received(:launcher)
+      end
+    end
+  end
+
+  describe "the control room" do
+    subject(:stderr) { unwrapped(result[1]) }
+
+    let(:result) { run(dry_run: false, rounds: 1, port: "4848") }
+
+    before do
+      building_plan
+      with_executor
+    end
+
+    it "starts beside the run on the store the board is published to, and prints its URL" do
+      result
+      aggregate_failures do
+        expect(Agentilda::Web).to have_received(:launcher).with(root: File.dirname(plans_root), plans_dir: plans_root, port: "4848", redis_url: "memory://")
+        expect(stderr).to include("Control room: http://127.0.0.1:4747")
+      end
+    end
+
+    it "opens the browser" do
+      result
+      expect(Agentilda::Web).to have_received(:open).with("http://127.0.0.1:4747")
+    end
+
+    it "stops it when the run ends" do
+      result
+      expect(web).to have_received(:stop)
+    end
+
+    context "with --no-open" do
+      let(:result) { run(dry_run: false, rounds: 1, open: false) }
+
+      it "only prints the URL" do
+        aggregate_failures do
+          expect(stderr).to include("Control room: http://127.0.0.1:4747")
+          expect(Agentilda::Web).not_to have_received(:open)
+        end
+      end
+    end
+
+    context "with --no-web" do
+      let(:result) { run(dry_run: false, rounds: 1, web: false) }
+
+      it "runs headless" do
+        result
+        expect(Agentilda::Web).not_to have_received(:launcher)
+      end
+    end
+
+    context "without Redis" do
+      before { allow(Agentilda::Live).to receive(:connect).and_raise(Agentilda::Live::Unavailable, "Redis at redis://h/0 is unavailable") }
+
+      it "runs headless, since there is no board to show" do
+        result
+        expect(Agentilda::Web).not_to have_received(:launcher)
+      end
+    end
+
+    context "when the server does not come up" do
+      before { allow(web).to receive(:ready?).and_return(false) }
+
+      it "says so, points at its log, and goes on without it" do
+        aggregate_failures do
+          expect(stderr).to include("The control room did not answer on http://127.0.0.1:4747", "/tmp/web.log")
+          expect(Agentilda::Web).not_to have_received(:open)
+          expect(web).to have_received(:stop)
         end
       end
     end

@@ -74,6 +74,8 @@ export function StatusBar(props: StatusBarProps) {
   const ready = ours.filter(isApproved).length;
   const blocked = live.filter(p => pillState(p, stations).blocked).length;
 
+  // Each pill's name starts with what it shows, "005 1h 38m", for voice control (label-content-name-mismatch); the
+  // space between the id and the time keeps that text "005 1h 38m" in the DOM, not "0051h 38m".
   const pill = ({ plan, gone: isGone }: Entry) => {
     const st = pillState(plan, stations, isGone);
     const request = st.blocked && hasRequest(plan);
@@ -85,7 +87,7 @@ export function StatusBar(props: StatusBarProps) {
           className={`pill ${st.cls}`.trim()}
           data-plan={plan.ordinal}
           title={`${id} ${plan.title}: ${st.say}`}
-          aria-label={`${id}, ${st.say}, ${span(plan.elapsed)}`}
+          aria-label={`${id} ${span(plan.elapsed)}, ${st.say}`}
           aria-expanded={request ? unblocking === plan.ordinal : undefined}
           onClick={() => (request ? onToggleUnblock(plan) : onShowPlan(plan))}
         >
@@ -93,7 +95,7 @@ export function StatusBar(props: StatusBarProps) {
             {st.mark}
           </span>
           <span className="pill-text">
-            <span className="pill-id">{id}</span>
+            <span className="pill-id">{id}</span>{" "}
             <span className="pill-time">{span(plan.elapsed)}</span>
           </span>
         </button>
@@ -125,14 +127,14 @@ export function StatusBar(props: StatusBarProps) {
                   type="button"
                   className={`pill${merged ? " is-gone" : done ? " is-done" : ""}`}
                   title={`${id} ${plan.title}: on ${who(their.node)}, ${state}. Read only.`}
-                  aria-label={`${id} on ${who(their.node)}, read only, ${state}, ${span(plan.elapsed)}`}
+                  aria-label={`${id} ${span(plan.elapsed)}, on ${who(their.node)}, read only, ${state}`}
                   onClick={() => onOpenMachine(their.node.id)}
                 >
                   <span className="pill-mark" aria-hidden="true">
                     {merged ? "✅" : done ? "✓" : "🖥️"}
                   </span>
                   <span className="pill-text">
-                    <span className="pill-id">{id}</span>
+                    <span className="pill-id">{id}</span>{" "}
                     <span className="pill-time">{span(plan.elapsed)}</span>
                   </span>
                 </button>

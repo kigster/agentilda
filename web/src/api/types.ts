@@ -143,6 +143,15 @@ export interface Board {
   others: Snapshot[];
 }
 
+/**
+ * A board as `GET /api/board` and the stream deliver it. `me` is null until this machine's engine first publishes
+ * (`tilda web` started before `tilda run`, or the run's snapshot expired), so the page never assumes it is there.
+ */
+export interface WireBoard {
+  me: Snapshot | null;
+  others: Snapshot[];
+}
+
 export type CommandKind =
   | "answer" // payload: { question: "B2", text }
   | "hold_blocked" // payload: { question: "B2" }

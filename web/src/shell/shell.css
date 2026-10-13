@@ -60,7 +60,7 @@ button, textarea { font: inherit; color: inherit; }
 .tabs { display: flex; align-items: center; gap: 8px; padding: 14px 24px 2px; overflow-x: auto; scrollbar-width: thin; }
 .tab { --pill-tint: 4%; border: 1px solid color-mix(in srgb, var(--ink) 9%, transparent); border-radius: 999px;
        background: color-mix(in srgb, var(--ink) var(--pill-tint), transparent); }
-.tab { display: inline-flex; align-items: center; min-height: 40px; padding: 6px 16px; cursor: pointer; font-weight: 600; color: var(--ink-soft); flex: none; white-space: nowrap; }
+.tab { display: inline-flex; align-items: center; min-height: 40px; padding: 6px 16px; cursor: pointer; font-weight: 600; color: color-mix(in srgb, var(--ink) 30%, var(--ink-soft)); flex: none; white-space: nowrap; }
 .tab:hover { --pill-tint: 8%; color: var(--ink); }
 .tab[aria-selected="true"] { --pill-tint: 14%; color: var(--ink); border-color: color-mix(in srgb, var(--ink) 22%, transparent); }
 .tab:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
@@ -121,34 +121,39 @@ button, textarea { font: inherit; color: inherit; }
 .statusbar h2 { margin: 0; font-size: 13px; font-weight: 800; white-space: nowrap; }
 .pills { flex: 1; min-width: 0; display: flex; gap: 6px; list-style: none; margin: 0; padding: 4px 0; overflow-x: auto; scrollbar-width: thin; }
 .pills > li { flex: none; display: flex; }
-.pill { --pill: var(--lane-plan); display: flex; align-items: center; gap: 7px; min-height: 44px; padding: 3px 12px 3px 8px; border-radius: 999px;
-        border: 1px solid color-mix(in srgb, var(--pill) 55%, transparent); background: color-mix(in srgb, var(--pill) 16%, var(--plate));
+/* Every pill's text holds 4.5:1 in both themes and every state (WCAG 1.4.3). A solid pill is its colour darkened
+   toward black, keeping --solid of it; the dark theme's brighter greens and purples keep less. */
+.statusbar { --solid: 70%; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .statusbar { --solid: 55%; } }
+:root[data-theme="dark"] .statusbar { --solid: 55%; }
+.pill { --pill: var(--lane-plan); --tint: 16%; display: flex; align-items: center; gap: 7px; min-height: 44px; padding: 3px 12px 3px 8px; border-radius: 999px;
+        border: 1px solid color-mix(in srgb, var(--pill) 55%, transparent); background: color-mix(in srgb, var(--pill) var(--tint), var(--plate));
         color: var(--ink); cursor: pointer; font: inherit; text-align: left; white-space: nowrap; }
-.pill:hover { background: color-mix(in srgb, var(--pill) 26%, var(--plate)); }
+.pill:hover { --tint: 26%; }
 .pill.is-done { --pill: var(--go); }
 .pill.is-blocked { --pill: var(--alarm); }
-/* Held blocked on purpose: solid red, so it reads as a decision, not a request waiting to be noticed. */
-.pill.is-held { --held: color-mix(in srgb, var(--alarm) 70%, #000); }
-.pill.is-held { background: var(--held); border-color: var(--held); color: #fff; }
-.pill.is-held:hover { background: color-mix(in srgb, var(--held) 85%, #000); }
-.pill.is-held .pill-time { color: rgb(255 255 255 / 82%); }
 .pill-mark { font-size: 15px; line-height: 1; width: 18px; text-align: center; }
-/* Merged: solid green with a checkbox, the one state that means the plan is finished. */
-.pill.is-merged { background: var(--go); border-color: var(--go); color: #fff; }
-.pill.is-merged .pill-time { color: rgb(255 255 255 / 85%); }
-.pill.is-merged:hover { background: color-mix(in srgb, var(--go) 85%, #000); }
-/* Its row has left the board: the pill takes GitHub's merged purple, keeping the checkbox. */
-.pill.is-gone { background: var(--merged); border-color: var(--merged); color: #fff; }
-.pill.is-gone .pill-time { color: rgb(255 255 255 / 85%); }
-.pill.is-gone:hover { background: color-mix(in srgb, var(--merged) 85%, #000); }
+/* Solid pills: white text on the darkened colour. Held blocked on purpose: solid red, so it reads as a decision, not a
+   request waiting to be noticed. Merged: solid green with a checkbox, the one state that means the plan is finished.
+   Gone, its row has left the board: GitHub's merged purple, keeping the checkbox. */
+.pill.is-held { --solid-bg: color-mix(in srgb, var(--alarm) var(--solid), #000); }
+.pill.is-merged { --solid-bg: color-mix(in srgb, var(--go) var(--solid), #000); }
+.pill.is-gone { --solid-bg: color-mix(in srgb, var(--merged) var(--solid), #000); }
+.pill.is-held, .pill.is-merged, .pill.is-gone { background: var(--solid-bg); border-color: var(--solid-bg); color: #fff; }
+.pill.is-held:hover, .pill.is-merged:hover, .pill.is-gone:hover { background: color-mix(in srgb, var(--solid-bg) 85%, #000); }
+.pill.is-held .pill-time, .pill.is-merged .pill-time, .pill.is-gone .pill-time { color: rgb(255 255 255 / 90%); }
 .pill.is-done .pill-mark { color: var(--go); font-weight: 800; }
 .pill-text { display: flex; flex-direction: column; line-height: 1.15; }
 .pill-id { font-size: 13px; font-weight: 800; }
-.pill-time { font-size: 11px; color: var(--ink-soft); }
+/* --ink-soft alone is 4.2:1 on a tinted pill; a third of --ink in it keeps the time quieter than the id and legible. */
+.pill-time { font-size: 11px; color: color-mix(in srgb, var(--ink) 30%, var(--ink-soft)); }
 .pills .divider { width: 1px; align-self: stretch; margin: 4px 6px; background: var(--hairline); flex: none; }
-/* Other machines' plans sit at the right end, as their tabs do at the top: read only, faded like their rows. */
+/* Other machines' plans sit at the right end, as their tabs do at the top: read only, faded like their rows. The fade
+   is a lighter tint and a dimmed mark rather than opacity, which would take the text below 4.5:1 with it. */
 .pills-theirs { flex: none; max-width: 40%; padding-left: 10px; border-left: 1px solid var(--hairline); }
 .pills-theirs:empty { display: none; }
-.pills-theirs .pill { opacity: .85; }
+.pills-theirs .pill { --tint: 9%; }
+.pills-theirs .pill:hover { --tint: 18%; }
+.pills-theirs .pill-mark { opacity: .7; }
 .statusbar-sum { margin: 0; font-size: 13px; color: var(--ink-soft); white-space: nowrap; }
 @media (max-width: 720px) { .statusbar h2, .statusbar-sum { display: none; } }

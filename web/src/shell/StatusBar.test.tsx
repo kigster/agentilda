@@ -24,21 +24,34 @@ const ours = () => within(screen.getAllByRole("list")[0]);
 
 it("draws a pill per plan with the mockup's states and the summary, accessibly", async () => {
   const { container } = render(<StatusBar {...props({ unblocking: "001.00" })} />);
-  const pill = screen.getByRole("button", { name: /^001, needs technical decision/ });
+  const pill = screen.getByRole("button", { name: /^001 [^,]*, needs technical decision/ });
   expect(pill).toHaveClass("pill is-blocked");
   expect(pill).toHaveAttribute("aria-expanded", "true");
-  expect(screen.getByRole("button", { name: "005, working, at Review, 1h 38m" })).not.toHaveAttribute("aria-expanded");
+  expect(screen.getByRole("button", { name: "005 1h 38m, working, at Review" })).not.toHaveAttribute("aria-expanded");
   expect(screen.getByText("0 merged, 0 ready to merge, 2 blocked")).toBeInTheDocument();
-  expect(screen.getByRole("button", { name: "010 on sam@ci-runner-2, read only, at Review, 1h 38m" })).toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "010 1h 38m, on sam@ci-runner-2, read only, at Review" })).toBeInTheDocument();
   expect(await axe(container)).toHaveNoViolations();
+});
+
+// axe's label-content-name-mismatch: a pill's name begins with what it shows (its number and time), so a voice user
+// can say what they see. The mark is aria-hidden, so it is not part of what is shown.
+it("names every pill starting with its visible text", () => {
+  render(<StatusBar {...props()} />);
+  const pills = document.querySelectorAll<HTMLButtonElement>(".pill");
+  expect(pills.length).toBeGreaterThan(0);
+  pills.forEach(pill => {
+    const shown = pill.querySelector(".pill-text")?.textContent ?? "";
+    expect(shown).toMatch(/^\d{3} \S/);
+    expect(pill.getAttribute("aria-label")).toMatch(new RegExp(`^${shown}, `));
+  });
 });
 
 it("toggles the unblock widget from a red pill and shows the plan from any other", async () => {
   const p = props();
   render(<StatusBar {...p} />);
-  await userEvent.click(screen.getByRole("button", { name: /^001,/ }));
+  await userEvent.click(screen.getByRole("button", { name: /^001 / }));
   expect(p.onToggleUnblock).toHaveBeenCalledWith(expect.objectContaining({ ordinal: "001.00" }));
-  await userEvent.click(screen.getByRole("button", { name: /^005,/ }));
+  await userEvent.click(screen.getByRole("button", { name: /^005 / }));
   expect(p.onShowPlan).toHaveBeenCalledWith(expect.objectContaining({ ordinal: "005.00" }));
   await userEvent.click(screen.getByTitle(/^010 Cache agent registry lookups: on sam@ci-runner-2, at Review. Read only./));
   expect(p.onOpenMachine).toHaveBeenCalledWith(board.others[0].node.id);
@@ -59,8 +72,8 @@ it("puts finished plans after a divider, in the order they finished, gone ones p
   const { container } = render(<StatusBar {...props({ plans, gone, offBar: new Set(["008.00"]), finishOrder, others: [] })} />);
   const ids = [...container.querySelectorAll(".pills:not(.pills-theirs) > li")].map(li => li.querySelector(".pill-id")?.textContent ?? "|");
   expect(ids).toEqual(["001", "004", "|", "003", "002", "009"]);
-  expect(ours().getByRole("button", { name: /^004, held blocked/ })).toHaveClass("is-held");
-  expect(ours().getByRole("button", { name: /^009,/ })).toHaveClass("is-gone");
+  expect(ours().getByRole("button", { name: /^004 [^,]*, held blocked/ })).toHaveClass("is-held");
+  expect(ours().getByRole("button", { name: /^009 / })).toHaveClass("is-gone");
   expect(screen.getByText("2 merged, 1 ready to merge, 1 blocked")).toBeInTheDocument();
 });
 

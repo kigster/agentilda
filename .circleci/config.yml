@@ -111,6 +111,73 @@ jobs:
       - store_artifacts:
           path: web/coverage
 
+  # The page in a browser against `agentilda web --demo`: the built web/dist, the API server and a real Redis, driven
+  # by Cypress. Unlike `web`, this job installs the Cypress binary, so CYPRESS_INSTALL_BINARY is left alone here.
+  e2e:
+    resource_class: medium
+    docker:
+      - image: cimg/ruby:4.0.6-browsers
+      - image: cimg/redis:7.4
+    working_directory: ~/agentilda
+    environment:
+      E2E_REDIS_URL: redis://localhost:6379/14
+    steps:
+      - checkout
+      - install_packages
+      - run:
+          name: Install Node and Cypress's system libraries
+          command: |
+            # The -browsers image ships Node; install it only if a future image stops doing so.
+            if ! command -v node >/dev/null; then
+              curl -fsSL https://deb.nodesource.com/setup_22.x | sudo -E bash -
+              sudo apt-get install --no-install-recommends -y nodejs
+            fi
+            node --version
+            # Cypress's own Electron needs these beside Chrome's. Ubuntu 24.04 renamed two of them with a t64 suffix.
+            sudo apt-get install --no-install-recommends -y libgtk-3-0t64 libgbm-dev libnotify-dev libnss3 libxss1 \
+              libasound2t64 libxtst6 xauth xvfb \
+              || sudo apt-get install --no-install-recommends -y libgtk-3-0 libgbm-dev libnotify-dev libnss3 libxss1 \
+              libasound2 libxtst6 xauth xvfb
+      - bundle_deps
+      - restore_cache:
+          keys:
+            - v1-e2e-npm-{{ arch }}-{{ checksum "web/package-lock.json" }}
+      - run:
+          name: Install web dependencies and the Cypress binary
+          working_directory: web
+          command: npm ci && npx cypress verify
+      - save_cache:
+          key: v1-e2e-npm-{{ arch }}-{{ checksum "web/package-lock.json" }}
+          paths:
+            - ~/.npm
+            - ~/.cache/Cypress
+      - run:
+          name: Build the page
+          working_directory: web
+          command: npm run build
+      - run:
+          name: Wait for Redis
+          command: dockerize -wait tcp://localhost:6379 -timeout 30s
+      - run:
+          name: Serve the demo
+          background: true
+          command: bundle exec exe/agentilda web --demo --no-open --redis-url "$E2E_REDIS_URL"
+      - run:
+          name: Wait for the demo
+          command: timeout 60 bash -c 'until curl -sf http://127.0.0.1:4747/healthz; do sleep 1; done'
+      - run:
+          name: Cypress
+          working_directory: web
+          command: npx cypress run
+      # `when` belongs to run steps only, so the failure decides what is copied, and the copy is always stored:
+      # empty after a green run, the videos and screenshots after a red one.
+      - run:
+          name: Keep Cypress's videos and screenshots
+          when: on_fail
+          command: mkdir -p /tmp/cypress && cp -R web/cypress/videos web/cypress/screenshots /tmp/cypress/ 2>/dev/null || true
+      - store_artifacts:
+          path: /tmp/cypress
+
 workflows:
   # .github/workflows/ci.yml + lint.yml + biome.yml. They are separate files on
   # GitHub only because that is the unit GitHub schedules; nothing depended on
@@ -120,3 +187,4 @@ workflows:
       - test
       - linter
       - web
+      - e2e

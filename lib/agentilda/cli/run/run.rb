@@ -57,6 +57,17 @@ module Agentilda
       option :redis_url,
         desc: "Redis for the live board, its commands and plan claims shared with other machines " \
               "(default: .tilda.yml redis_url, else $REDIS_URL, else #{Live::DEFAULT_URL})"
+      option :web,
+        type:    :boolean,
+        default: true,
+        desc:    "Serve the control room beside the run, when Redis answers; --no-web runs headless"
+      option :open,
+        type:    :boolean,
+        default: true,
+        desc:    "Open the control room in the browser; --no-open only prints its URL"
+      option :port,
+        default: Agentilda::Web::DEFAULT_PORT.to_s,
+        desc:    "Port the control room listens on, on 127.0.0.1"
 
       example [
         "-n                     # show which agent would take which plan",
@@ -64,7 +75,8 @@ module Agentilda
         "-j 4                   # …with four at a time",
         "--isolation shared     # one tree, serial — no git required",
         "--rounds 3             # …capping every agent at three rounds per plan",
-        "--plan 005,006,007     # only the plans a batch step just created"
+        "--plan 005,006,007     # only the plans a batch step just created",
+        "--no-web               # headless: no control room, no browser"
       ]
 
       # Option precedence, quietest to loudest: the built-in default, then
@@ -124,6 +136,7 @@ module Agentilda
         Execution::Control.reset!
 
         live = live_for(root:, tree:, agents:, options:)
+        web = web_for(live, root:, tree:, options:)
         runner = Engine.runner(
           tree:,
           agents:,
@@ -151,6 +164,7 @@ module Agentilda
           Execution.on_interrupt { runner.call { |dispatcher| live&.attach(dispatcher) } }
         ensure
           live&.close
+          web&.stop
         end
         report(runner, attempts, options, seconds: UI.monotonic - started)
         exit(failures(attempts).empty? ? 0 : 1)
@@ -189,6 +203,38 @@ module Agentilda
                "plan claims shared with other machines. Start redis-server, or pass --redis-url.")
         end
         nil
+      end
+
+      # The control room (W1, W7): `agentilda web` as its own process beside
+      # the engine, reading the board this run publishes. Only with a live
+      # board to read, so a dry run, a run without Redis and `--no-web` all
+      # stay headless. A server that does not come up is reported and left
+      # out; the run is the agents' work, and the page is a view of it.
+      #
+      # @param live [Agentilda::Live::Session, nil]
+      # @param root [String]
+      # @param tree [Agentilda::Plans::Tree]
+      # @param options [Hash]
+      # @return [Agentilda::Web::Launcher, nil] running, for the run to stop
+      def web_for(live, root:, tree:, options:)
+        return nil if live.nil? || options[:web] == false
+
+        web = Agentilda::Web.launcher(root:,
+          plans_dir: tree.dir,
+          port:      options[:port] || Agentilda::Web::DEFAULT_PORT,
+          redis_url: live.store.url).start
+        unless web.ready?
+          web.stop
+          unless quiet?(options)
+            warn("The control room did not answer on #{web.url}, so the run goes on without it. " \
+                 "Its log: #{web.log}")
+          end
+          return nil
+        end
+
+        info("Control room: #{web.url}") unless quiet?(options)
+        Agentilda::Web.open(web.url) unless options[:open] == false
+        web
       end
 
       # The attempts list, padded into columns.

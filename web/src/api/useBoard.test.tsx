@@ -90,7 +90,7 @@ describe("reconcile", () => {
     const old = at(10, [5, 7]);
     const next = at(9, [6, 3]);
     const merged = reconcile(old, next);
-    expect(merged.me.seq).toBe(10);
+    expect(merged.me?.seq).toBe(10);
     expect(merged.others.map(s => s.seq)).toEqual([6, 7]);
   });
 
@@ -101,8 +101,25 @@ describe("reconcile", () => {
     expect(reconcile(undefined, old)).toBe(old);
     const elsewhere = at(1);
     elsewhere.me.node.id = "another";
-    expect(reconcile(old, elsewhere).me.seq).toBe(1);
+    expect(reconcile(old, elsewhere).me?.seq).toBe(1);
   });
+
+  it("takes this machine's first snapshot over an empty board, and an empty one when the engine leaves", () => {
+    const empty = { me: null, others: [] };
+    const first = at(3);
+    expect(reconcile(empty, first).me).toBe(first.me);
+    expect(reconcile(first, empty).me).toBeNull();
+  });
+});
+
+it("waits, with no board, until the engine publishes its first snapshot", async () => {
+  fetchMock.mockResolvedValue(json({ me: null, others: [] }));
+  const { result } = renderHook(() => useBoard(), { wrapper });
+  await waitFor(() => expect(result.current.waiting).toBe(true));
+  expect(result.current.board).toBeUndefined();
+  act(() => streams[0].onBoard(loadFixtureBoard()));
+  await waitFor(() => expect(result.current.board?.me.node.id).toBe(loadFixtureBoard().me.node.id));
+  expect(result.current.waiting).toBe(false);
 });
 
 it("does not roll the board back when a reconnect GET lands after a newer streamed board", async () => {
@@ -118,4 +135,36 @@ it("does not roll the board back when a reconnect GET lands after a newer stream
   await act(async () => release(json({ ...first, me: { ...first.me, seq: 41 } })));
   await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
   expect(result.current.board?.me.seq).toBe(42);
+});
+
+it("keeps a finished run finished when an older GET, still holding its last snapshot, lands after `me: null`", async () => {
+  const first = loadFixtureBoard();
+  let release: (r: Response) => void = () => {};
+  fetchMock.mockResolvedValueOnce(json(first)).mockImplementationOnce(() => new Promise<Response>(r => (release = r)));
+  const { result } = renderHook(() => useBoard(), { wrapper });
+  await waitFor(() => expect(result.current.board?.me.seq).toBe(first.me.seq));
+  const stream = streams[0];
+  act(() => stream.onReconnect()); // the GET leaves now, and the server still has the run's last snapshot
+  act(() => stream.onBoard({ me: null, others: first.others }));
+  await act(async () => release(json(first)));
+  await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
+  expect(result.current.waiting).toBe(true);
+  expect(result.current.board).toBeUndefined();
+});
+
+it("ignores a GET whose fetch outlives its cancellation, answering from what the stream applied", async () => {
+  const first = loadFixtureBoard();
+  let release: (r: Response) => void = () => {};
+  fetchMock.mockImplementationOnce(() => new Promise<Response>(r => (release = r)));
+  const client = createQueryClient();
+  const { result } = renderHook(() => useBoard(), {
+    wrapper: ({ children }: { children: ReactNode }) => <QueryClientProvider client={client}>{children}</QueryClientProvider>,
+  });
+  await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+  const cancel = vi.spyOn(client, "cancelQueries");
+  act(() => streams[0].onBoard({ me: null, others: [] }));
+  expect(cancel).toHaveBeenCalledWith({ queryKey: ["board"] });
+  await act(async () => release(json(first)));
+  await waitFor(() => expect(result.current.waiting).toBe(true));
+  expect(result.current.board).toBeUndefined();
 });
