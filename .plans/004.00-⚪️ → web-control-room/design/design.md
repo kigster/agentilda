@@ -1,0 +1,103 @@
+# Control room design direction
+
+The mockup beside this file is `control-room.html`: open it in a browser. It runs on sample data, and its simulation fakes the live updates.
+
+## Subject, audience, job
+
+- **Subject:** a run of agentilda. Plans move through a fixed set of states, each handled by a named agent, and end at a pull request that gets reviewed.
+- **Audience:** one engineer, often late at night, with several plans in flight at once.
+- **Primary job:** see at a glance where every plan stands and what each agent is doing and costing, then step in (answer, message, interrupt) without leaving the page.
+
+## The idea: a transit board
+
+The state machine already has the shape of a transit line. The spine is the trunk; the full, plan and quick lanes enter at different stations; a rejection loops back to Building. So every plan is drawn as **its own horizontal line**, and every line passes through **the same station columns**. Reading across a row tells you a plan's journey. Reading down a column tells you everything in Building right now.
+
+- The station columns come from `StateMachine::SPINE`, and the agent under each station from `Agents::Registry` (`handles:`). Neither is hard-coded in the front end (decision W4).
+- A **filled line** marks travelled stations. A **hollow ring** is a station the plan's lane skips. A **dotted line** is the road ahead.
+- The **agents at work** hang under the plan's current station as cars. A pair (luke and rey) is two cars side by side. Each car shows the agent, its model, elapsed time, tokens in (↑) and out (↓), and its latest activity line.
+- The **PR terminus** shows the PR number, the CI result and the review label from plan 005 (L1).
+
+## Tokens
+
+| Token | Light | Dark | Use |
+| --- | --- | --- | --- |
+| `--enamel` | `#E9EDF1` | `#0E1522` | page |
+| `--plate` | `#FFFFFF` | `#151E2F` | rows, rail, drawer |
+| `--ink` | `#13233F` | `#E4EAF3` | text, trunk |
+| `--ink-soft` | `#5A6A82` | `#8D9AB0` | secondary text |
+| `--lane-full` | `#1F5FD1` | `#5B8DF0` | full lane line |
+| `--lane-plan` | `#C98700` | `#F0B43C` | plan lane line |
+| `--lane-quick` | `#1E8C3A` | `#4CC76A` | quick lane line |
+| `--alarm` | `#D1343B` | `#F06A6F` | rejected, failing CI, stop |
+
+The review labels keep the colours of plan 005 (L1).
+
+**Lane washes:** each plan row is washed in its lane colour, blue for full, yellow for plan and green for quick, mixed into the plate at 18% in the light theme and 9% in the dark one (`--wash`). The author first asked for 40%, then for "much much darker" once it was on screen.
+
+**Lane grooves:** rows are separated by a groove pressed into the board rather than a hairline: a 6 px channel inset 10 px from each edge, shadowed along its top and catching light along its bottom (`--groove`, `--groove-shade`, `--groove-light`). The channel is deeper and the highlight fainter in the dark theme.
+
+**Type:** Overpass for everything. It descends from Highway Gothic, the US road-sign face, which is wayfinding type for a wayfinding board. Station names are set bold and tight. Overpass Mono appears in exactly one place: agents' activity lines, which really are terminal output. Every number uses tabular figures, so ticking counters don't jitter.
+
+**Layout:** a top bar with the run's totals, the board on the left, and a rail on the right listing "Needs you" items (questions, interrupts). Selecting a car opens a drawer in place of the rail, with that agent's transcript and the message controls. Everything is left aligned. Below 960 px the rail drops beneath the board, and the board scrolls sideways inside its own frame, never the page.
+
+```
+┌ agentilda   Run 18 min   4 agents working   ↑ 1.24M  ↓ 86k   $14.20     [Stop run] ┐
+├─────────────────────────────────────────────────────────────────┬───────────────────┤
+│           New  Researched  Planning  Building  UI  Review  PR   │ Needs you  2      │
+│ 001.00    ●━━━━━━●━━━━━━━━━━●━━━━━━━━◉┄┄┄┄┄┄┄○┄┄┄┄┄○┄┄┄┄┄┄○     │ ┌ question ──────┐ │
+│ Clean…                               [luke-backend][rey-frontend]│ │ answer box     │ │
+│ 005.00                ○      ○       ●━━━━━━━━━━━━━━━━◉┄┄┄┄○     │ └────────────────┘ │
+│ Review…                                         [hansolo]        │ ┌ interrupted ───┐ │
+└─────────────────────────────────────────────────────────────────┴───────────────────┘
+```
+
+## Car colours and logs
+
+- **A car is tinted by its agent's state:** green while it works, red while it is blocked. A red car swaps its activity line for the reason it is red (the question it asked, or "You interrupted it"), in up to two lines of plain type, and the label in its corner changes to "needs you" or "interrupted". A blocked agent's tokens stop counting, because it is waiting, not working.
+- **Answering** works from the Needs you rail or from the agent's drawer, and needs actual text. ⌘ Enter (Ctrl Enter off a Mac) sends from any answer or message box, and each placeholder says so. The question and the answer both go into the agent's transcript.
+- **The Logs tab** tails `.agentilda/log/engine.log` and `api.log` (decision W14) through the API server: filters for source and level, a text filter, and Follow, which turns itself off when you scroll up and back on at the bottom. While the tab is closed, a count of new warnings and errors shows on it.
+
+## Test tabs and PR links
+
+- **Each test run gets a tab** next to Board and Logs, labelled `001.00 tests` and carrying a small chip: "137 of 358" while running, "✓ 412" once passing, "3 failed" otherwise. The tab can be closed only once the run has finished. Inside: passed, failed and pending counts, a progress bar segmented by outcome, the failures with `file:line`, and the output with follow (decision W15).
+- **While its agent runs tests,** a car's activity line reads "Running bundle exec rspec: 137 of 358".
+- **PR numbers are links** that open the pull request on GitHub in a new tab. The URL comes from the board (`Board::Row#pr`), and is never assembled in the front end.
+
+## Header and copilot
+
+- **The logo** sits in the top-left corner, 30 px tall, set off by a divider: `docs/logos/long-rectangle-transparent.png` (light letters) on the dark theme and `long-rectangle-transparent-ink.png` (ink letters) on the light one, both without the tagline, which is unreadable at that height. The favicon is `docs/logos/square-large.png`.
+- **The header names the project** (decision W18): its title from the manifest, its one-line description and its path, beside the logo.
+- **The copilot** (decision W17) is a pop-up in the bottom right, 440 by 560 px, on an inverted surface: dark-ish in the light theme and light-ish in the dark one (`--inv-*` tokens, its own `color-scheme`), so it reads as floating above the board rather than as part of it. Minimising it leaves a dark tab fixed to the right edge, reading "Copilot" vertically, with a green dot when there is a reply you have not seen. Esc minimises it. Stop and discard come back as a red card to confirm; a drafted answer comes back as a quiet card that puts the draft in the answer box without sending it. Its header shows its model and tokens, like a car. **It can be dragged** by its header (or moved with the arrow keys on its grip, Shift for bigger steps), stays inside the window and above the status bar, and remembers where it was left. Double-click the header, or press Home on the grip, to put it back in the corner.
+- **The status bar** is fixed along the bottom: one small pill per plan, showing the plan number and, on a second line, the time it has taken so far.
+  - **Green with ✓:** reviewed and approved, ready to merge.
+  - **Yellow with 🛠️:** an agent is working on it.
+  - **Red with a block emoji from `status.rb`:** 🅱️ for a product question, ⭕️ for a technical block or an interrupted agent.
+  - Working and blocked plans come first, in plan order. Finished plans sit after a divider on the right, in the order they finished, and a plan that finishes slides across to join them. Its clock stops when it finishes. Clicking a pill scrolls its row into view. A summary on the right reads "2 of 6 ready to merge, 3 blocked".
+
+## Start dialog
+
+- **`tilda start`** opens the page at `#start`, and **New idea** opens the same dialog during a run (decision W19). It is a native `<dialog>`: focus stays inside, and Esc steps back one view (plan editor → plans → idea) instead of discarding anything.
+- **Three views in one dialog.** The idea ("What is the product or feature you'd like to build?"); the split, "Here is your idea broken up into plans. Confirm?", with one row per plan (`[009 Accounts and imports] [Accept] [Modify]`) and sub-plans indented under their parent; and one plan in the editor, titled "Editing 010: Import bank statements as CSV", with **Revert ↶** and **Save ✔**. Saving accepts the plan. **Create N plans** stays disabled until every plan is accepted.
+- **The editor** is a transparent textarea over a highlighted copy of its own text, so typing, selection, undo and spellcheck stay native. Overpass Mono, the second place it appears, because Markdown source is code. Headings in the full-lane blue, code in the plan-lane amber, list marks in red, links in green.
+- **Frontmatter is a form above the editor, never text in it.** Lane, front end and depth are segmented controls (the lane options carry their lane colours); "More settings" opens per-phase adapter, model and effort and the four list fields. The idea dialog shows the first three as defaults for every plan it becomes.
+- **Plan numbers are plain `NNN`** everywhere in the mockup (decision W21).
+
+## Principles
+
+1. **One bold thing: the lines.** Colour and motion go to the tracks. The cars, the rail and the drawer stay quiet: no shadows, a single hairline, white plates.
+2. **Live is not loud.** Counters, timers and activity lines update in place, with no flashing and no animation. The one orchestrated motion is a plan **advancing**: its line fills to the next station and its cars slide there. Seeing a plan move is news; a ticking counter isn't.
+3. **Structure carries information.** Station columns are real states, lane colours are real lanes, a hollow ring is a real skip. Nothing is numbered unless it really is a sequence.
+4. **Words say what happens.** The buttons say "Send answer", "Keep work and resume", "Discard work", "Stop agent". Each action keeps one name all the way to its confirmation.
+
+## Checked against the generic defaults
+
+- The obvious agent-dashboard answer is a dark page with one neon accent, KPI tiles and a card grid. **Changed:** a light enamel page by default (dark is still supported), no KPI tiles (the run's totals are plain text in the top bar), and cars hanging off lines instead of a card grid.
+- A first draft drew one shared transit map with plans as moving tokens. **Changed** after the author asked for one horizontal plane per plan: it hid per-agent tokens, and it stacked badly beyond about five plans.
+- The meta strings in the top bar were going to be joined with middle dots. **Changed** to separate, spaced segments.
+- A monospace face for labels is the common tell. **Kept** only for real terminal output.
+
+## For the build (rey-frontend)
+
+- React with shadcn/ui primitives: `Sheet` for the drawer, `Tooltip`, `Textarea`, `Button`, `Badge`. They are restyled with the tokens above, not left with the default shadcn look.
+- Motion `layout` and `layoutId` move a car between stations; the line fill is a CSS transition on the segment. Under `prefers-reduced-motion`, both jump instead.
+- One `EventSource` on the `board` stream (decision W13). Counters render straight from each snapshot; there is no client-side interpolation.
