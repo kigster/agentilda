@@ -76,6 +76,10 @@ module Agentilda
         # its agents down with it now that the terminal's own SIGINT no
         # longer reaches them.
         #
+        # A child stays here after its leader is reaped for as long as its
+        # group has members: a grandchild that ignores TERM and let go of the
+        # pipe outlives the leader, and this is what still reaches it.
+        #
         # @return [void]
         def terminate_all = live.each { it.kill("KILL") }
 
@@ -90,6 +94,7 @@ module Agentilda
         def track(child)
           @mutex.synchronize do
             @at_exit ||= at_exit { terminate_all }
+            @live.reject!(&:finished?)
             @live << child
           end
           child
@@ -103,6 +108,7 @@ module Agentilda
         @reader = reader
         @status = nil
         @terminating = false
+        @emptied = false
         @guard = Mutex.new
       end
 
@@ -131,23 +137,30 @@ module Agentilda
       rescue Errno::ECHILD
         @status
       ensure
-        self.class.forget(self) if @status
+        self.class.forget(self) if finished?
       end
+
+      # @return [Boolean] reaped, and nothing left in its group
+      def finished? = !@status.nil? && !group?
 
       # Signal the whole group: the agent and everything it started.
       #
-      # Once the leader has been reaped its pid is free to be reused, so a
-      # reaped child is never signalled. Nothing it left behind can matter by
-      # then: it is reaped only after its pipe reached end of file.
+      # The group is signalled even after its leader has been reaped. A member
+      # that ignored TERM and let go of the pipe outlives the leader, and POSIX
+      # does not hand a group's id out as a pid while the group has members,
+      # so `-pid` still means this group. Once it answers ESRCH the group is
+      # empty, the id is free, and it is never signalled again.
       #
       # @param signal [String]
       # @return [void]
       def kill(signal = "KILL")
-        return if @status
+        return if @emptied
 
         Process.kill(signal, -pid)
-      rescue Errno::ESRCH, Errno::EPERM
-        # Already gone, which is what was wanted.
+      rescue Errno::ESRCH
+        @emptied = true
+      rescue Errno::EPERM
+        # Not ours to signal, so not ours to end.
       end
 
       # The guarantee behind every stop: TERM to the group, KILL to whatever
@@ -156,6 +169,11 @@ module Agentilda
       #
       # Once only: the dispatcher asks again on every tick past a quit's
       # deadline, and a second caller has nothing to add to the first.
+      #
+      # The leader being reaped mid-grace does not cut it short: the reader
+      # sees end of file as soon as the leader dies, and a member that
+      # ignored TERM is still there to KILL. The caller's thread must be left
+      # to finish; {Clock#stop} waits for an expiry under way for that reason.
       #
       # @param grace [Numeric] seconds between TERM and KILL
       # @param drain [Numeric] seconds after KILL before the pipe is closed
@@ -187,11 +205,14 @@ module Agentilda
       # @return [Boolean] whether anything in the group, a zombie leader
       #   included, is still there
       def group?
-        return false if @status
+        return false if @emptied
 
         Process.kill(0, -pid)
         true
-      rescue Errno::ESRCH, Errno::EPERM
+      rescue Errno::ESRCH
+        @emptied = true
+        false
+      rescue Errno::EPERM
         false
       end
 

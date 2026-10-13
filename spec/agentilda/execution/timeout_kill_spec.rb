@@ -23,6 +23,15 @@ RSpec.describe "Ending an agent that will not end" do
     ["sh", "-c", "#{RbConfig.ruby.shellescape} -e #{script.shellescape} \"$0\" & wait", pidfile]
   end
 
+  # A grandchild that ignores TERM and does not hold the pipe, under a leader
+  # TERM does end: the reader reaches end of file and the leader is reaped
+  # while the group still has a member. With +leader_waits+ false the leader
+  # exits at once of its own accord.
+  def detached(pidfile, leader_waits: true)
+    wait = leader_waits ? "; wait" : ""
+    ["sh", "-c", "(trap '' TERM; exec sleep 30) >/dev/null 2>&1 & echo $! > \"$0\"#{wait}", pidfile]
+  end
+
   def grandchild = Integer(File.read(pidfile))
 
   def gone?(pid)
@@ -58,9 +67,10 @@ RSpec.describe "Ending an agent that will not end" do
     # thread would wait on the memoization lock the main thread holds. The
     # child is handed back only once the grandchild is up, so the clock,
     # started after it, cannot fire first.
+    let(:argv) { stubborn(pidfile) }
     let(:spawn) do
       path = pidfile
-      argv = stubborn(path)
+      argv = self.argv
       lambda { |_argv, chdir:, env:|
         Agentilda::Execution::Child.spawn(argv, chdir:, env:).tap { sleep(0.01) until File.size?(path) }
       }
@@ -98,6 +108,17 @@ RSpec.describe "Ending an agent that will not end" do
       result
       expect(gone_soon?(grandchild)).to be(true)
     end
+
+    # The leader dies on TERM, the reader sees end of file, and the executor
+    # stops the clock while its thread is still inside the TERM grace.
+    context "when the leader is reaped before the KILL" do
+      let(:argv) { detached(pidfile) }
+
+      it "still KILLs the TERM-ignoring grandchild" do
+        result
+        expect(gone_soon?(grandchild)).to be(true)
+      end
+    end
   end
 
   describe Agentilda::Execution::Child do
@@ -129,10 +150,11 @@ RSpec.describe "Ending an agent that will not end" do
       expect(child.wait).not_to be_success
     end
 
-    it "is forgotten once reaped" do
+    it "is forgotten once reaped with its group gone" do
       reader
       child.terminate(grace: 0.2)
       reader.join(2)
+      gone_soon?(grandchild)
       child.wait
       expect(described_class.live).not_to include(child)
     end
@@ -169,6 +191,33 @@ RSpec.describe "Ending an agent that will not end" do
     it "KILLs every live group when the harness exits" do
       described_class.terminate_all
       expect(gone_soon?(grandchild)).to be(true)
+    end
+
+    context "with a TERM-ignoring grandchild that does not hold the pipe" do
+      let(:argv) { detached(pidfile) }
+      let(:stopper) { Thread.new { child.terminate(grace: 0.5) } }
+
+      # The reader finishes and the leader is reaped mid-grace, as the
+      # executor does on its own thread.
+      it "KILLs the group even when the leader is reaped mid-grace" do
+        reader
+        stopper
+        reader.join(2)
+        child.wait
+        stopper.join(2)
+        expect(gone_soon?(grandchild)).to be(true)
+      end
+    end
+
+    context "with a leader that exits and leaves a member behind" do
+      let(:argv) { detached(pidfile, leader_waits: false) }
+
+      it "KILLs the rest of the group when the harness exits" do
+        reader.join(2)
+        child.wait
+        described_class.terminate_all
+        expect(gone_soon?(grandchild)).to be(true)
+      end
     end
   end
 end
