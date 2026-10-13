@@ -249,7 +249,7 @@ Several machines, say three, may run agentilda on the same repository against on
 
 - The header shows this machine as `username@hostname` under the project's path, with the node digest and the masked Redis address on hover.
 - **Each other machine gets a tab of its own**, labelled `username@hostname` with a lock, after the Board tab. It draws that machine's plans as the board draws ours (stations, lines, agents, tokens, elapsed time) with a line naming its checkout path and when it was last seen. Nothing on it is a control: no drawer, no model dropdown, no answer box.
-- **All machines**, a toggle in the header, merges everything onto the Board tab: our plans first, as usual, then each other machine's under a heading naming it, read-only and at 25% opacity (a 75% cut), so ours stay the thing you read. The choice is remembered per browser. Off, the Board shows only this machine's plans.
+- **All machines**, a toggle in the header, merges everything onto the Board tab: our plans first, as usual, then each other machine's under a heading naming it, read-only and at 85% opacity, so they stay readable while ours stay first. The choice is remembered per browser. Off, the Board shows only this machine's plans.
 
 **Known gap.** Plan folders move by renames in each machine's own checkout, so a plan's state reaches the other machines' trees only through git, when the branch is pushed and pulled. Redis shows the live state; the folders catch up later. Making the claim the source of truth for which state a plan is in is not part of this decision.
 
