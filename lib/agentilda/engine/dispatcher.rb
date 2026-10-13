@@ -171,7 +171,8 @@ module Agentilda
         finish_discards
         unblock_answered
         poll
-        @running.each { |job| job.handle.kill!(grace: 0, reason: :quit) } if Execution::Control.overdue?
+        # On threads: a kill waits out TERM before KILL, and the board must not.
+        @running.each { |job| Thread.new { job.handle.kill!(grace: 0, reason: :quit) } } if Execution::Control.overdue?
         dispatch unless Execution::Control.quit? || resting?
         persist
         @on_board&.call(board)

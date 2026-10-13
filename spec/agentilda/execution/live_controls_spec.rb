@@ -10,7 +10,7 @@ RSpec.describe "The live controls on one invocation" do
     let(:traces) { File.join(root, "traces") }
     let(:spawned) { [] }
     let(:status) { instance_double(Process::Status, success?: true, exitstatus: 0) }
-    let(:child) { instance_double(Agentilda::Execution::Child, pid: 7, alive?: false, kill: nil, wait: status, each_chunk: nil) }
+    let(:child) { instance_double(Agentilda::Execution::Child, pid: 7, alive?: false, kill: nil, terminate: nil, wait: status, each_chunk: nil) }
     let(:spawn) do
       lambda { |argv, chdir:, env:|
         spawned << [argv, chdir, env]

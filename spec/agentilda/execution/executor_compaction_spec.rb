@@ -58,7 +58,7 @@ RSpec.describe Agentilda::Execution::Executor, :tree do
   def delta(sent, made) = event(type: "stream_event", event: { type: "message_delta", usage: { input_tokens: sent, output_tokens: made } })
 
   def child(chunks, status: ok, during: nil)
-    child = instance_double(Agentilda::Execution::Child, pid: 100 + spawned.size, alive?: false, kill: nil, wait: status)
+    child = instance_double(Agentilda::Execution::Child, pid: 100 + spawned.size, alive?: false, kill: nil, terminate: nil, wait: status)
     allow(child).to receive(:each_chunk) do |&block|
       chunks.each { block.call(it) }
       during&.call
@@ -278,7 +278,7 @@ RSpec.describe Agentilda::Execution::Executor, :tree do
     end
 
     context "with an agent that will not stop" do
-      let(:process) { instance_double(Agentilda::Execution::Child, alive?: true, kill: nil) }
+      let(:process) { instance_double(Agentilda::Execution::Child, alive?: true, kill: nil, terminate: nil) }
 
       before do
         handle.child = process
@@ -287,7 +287,7 @@ RSpec.describe Agentilda::Execution::Executor, :tree do
       end
 
       it "kills it once the grace is spent" do
-        expect(process).to have_received(:kill).with("KILL")
+        expect(process).to have_received(:terminate)
       end
     end
 
@@ -295,8 +295,8 @@ RSpec.describe Agentilda::Execution::Executor, :tree do
     # so the INTERRUPT and the kill timer are aimed at the process that was
     # running when it was asked, never at the one that replaced it.
     context "when the agent is replaced while the request is being made" do
-      let(:first) { instance_double(Agentilda::Execution::Child, alive?: true, kill: nil) }
-      let(:replacement) { instance_double(Agentilda::Execution::Child, alive?: true, kill: nil) }
+      let(:first) { instance_double(Agentilda::Execution::Child, alive?: true, kill: nil, terminate: nil) }
+      let(:replacement) { instance_double(Agentilda::Execution::Child, alive?: true, kill: nil, terminate: nil) }
       let(:visible) { [] }
 
       before do
@@ -316,7 +316,7 @@ RSpec.describe Agentilda::Execution::Executor, :tree do
       end
 
       it "never kills the replacement" do
-        expect(replacement).not_to have_received(:kill)
+        expect(replacement).not_to have_received(:terminate)
       end
     end
   end

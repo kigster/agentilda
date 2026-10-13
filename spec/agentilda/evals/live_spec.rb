@@ -25,7 +25,7 @@ RSpec.describe Agentilda::Evals::Live do
       folder = Dir.glob(File.join(chdir, ".plans", "*")).first
       seen.merge!(argv:, folder: File.basename(folder), spec: File.read(File.join(folder, "spec.md")))
       agent_writes.call(chdir, folder)
-      child = instance_double(Agentilda::Execution::Child, pid: 4242, alive?: false, kill: nil, wait: exit_status)
+      child = instance_double(Agentilda::Execution::Child, pid: 4242, alive?: false, kill: nil, terminate: nil, wait: exit_status)
       allow(child).to receive(:each_chunk) { |&block| stream.each { block.call(it) } }
       child
     }
