@@ -74,9 +74,9 @@ The choice is made per interrupt and is never a global setting.
 
 A person's message to a running agent goes into the plan's mailbox (plan `003.00`) as a `human` entry, from which the hooks of W8 deliver it. The mailbox is also the record that outlives the run. Questions in `blocked.md` appear as answer forms, which run the unblocker on submit. Live stream-json input to `claude -p` (`--input-format stream-json`, `--resume`) is a later spike, not a prerequisite.
 
-### W11. `--commit` still governs writes
+### W11. `-n` / `--dry-run` governs writes
 
-Without `--commit`, the page shows a dry run and its write controls are disabled.
+PR #53 removes `--commit`: commands do their work when run and take `-n` / `--dry-run` for a preview (`docs/decisions/decisions-on-tilda-skills-and-config.md`, decision 2). The web follows it: `tilda run -n` and `tilda start -n` show the page as a dry run with its write controls disabled, and without `-n` the page's buttons act.
 
 ### W13. The engine and the API server talk over Redis Streams, both ways
 
@@ -112,7 +112,7 @@ A direct bidirectional socket was considered. Streams won because they keep what
 Revised by the author on 2026-10-12, reversing the first version of this decision, which ruled `REDIS_URL` out. Agentilda and `agent-lock` (W20) are installed and run together, so they find Redis the same way, in this order:
 
 1. `--redis-url` on the command line.
-2. `redis_url:` in agentilda's configuration file.
+2. `redis_url:` in `.tilda.yml`, the project's settings file from PR #53.
 3. `$REDIS_URL`, when it is set, as agent-lock reads it.
 4. `redis://localhost:6379/0`.
 
@@ -137,7 +137,7 @@ The page's title is the project being worked on; "agentilda" shrinks to a small 
 
 The title comes from the first of these that exists in the project root **(proposed order)**:
 
-1. `title:` and `description:` in agentilda's configuration file: an explicit override.
+1. `project:` in `.tilda.yml` (PR #53), which already names the project for `INDEX.md`, plus a `description:` key added beside it.
 2. A manifest: `package.json` (`displayName` or `name`, plus `description`), `Cargo.toml` (`[package] name` and `description`), `*.gemspec` (`name` and `summary`), `pyproject.toml` (`[project] name` and `description`), `go.mod` (the module path's last segment).
 3. The first `# ` heading of `README.md`.
 4. The directory name.
@@ -152,7 +152,7 @@ A slug from a manifest is passed through `Plans::Feature.titleize`, so `agentild
 2. **The split.** A short idea (under about 120 words and at most one `##` section) becomes one plan directly. A longer one goes to **palpatine-planner**, which returns the plans as JSON, validated against a schema before the page shows them **(the threshold is proposed)**. This is a new job for palpatine, which today turns one signed-off spec into work units; the agent definition gains it as a second mode.
 3. **The confirmation.** The dialog becomes "Here is your idea broken up into plans. Confirm?" and lists each plan as `[001 Set up a scaffold for the application] [Accept] [Modify]`. Sub-plans are indented under their parent, with their own **Accept** and **Modify**, because each becomes a plan of its own. **Accept all** is offered while any are left.
 4. **Modify** opens the same editor on the body of that plan's opening `spec.md`, with its frontmatter as controls above it (see below), and the dialog's title becomes "Editing 001: Set up a scaffold for the application". **Revert ↶** discards the edit and goes back to the list; **Save ✔** keeps it, and saving also accepts the plan. Esc steps back one view and never throws work away.
-5. **Create N plans** is enabled once every plan is accepted. It creates each folder through `Lifecycle.create`, in order, as ⚪️ New. Clicking it is the consent that `--commit` gives on the command line (W11).
+5. **Create N plans** is enabled once every plan is accepted. It creates each folder through `Lifecycle.create`, in order, as ⚪️ New. Clicking it writes the folders; under `-n` it is disabled (W11).
 
 **Frontmatter is never typed.** The editor holds only the body of `spec.md`. Its frontmatter is a form above the editor, generated from the schema in W5: lane, front end and depth as segmented controls, and under "More settings" the per-phase adapter, model and effort plus the four lists (`implementation_suggestions`, `implementation_requirements`, `task-completed-when`, `how-to-verify`, one item per line). When the plan is created, the form is written as YAML at the top of `spec.md`, holding only the values that differ from the defaults, so `Plans::Spec` reads it unchanged. Settled by the author on 2026-10-12.
 
@@ -160,7 +160,7 @@ A sub-plan is an ordinary plan with its own number. Its frontmatter names its pa
 
 ### W20. `tilda init` ends in `tilda start`
 
-`tilda init` is new: it prepares a project for agentilda (the `.plans` directory, the configuration file, a check that Redis answers) and installs the `agent-lock` gem when `alock` is missing or older than the version agentilda needs, so the two always arrive together (settled by the author, 2026-10-12). It then runs `tilda start`, so a new project goes straight from setup to the idea dialog. `--no-start` stops after setup, for scripts and CI.
+`tilda init` arrives in PR #53, where it writes `.tilda.yml` and creates `.plans/`. This decision extends it: it also checks that Redis answers, and installs the `agent-lock` gem when `alock` is missing or older than the version agentilda needs, so the two always arrive together (settled by the author, 2026-10-12). It then runs `tilda start`, so a new project goes straight from setup to the idea dialog. `--no-start` stops after setup, for scripts and CI.
 
 ### W21. Plan numbers are plain `NNN`
 
