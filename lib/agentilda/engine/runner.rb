@@ -184,12 +184,20 @@ module Agentilda
         Task.new(agent:, subject:, root: checkout.path, checkout:, round:)
       end
 
-      # @return [Agentilda::Vcs::Publisher::Publication, nil]
+      # Push a finished build and record the pull request it opened in the
+      # plan's `pull-requests.md`, the row 🟢 is judged by. A push to a pull
+      # request the plan already had records nothing: the row is there, and a
+      # second copy of it would read as a second pull request.
+      #
+      # @param task [Agentilda::Engine::Runner::Task]
+      # @param subject [Agentilda::Plans::Subject] the plan in the main tree
+      # @return [Agentilda::Vcs::Publisher::Publication, nil] nil when the run
+      #   publishes nothing or the checkout holds no change
       def publish(task, subject)
         return nil unless @publisher && task.checkout&.dirty?
 
         publication = @publisher.publish(checkout: task.checkout, subject:)
-        record_pull_request(subject.feature.path, publication) if publication.published?
+        record_pull_request(subject.feature.path, publication) if publication.published? && !publication.updated
         publication
       end
 

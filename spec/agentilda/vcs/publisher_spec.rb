@@ -126,6 +126,31 @@ RSpec.describe Agentilda::Vcs::Publisher, :tree do
       end
     end
 
+    # A re-build after 🔴: the branch already carries the pull request the
+    # reviewer asked changes of, and a second `gh pr create` on it fails.
+    context "when the plan already has an open pull request" do
+      let!(:built) do
+        plans do |t|
+          t.plan "000.00", :rejected, "rebuilt", files: { "spec.md" => spec_body }, prs: [t.open(7, "[000.00](A) Rebuilt")]
+        end
+      end
+      let(:publication) { publisher.publish(checkout:, subject: plan) }
+
+      before { publication }
+
+      it "commits and pushes to the same branch and opens nothing" do
+        aggregate_failures do
+          expect(command).to have_received(:run).with("git", "commit", "-m", "Rebuilt", hash_including(:chdir))
+          expect(command).to have_received(:run).with("git", "push", "-u", "origin", checkout.branch, hash_including(:chdir))
+          expect(command).not_to have_received(:run).with("gh", any_args)
+        end
+      end
+
+      it "reports that pull request, marked as updated" do
+        expect(publication).to have_attributes(url: "https://github.com/example/repo/pull/7", title: "[000.00](A) Rebuilt", updated: true)
+      end
+    end
+
     context "on a dry run" do
       subject(:publisher) do
         described_class.new(root: File.dirname(plans_root), command:, dry_run: true)

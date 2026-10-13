@@ -31,7 +31,12 @@ module Agentilda
       #   @return [String, nil] nil on a dry run or a refusal
       # @!attribute [r] refusal
       #   @return [String, nil]
-      Publication = Data.define(:ordinal, :branch, :title, :url, :refusal) do
+      # @!attribute [r] updated
+      #   @return [Boolean] whether the push went to a pull request the plan
+      #     already had open, rather than opening a new one
+      Publication = Data.define(:ordinal, :branch, :title, :url, :refusal, :updated) do
+        def initialize(updated: false, **rest) = super
+
         # @return [Boolean]
         def published? = !url.nil?
       end
@@ -50,14 +55,24 @@ module Agentilda
         @dry_run = dry_run
       end
 
-      # Push one plan's branch and open its pull request.
+      # Push one plan's branch and open its pull request, or, when the plan
+      # already has one open, push to it.
+      #
+      # A re-build after 🔴 Changes Requested is the second case. Its branch
+      # already carries the open pull request the reviewer asked changes of,
+      # and `gh pr create` on that branch fails ("a pull request for branch
+      # ... already exists") after the push has gone through, so the fixes
+      # reached the pull request and the run reported a refusal. One branch per
+      # plan means at most one open pull request per plan, so the open row in
+      # `pull-requests.md` is the one to push to.
       #
       # @param checkout [Agentilda::Vcs::Worktree::Checkout]
       # @param subject [Agentilda::Plans::Subject]
       # @param letter [String, nil] force a part letter; nil auto-assigns
       # @return [Agentilda::Vcs::Publisher::Publication]
       def publish(checkout:, subject:, letter: nil)
-        title = title_for(subject, letter)
+        open = subject.pull_requests.select(&:open?).last
+        title = open&.title || title_for(subject, letter)
 
         unless checkout.dirty?
           return refuse(subject, checkout, title, "nothing to publish — the worktree is unchanged")
@@ -67,9 +82,9 @@ module Agentilda
 
         commit(checkout, title)
         push(checkout)
-        url = create_pull_request(checkout, subject, title)
+        url = open ? open.url : create_pull_request(checkout, subject, title)
 
-        Publication.new(**base_fields(subject, checkout, title), url:, refusal: nil)
+        Publication.new(**base_fields(subject, checkout, title), url:, refusal: nil, updated: !open.nil?)
       rescue TTY::Command::ExitError => e
         refuse(subject, checkout, title, git_complaint(e))
       end
