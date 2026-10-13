@@ -30,3 +30,6 @@ mermaid.html
 *.private
 *.public
 .lavish
+
+# bin/factory-e2e and other reports
+/log/*

@@ -63,6 +63,19 @@ web-e2e:
     until curl -sf http://127.0.0.1:4747/healthz >/dev/null; do sleep 0.2; done
     cd web && npx cypress run
 
+# Real agents build a tic-tac-toe page through `tilda start`; spends tokens, needs AGENTILDA_FACTORY_E2E=1
+factory-e2e:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    if [[ "${AGENTILDA_FACTORY_E2E:-}" != "1" ]]; then
+        echo "factory-e2e runs real agents and spends real tokens; run it as AGENTILDA_FACTORY_E2E=1 just factory-e2e" >&2
+        exit 64
+    fi
+    (cd web && npm run build)
+    unset BUNDLE_GEMFILE BUNDLE_BIN_PATH BUNDLER_SETUP BUNDLER_VERSION RUBYOPT RUBYLIB
+    eval "$(rbenv init - bash 2>/dev/null || true)"
+    bin/factory-e2e
+
 # Lint, type-check and unit-test the page, with coverage
 web-test:
     cd web && npm run lint && npm run typecheck && npm run coverage

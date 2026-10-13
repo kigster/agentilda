@@ -80,6 +80,10 @@ module Agentilda
       # means. The page's backlog draws the same line.
       FINISHED = Live::Snapshot::FINISHED
 
+      # The phase whose Completed notes are verdicts (approved, rejected,
+      # slop). Anyone else's note is only a note.
+      REVIEW_PHASE = "review"
+
       # @param runner [Agentilda::Engine::Runner]
       # @param state [Agentilda::Engine::StateFile, nil] nil under a dry run
       # @param rounds [Integer, nil] `--rounds`, a cap that only tightens
@@ -1061,7 +1065,10 @@ module Agentilda
         subject = fresh(task) or return base.with(ok: false, note: "plan folder vanished")
         remember(ordinal, agent.name, job.state, "Completed", task.round)
         Lifecycle::Completion.copy(subject) if agent.ledger.include?("plan.md")
-        verdict = verdict_of(entry)
+        # Only a reviewer rules. A builder that signed `Completed (approved)`
+        # once had its own work taken as approved: the plan was parked as
+        # finished at 🟡, never reviewed and never published.
+        verdict = verdict_of(entry) if agent.phase.to_s == REVIEW_PHASE
         partner_running = @running.any? { |j| j.task.subject.feature.ordinal.to_s == ordinal }
         target = target_for(agent, verdict, partner_running)
 
@@ -1071,6 +1078,8 @@ module Agentilda
         end
 
         attempt = base.with(status: "Completed")
+        return built_locally(attempt, ordinal) if local_only_review?(target, subject)
+
         if target
           return attempt.with(ok: false, note: "ledger says Completed but #{Plans::STATUS_BY_KEY.fetch(target)} is not justified: #{Plans::STATUS_BY_KEY.fetch(target).violation(subject)}") unless subject.machine.may?(target)
 
@@ -1083,6 +1092,33 @@ module Agentilda
         handoff = Plans::Ledger.handoff_after(reading, entry)
         attempt = honour(handoff, subject, attempt) if handoff
         attempt
+      end
+
+      # A build finished in a run that opens no pull request: 🟢 needs one,
+      # so the folder cannot move, and failing the attempt would only start
+      # the builder again on work that is done. Only the missing pull request
+      # is forgiven, and pull-requests.md with it, where the pull request
+      # would be recorded: a build that deleted another file 🟢 requires
+      # (spec.md, plan.md) is still reported, rather than parked as done. 🟡's own
+      # invariant is not asked, since a quick-lane plan.md has no work units.
+      #
+      # @param target [Symbol, nil]
+      # @param subject [Agentilda::Plans::Subject]
+      # @return [Boolean]
+      def local_only_review?(target, subject)
+        return false unless target == :ready_for_review && !@runner.publishes? && !subject.machine.may?(target)
+
+        (Plans::STATUS_BY_KEY.fetch(target).requires - %w[pull-requests.md]).all? { subject.file?(it) }
+      end
+
+      # The build stays at 🟡, finished for this run, saying why.
+      #
+      # @param attempt [Agentilda::Engine::Runner::Attempt]
+      # @param ordinal [String]
+      # @return [Agentilda::Engine::Runner::Attempt]
+      def built_locally(attempt, ordinal)
+        @finished_plans << ordinal
+        attempt.with(note: "#{attempt.note}; built locally, no pull request in this run, so it waits for one")
       end
 
       # @param entry [Agentilda::Plans::Ledger::Entry]

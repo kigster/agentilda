@@ -353,6 +353,23 @@ just update-workflow   # regenerate docs/WORKFLOW.md
 
 The executables in `exe/` find their own `Gemfile`, so they behave the same whether they are run from `PATH` or from another project's root.
 
+### Factory integration test
+
+`just factory-e2e` proves the whole factory through the page. It makes a throwaway git repository with no remote, runs `tilda init` and `tilda start --isolation shared` there (port 4777, Redis db 11), and Cypress (`web/cypress/factory/`) then:
+
+1. types a tic-tac-toe idea into the New idea dialog, in the quick lane at depth fast, with no front end;
+1. watches the board, answering any question under Needs you from a canned list;
+1. waits for `r2d2-mechanic` to finish the build. With no remote there is no pull request, so the plan stays at 🟡 Building, done for the run: 🟢 needs an open pull request, and 👀 and ✅ need a person;
+1. serves the `index.html` the agent wrote, plays a game X wins, checks the win is announced, and checks Restart clears the board.
+
+It runs real `claude` agents, so it costs tokens: one Haiku build, about a cent and under a minute of agent time. It refuses to run without `AGENTILDA_FACTORY_E2E=1`, and nothing in `just test`, `just web-e2e` or CircleCI runs it:
+
+```bash
+AGENTILDA_FACTORY_E2E=1 just factory-e2e
+```
+
+`FACTORY_PORT`, `FACTORY_REDIS_URL`, `FACTORY_MODEL` (default `haiku`), `FACTORY_TIMEOUT` (seconds per agent, default 600) and `FACTORY_MINUTES` (the wait for the build, default 15) override the defaults. A port already in use is refused, never taken over. The temp repository and the `tilda start` it launched are removed on every exit, and what is worth reading afterwards (the board, each plan's `state.json`, the progress log, the built page and the tail of each agent's trace) is kept in `log/factory-e2e/`.
+
 ______________________________________________________________________
 
 © 2026 Konstantin Gredeskoul
